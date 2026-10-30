@@ -438,6 +438,38 @@ describe("proposal.0001 edit results", () => {
         ]);
     });
 
+    test("a move whose text Oh My Pi pruned names both files instead of inventing a diff", () => {
+        const source = join(cwd, "c.txt");
+        const destination = join(cwd, "d.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("edited 2 files", {
+                perFileResults: [
+                    {
+                        diff: "",
+                        op: "update",
+                        move: destination,
+                        sourcePath: source,
+                        path: destination,
+                        snapshotsPruned: true,
+                    },
+                ],
+            }),
+        });
+
+        expect(update.locations).toEqual([{ path: destination }, { path: source }]);
+        expect(update.content).toEqual([
+            textContent("edited 2 files"),
+            textContent(
+                `No diff for ${destination}: Oh My Pi did not report what the move replaced`,
+            ),
+            textContent(
+                `No diff for ${source}: Oh My Pi did not keep the text of an edit this large`,
+            ),
+        ]);
+    });
+
     test("a change larger than 1 MiB is named with the reason instead", () => {
         const path = join(cwd, "huge.txt");
         const update = endUpdate({

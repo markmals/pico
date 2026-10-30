@@ -201,7 +201,7 @@ model key revoked                       → session/prompt fails with the provid
 - `cwd` must be an absolute path to an existing directory. Otherwise the request fails with an invalid-params error naming the problem.
 - Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`. An HTTP or SSE entry fails the request with an invalid-params error naming the server and stating that only stdio MCP servers are supported. If a stdio server fails to connect or list its tools, the request fails with an error naming the server and the cause; no session is created and no partial tool set is used.
 - Pico creates the OMP session with:
-    - `settings`: `Settings.loadReadOnly({ cwd })` overlaid with `eval.py: false`, `eval.js: false`, `lsp.enabled: false` and `task.maxRecursionDepth: 0`;
+    - `settings`: `Settings.loadReadOnly({ cwd })` overlaid with `eval.py: false`, `eval.js: false`, `lsp.enabled: false`, `task.maxRecursionDepth: 0`, `tools.approvalMode: yolo`, every configured per-tool approval policy (`tools.approval`) set to allow, and no restricted folders (`tools.restrictedFolders`);
     - `enableLsp: false`, `enableMCP: false` (restricted sessions force this anyway), `hasUI: false`, `autoApprove: true`;
     - `restrictToolNames: true`, and `toolNames` set to the built-in roster plus the name of every tool the connected MCP servers supplied (see Effective roster);
     - `sessionManager`: an in-memory session manager for `cwd`;
@@ -213,7 +213,7 @@ model key revoked                       → session/prompt fails with the provid
 - The model and thinking level are whatever the user's OMP configuration resolves for `cwd`. If no model resolves, or the resolved model has no usable credentials, the request fails with an error that says so; Pico does not substitute another model.
 - If the credential store cannot be opened, the request fails with an error naming the store's path and the cause. When the cause is a read-only or permission-denied failure, the message also says that Sesh's Autonomous sandbox blocks writes to `~/.omp` and that Pico does not support Autonomous sessions yet.
 - The response is `{ sessionId }`, with no `modes` and no `configOptions`. `sessionId` is unique within the process.
-- OMP extension discovery runs normally, so user and project extension hooks keep working. Extension-contributed tools are not exposed (`restrictToolNames`).
+- User and project extension hooks keep working. Restricted sessions skip OMP's own extension discovery (`src/sdk.ts:2831-2842`), so Pico discovers the same user and project extensions itself and passes them to the session preloaded, loading each module once. Their hooks run, and their tools are not exposed (`restrictToolNames`; `src/sdk.ts:3618, 3711`).
 
 ### Sesh worktrees
 
@@ -254,7 +254,7 @@ model key revoked                       → session/prompt fails with the provid
 
 ### Tool calls
 
-- When the engine emits `tool_execution_start`, Pico sends one `tool_call`. Its `toolCallId` is the engine's tool call ID, `status` is `in_progress`, `rawInput` is the arguments, and `title`, `kind` and `locations` are as below. Nothing else creates tool calls.
+- When the engine emits `tool_execution_start`, Pico sends one `tool_call`. Its `toolCallId` is the engine's tool call ID, `name` is the engine's tool name, `status` is `in_progress`, `rawInput` is the arguments, and `title`, `kind` and `locations` are as below. Nothing else creates tool calls.
 - Kinds: `read` → `read`; `grep` and `glob` → `search`; `edit` and `write` → `edit`; `bash` → `execute`; `web_search` → `fetch`; any `mcp__*` tool → `other`.
 - Titles, in order of preference:
     - `bash` is titled with its command.
@@ -263,8 +263,9 @@ model key revoked                       → session/prompt fails with the provid
     - Otherwise, for `mcp__<server>_<tool>`, `<server>: <tool>` (such as `sesh: ask_user`).
     - Otherwise, the tool's name.
 - `locations` holds absolute paths, resolved against the session `cwd`:
-    - `read`: the file, with `line` set to the starting line when an offset is given;
-    - `edit` and `write`: every affected file;
+    - `read`: the file, with the path's line selector removed. When the selector names a starting line (`file.ts:50`, `file.ts:50-80`, `file.ts:50+30`), `line` is that line.
+    - `write`: the file, on the `tool_call`.
+    - `edit`: every affected file, on the final `tool_call_update`, because `edit`'s arguments name the file only inside its patch text.
     - `grep` and `glob`: the searched path when given.
 - `tool_execution_update` with partial output becomes a `tool_call_update` whose `content` is the current output as text. For `bash`, that is the combined output so far.
 - `tool_execution_end` becomes a `tool_call_update` with:
@@ -278,7 +279,7 @@ model key revoked                       → session/prompt fails with the provid
 ### Approvals
 
 - Pico never sends `session/request_permission`. Every admitted tool call runs without asking: OMP's session runs with `autoApprove: true`, and Pico installs no permission gate.
-- The approval mode in the user's OMP configuration has no effect inside Pico.
+- The user's OMP approval configuration has no effect inside Pico: not its approval mode, not its per-tool approval policies (`tools.approval`), whether they ask or deny, and not its restricted folders (`tools.restrictedFolders`), which would otherwise turn calls touching them into prompts that cannot be answered. Pico's settings overlay neutralizes all three.
 - Pico offers Sesh no mode option, so Sesh has no permissive mode to select in an Autonomous session. That does not matter for approvals, since Pico never asks. Autonomous sessions fail at `session/new` for the credential-store reason above.
 
 ### `session/cancel`

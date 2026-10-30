@@ -26,9 +26,13 @@ hk.local.pkl
 *.gate.lock*
 
 # Tuist generates the Xcode project from Project.swift on demand; Project.swift is
-# the source of truth and these are artifacts. Named rather than globbed, so a
-# hand-made prototype project elsewhere in the tree stays visible.
-*.xcodeproj/
-*.xcworkspace/
+# the source of truth and these are artifacts.
+#
+# Anchored with a leading slash: the generated project is always at the repository
+# root, and an unanchored `*.xcodeproj/` also swallows the hand-managed
+# `Prototype.xcodeproj` that `prototyping-apple-app-design` ships and copies into
+# every new design prototype.
+/*.xcodeproj/
+/*.xcworkspace/
 # Where Tuist writes the Info.plist and other inputs it derives for that project.
 Derived/

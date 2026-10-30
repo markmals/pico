@@ -29,7 +29,8 @@ Pico never asks for approval. Every tool call runs as soon as the agent makes it
 
 2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Give it a name such as "Pico (dev)" and choose `.build/pico-acp` as the executable.
 3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
-4. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
+4. To choose a model, open the **Model** menu under the task box. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it.
+5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
 
 The launcher points at this checkout. If you move or delete the checkout, run `mise run acp:launcher` again in its new location and update the agent's executable in Sesh.
 
@@ -57,7 +58,7 @@ Then ask it to run `exit 3` with the bash tool: that tool call shows as failed, 
 
 ## Limits and edge cases
 
-- **Model:** Pico uses the model and thinking level your OMP configuration selects for the project. There is no model picker in Sesh yet. The session fails to start with an error saying why when no model is configured, when the configured model isn't available (Pico never switches to another one), or when its credentials can't be used.
+- **Model:** a session starts on the model and thinking level your OMP configuration selects for the project, and you can switch both from Sesh's menus (see above). The session fails to start, with an error saying why, when no model is configured, when the configured model isn't available (Pico never starts on another model instead), or when its credentials can't be used. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model; the same happens if Sesh re-applies a model you used before that is no longer available. Switching to a model that can't reason sets Thinking to Off.
 - **Provider errors during a turn** (an expired key, a rate limit, a network failure) end the turn with an error that carries the provider's message, not with a normal reply. What the agent had already shown stays in the conversation.
 - **Credentials:** Pico uses your OMP credential store at `~/.omp/agent/agent.db`. If an OAuth token has expired, OMP refreshes it there when the session starts or later, exactly as terminal OMP does. Pico never copies or deletes credentials.
 - **Project files:** the session's working directory decides which project settings, extensions and `AGENTS.md` files OMP uses, exactly as in terminal OMP.

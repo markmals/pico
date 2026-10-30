@@ -76,7 +76,6 @@ describe("proposal.0001 unsupported methods", () => {
         ["session/resume", { sessionId: "s", cwd: "/tmp", mcpServers: [] }],
         ["session/close", { sessionId: "s" }],
         ["session/set_mode", { sessionId: "s", modeId: "default" }],
-        ["session/set_config_option", { sessionId: "s", configOptionId: "model", value: "x" }],
         ["authenticate", { methodId: "oauth" }],
     ])("%s is answered with method not found", async (method, params) => {
         const session = connect();

@@ -1,6 +1,6 @@
 // Derived from oh-my-pi 18.14.0 src/modes/acp/acp-agent.ts (MIT; see THIRD-PARTY-NOTICES.md).
 
-import type { AgentContext, StopReason } from "@agentclientprotocol/sdk";
+import type { AgentContext, SessionConfigOption, StopReason } from "@agentclientprotocol/sdk";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 
 import { RequestError } from "@agentclientprotocol/sdk";
@@ -9,6 +9,7 @@ import { USER_INTERRUPT_LABEL } from "@oh-my-pi/pi-coding-agent";
 import type { PicoSession } from "../engine/pico-session.ts";
 
 import { SessionEventMapper } from "../events/session-event-mapper.ts";
+import { applyConfigOption, configOptionsOf } from "./config-options.ts";
 import { UpdateQueue } from "./update-queue.ts";
 
 /** How long a cancellation may take to stop the engine before Pico gives up on the session. */
@@ -40,11 +41,44 @@ export class SessionRuntime {
     #closedReason: string | undefined;
     #disposal: Promise<void> | undefined;
     #step: "stopping the turn" | "disposing" | undefined;
+    /** Config changes in progress; the engine's own change events are not echoed for them. */
+    #applyingConfigOption = 0;
+    readonly #stopWatchingModel: () => void;
 
     constructor(sessionId: string, session: PicoSession, client: AgentContext) {
         this.#sessionId = sessionId;
         this.#session = session;
         this.#queue = new UpdateQueue(client, sessionId);
+        // The engine can change the model or thinking level itself (a clamp, a retry
+        // fallback); the client's menus have to follow, through the ordered queue.
+        this.#stopWatchingModel = session.engine.subscribe(event => {
+            if (event.type !== "model_changed" && event.type !== "thinking_level_changed") return;
+            if (this.#applyingConfigOption > 0) return;
+            this.#queue.push({
+                sessionUpdate: "config_option_update",
+                configOptions: this.configOptions(),
+            });
+        });
+    }
+
+    /** The session's model and thinking menus as they stand now. */
+    configOptions(): SessionConfigOption[] {
+        return configOptionsOf(this.#session.engine);
+    }
+
+    /** Applies a client's menu choice and answers with the menus that result. */
+    async setConfigOption(
+        configId: string,
+        value: string | boolean,
+    ): Promise<SessionConfigOption[]> {
+        if (this.#closedReason) throw RequestError.internalError(undefined, this.#closedReason);
+        this.#applyingConfigOption += 1;
+        try {
+            await applyConfigOption(this.#session, configId, value);
+        } finally {
+            this.#applyingConfigOption -= 1;
+        }
+        return this.configOptions();
     }
 
     /**
@@ -197,7 +231,10 @@ export class SessionRuntime {
 
     /** The engine session is torn down once; every later caller awaits that work. */
     #dispose(): Promise<void> {
-        this.#disposal ??= this.#session.dispose();
+        if (!this.#disposal) {
+            this.#stopWatchingModel();
+            this.#disposal = this.#session.dispose();
+        }
         return this.#disposal;
     }
 }

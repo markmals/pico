@@ -6,6 +6,7 @@ import { describe, test } from "node:test";
 import { createPicoSession } from "./pico-session.ts";
 import { fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
+    collectWrites,
     createMockModel,
     editAfterRead,
     mockAuthStorage,
@@ -118,16 +119,13 @@ describe("proposal.0001 working directory", () => {
             }),
         });
         t.after(() => session.dispose());
+        const written = collectWrites(session);
 
         await session.engine.prompt("create worktree.txt");
 
         assert.equal(session.cwd, cwd);
-        assert.deepEqual(session.takeRecordedChanges("write-1"), [
-            {
-                path: path.join(cwd, "worktree.txt"),
-                oldText: null,
-                newText: "branch\n",
-            },
+        assert.deepEqual(written, [
+            { path: path.join(cwd, "worktree.txt"), oldText: null, newText: "branch\n" },
         ]);
         assert.equal(fs.readFileSync(path.join(cwd, "worktree.txt"), "utf8"), "branch\n");
         assert.deepEqual(fs.readdirSync(mainCheckout), []);

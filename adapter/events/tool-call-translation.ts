@@ -9,10 +9,15 @@ import {
     splitPathAndSelPreferringLiteralSync,
 } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
 
-import type { McpToolIdentity } from "../engine/pico-session.ts";
+import type { McpToolIdentity, RecordedChange } from "../engine/pico-session.ts";
 
 /** Selectors that name the first line the read window starts at: `50`, `50-80`, `50-`, `50+30`. */
 const STARTING_LINE = /^(\d+)(?:-\d*|\+\d+)?$/;
+
+/** Past this much text a change is named rather than shown, as the engine's own recorder does. */
+const MAX_DIFF_BYTES = 1024 * 1024;
+
+const PRUNED_BY_OMP = "Oh My Pi did not keep the text of an edit this large";
 
 export function toolKind(toolName: string): ToolKind {
     switch (toolName) {
@@ -67,26 +72,56 @@ export function startLocations(toolName: string, args: unknown, cwd: string): To
     return location ? [location] : [];
 }
 
-/** The files an `edit` result reports changing, in result order. */
-export function editedFiles(details: unknown, cwd: string): ToolCallLocation[] {
+/** What an `edit` changed, and every file it affected. */
+export interface EditedFiles {
+    /** One entry per file whose content the result describes, in result order. */
+    changes: RecordedChange[];
+    /** Those files plus the ones a move emptied, which have no content of their own. */
+    locations: ToolCallLocation[];
+}
+
+/**
+ * What an `edit` result says it changed, one entry per file, in result order.
+ *
+ * The text comes from the engine's own result: a single-file edit reports on
+ * `details`, a multi-file edit on `details.perFileResults`. A file whose text is
+ * absent or unusable carries the reason instead of a diff.
+ */
+export function editedFiles(details: unknown, cwd: string): EditedFiles {
+    const changes: RecordedChange[] = [];
     const locations: ToolCallLocation[] = [];
     for (const entry of editEntries(details)) {
         const path = resolveLocationPath(stringProperty(entry, "path"), cwd);
-        if (path) locations.push({ path });
+        if (!path) continue;
+        const change = describeEdit(entry, path);
+        if (change) changes.push(change);
+        locations.push({ path });
+        // A move leaves the origin behind: it is affected, but its content is now
+        // the destination's, so there is nothing to diff for it.
+        const origin = resolveLocationPath(stringProperty(entry, "sourcePath"), cwd);
+        if (origin && origin !== path) locations.push({ path: origin });
     }
-    return locations;
+    return { changes, locations };
 }
 
-export function editDiffs(details: unknown, cwd: string): ToolCallContent[] {
-    const diffs: ToolCallContent[] = [];
-    for (const entry of editEntries(details)) {
-        const path = resolveLocationPath(stringProperty(entry, "path"), cwd);
-        const oldText = stringProperty(entry, "oldText");
-        const newText = stringProperty(entry, "newText");
-        if (!path || (oldText === undefined && newText === undefined)) continue;
-        diffs.push({ type: "diff", path, oldText: oldText ?? null, newText: newText ?? "" });
+function describeEdit(entry: unknown, path: string): RecordedChange | undefined {
+    const oldText = textProperty(entry, "oldText");
+    const newText = textProperty(entry, "newText");
+    if (oldText === undefined && newText === undefined) {
+        return property(entry, "snapshotsPruned") === true
+            ? { path, noDiff: PRUNED_BY_OMP }
+            : undefined;
     }
-    return diffs;
+    // A removal reports what it replaced and nothing after it.
+    const replaced = oldText ?? null;
+    const written = newText ?? "";
+    if (Buffer.byteLength(replaced ?? "") + Buffer.byteLength(written) > MAX_DIFF_BYTES) {
+        return { path, noDiff: "it is larger than 1 MiB" };
+    }
+    if ((replaced ?? "").includes("\0") || written.includes("\0")) {
+        return { path, noDiff: "it is a binary file" };
+    }
+    return { path, oldText: replaced, newText: written };
 }
 
 export function textContent(text: string): ToolCallContent {
@@ -109,9 +144,15 @@ function property(value: unknown, key: string): unknown {
     return (value as Record<string, unknown>)[key];
 }
 
-function stringProperty(value: unknown, key: string): string | undefined {
+export function stringProperty(value: unknown, key: string): string | undefined {
     const candidate = property(value, key);
     return typeof candidate === "string" && candidate.length > 0 ? candidate : undefined;
+}
+
+/** Like {@link stringProperty}, but an empty string is a value: a file can be emptied. */
+function textProperty(value: unknown, key: string): string | undefined {
+    const candidate = property(value, key);
+    return typeof candidate === "string" ? candidate : undefined;
 }
 
 /**

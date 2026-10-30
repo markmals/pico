@@ -63,7 +63,7 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
             get disposalPhase() {
                 return disposalPhase;
             },
-            takeRecordedChanges: () => [],
+            takeWrite: () => undefined,
             mcpToolIdentity: () => undefined,
             dispose: async () => {
                 calls.push("dispose");

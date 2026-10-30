@@ -11,6 +11,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { PicoSession, RecordedChange } from "../pico-session.ts";
+
 export { createMockModel };
 
 registerMockApi();
@@ -268,6 +270,26 @@ function resultText(result: unknown): string {
         }
     }
     return texts.join("");
+}
+
+/**
+ * Takes each write record as the turn produces it, the way the mapper does: the
+ * session clears what nothing took when the turn ends.
+ */
+export function collectWrites(
+    session: Pick<PicoSession, "engine" | "takeWrite">,
+): RecordedChange[] {
+    const taken: RecordedChange[] = [];
+    session.engine.subscribe((event: AgentSessionEvent) => {
+        if (event.type !== "tool_execution_end" || event.toolName !== "write") return;
+        const details = event.result?.details;
+        if (typeof details !== "object" || details === null || !("resolvedPath" in details)) return;
+        const { resolvedPath } = details;
+        if (typeof resolvedPath !== "string") return;
+        const record = session.takeWrite(resolvedPath);
+        if (record !== undefined) taken.push(record);
+    });
+    return taken;
 }
 
 /** Collects every tool the engine actually executed, in order. */

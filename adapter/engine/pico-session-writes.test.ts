@@ -216,6 +216,18 @@ describe("proposal.0001 recorded writes", () => {
 });
 
 describe("proposal.0001 undiffable files", () => {
+    test("a file whose last UTF-8 sequence is cut short reports no diff", async t => {
+        const { cwd, session, written } = await writingSession(t, [
+            { file: "truncated.bin", content: "after\n" },
+        ]);
+        const absolute = path.join(cwd, "truncated.bin");
+        fs.writeFileSync(absolute, Buffer.from([0x61, 0x62, 0xc3]));
+
+        await session.engine.prompt("replace truncated.bin");
+
+        assert.deepEqual(written, [{ path: absolute, noDiff: "it is a binary file" }]);
+    });
+
     test("a write over a binary file reports no diff and says why", async t => {
         const { cwd, session, written } = await writingSession(t, [
             { file: "image.bin", content: "text\n" },
@@ -263,6 +275,33 @@ describe("proposal.0001 undiffable files", () => {
         await session.engine.prompt("replace latin.bin");
 
         assert.deepEqual(written, [{ path: absolute, noDiff: "it is a binary file" }]);
+    });
+
+    test("a large file Pico cannot read reports why, and the write still runs", async t => {
+        const { cwd, session, written } = await writingSession(t, [
+            { file: "huge-unreadable.txt", content: "after\n" },
+        ]);
+        const absolute = path.join(cwd, "huge-unreadable.txt");
+        fs.writeFileSync(absolute, `${"x\r\n".repeat(400_000)}`);
+        fs.chmodSync(absolute, 0o200);
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("replace huge-unreadable.txt");
+
+        assert.deepEqual(
+            executions.map(execution => [execution.name, execution.isError]),
+            [["write", false]],
+        );
+        fs.chmodSync(absolute, 0o600);
+        assert.equal(fs.readFileSync(absolute, "utf8"), "after\n");
+        const [record] = written;
+        assert.equal(record?.path, absolute);
+        assert.ok(
+            record && "noDiff" in record,
+            `expected a no-diff record, got ${JSON.stringify(record)}`,
+        );
+        assert.match(record.noDiff, /could not read it/);
+        assert.match(record.noDiff, /EACCES/);
     });
 
     test("a write over a file Pico cannot read reports why, and still runs", async t => {

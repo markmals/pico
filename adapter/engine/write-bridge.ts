@@ -8,7 +8,6 @@ import type { ClientBridge } from "@oh-my-pi/pi-coding-agent/session/client-brid
 import { resolvePath } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
 import { unwrapHashlineHeaderPath } from "@oh-my-pi/pi-coding-agent/tools/plan-mode-guard";
 import { getEditInputPaths } from "@oh-my-pi/pi-tui/tools/edit";
-import { isProbablyBinaryHeader } from "@oh-my-pi/pi-utils/binary";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -72,11 +71,16 @@ async function readPrevious(absolutePath: string): Promise<Previous> {
     }
     if (size > MAX_DIFF_BYTES) {
         // The whole file stays off the heap, but its conventions still have to
-        // reach the bytes being written, as OMP's own local write would.
-        return {
-            noDiff: "it is larger than 1 MiB",
-            convention: await scanTextFileConvention(absolutePath, size),
-        };
+        // reach the bytes being written, as OMP's own local write would. A file
+        // that is writable but not readable fails here exactly as a small one does.
+        try {
+            return {
+                noDiff: "it is larger than 1 MiB",
+                convention: await scanTextFileConvention(absolutePath, size),
+            };
+        } catch (error) {
+            return unreadable(error);
+        }
     }
     let bytes: Buffer;
     try {
@@ -84,11 +88,18 @@ async function readPrevious(absolutePath: string): Promise<Previous> {
     } catch (error) {
         return unreadable(error);
     }
-    // OMP's own classifier: a NUL byte or any invalid UTF-8 makes it binary.
-    if (isProbablyBinaryHeader(bytes)) {
+    // A NUL byte or any invalid UTF-8 makes it binary, as OMP classifies it. The
+    // decoder is finalized rather than streamed, so a sequence cut short at the
+    // end of the file counts as invalid instead of being waved through.
+    let text: string;
+    try {
+        // `ignoreBOM` keeps a leading byte order mark in the text, where OMP keeps it.
+        text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+    } catch {
         return { noDiff: "it is a binary file", convention: undefined };
     }
-    return { text: bytes.toString("utf8"), convention: readTextFileConvention(bytes) };
+    if (text.includes("\u0000")) return { noDiff: "it is a binary file", convention: undefined };
+    return { text, convention: readTextFileConvention(bytes) };
 }
 
 /** Why the text a write produced cannot be shown as a diff, if it cannot. */
@@ -99,20 +110,55 @@ function undiffableText(text: string): string | undefined {
     return undefined;
 }
 
-/** The files a finished `write` or `edit` really touched, as its effective input names them. */
-function targets(event: ToolResultEvent, cwd: string): string[] {
+/** A string property of `value`, when it has one. */
+function stringField(value: unknown, field: string): string | undefined {
+    if (typeof value !== "object" || value === null || !(field in value)) return undefined;
+    const held: unknown = (value as Record<string, unknown>)[field];
+    return typeof held === "string" ? held : undefined;
+}
+
+/** Every path field `value` carries, appended to `into`. */
+function collectPaths(value: unknown, into: string[]): void {
+    for (const field of ["resolvedPath", "path", "sourcePath", "move"]) {
+        const held = stringField(value, field);
+        if (held !== undefined) into.push(held);
+    }
+}
+
+/** The paths OMP's own result names, which is where its path recovery shows up. */
+function resultPaths(event: ToolResultEvent): string[] {
+    const details: unknown = "details" in event ? event.details : undefined;
     const named: string[] = [];
+    collectPaths(details, named);
+    if (typeof details === "object" && details !== null && "perFileResults" in details) {
+        const entries: unknown = details.perFileResults;
+        if (Array.isArray(entries)) for (const entry of entries) collectPaths(entry, named);
+    }
+    return named;
+}
+
+/** The paths the call's own effective input names. */
+function inputPaths(event: ToolResultEvent): string[] {
     if (event.toolName === "write") {
         const target = "path" in event.input ? event.input.path : undefined;
-        if (typeof target === "string") named.push(unwrapHashlineHeaderPath(target));
-    } else if (event.toolName === "edit") {
-        const input = "input" in event.input ? event.input.input : undefined;
-        if (typeof input === "string") named.push(...getEditInputPaths(input));
+        return typeof target === "string" ? [unwrapHashlineHeaderPath(target)] : [];
     }
+    if (event.toolName !== "edit") return [];
+    const input = "input" in event.input ? event.input.input : undefined;
+    return typeof input === "string" ? [...getEditInputPaths(input)] : [];
+}
+
+/**
+ * The files a finished `write` or `edit` really touched. OMP recovers a target
+ * the input only half names — a hashline header carrying a bare basename — so
+ * the paths its own result reports count as much as the ones the input names.
+ */
+function targets(event: ToolResultEvent, cwd: string): string[] {
     const resolved: string[] = [];
-    for (const target of named) {
+    for (const target of [...resultPaths(event), ...inputPaths(event)]) {
         try {
-            resolved.push(resolvePath(target, cwd));
+            const file = resolvePath(target, cwd);
+            if (!resolved.includes(file)) resolved.push(file);
         } catch {
             // An internal URL is not a project file; OMP writes it itself.
         }

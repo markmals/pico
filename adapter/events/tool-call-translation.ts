@@ -115,15 +115,11 @@ export function editedFiles(
         const change =
             attributed ?? (moved ? { path, noDiff: MOVE_REPLACED } : describeEdit(entry, path));
         if (change) changes.push(change);
-        // A move empties the origin: it is affected, and its text is what the
-        // result reports for the file that now holds it.
+        // A move empties the origin: it is affected, and the result's text for the
+        // file that now holds it is the only record of what the origin held.
         if (moved) {
             locations.push({ path: origin });
-            changes.push({
-                path: origin,
-                oldText: textProperty(entry, "oldText") ?? null,
-                newText: "",
-            });
+            changes.push(describeEmptied(entry, origin));
         }
     }
 
@@ -147,15 +143,26 @@ function describeEdit(entry: unknown, path: string): RecordedChange | undefined 
             : undefined;
     }
     // A removal reports what it replaced and nothing after it.
-    const replaced = oldText ?? null;
-    const written = newText ?? "";
-    if (Buffer.byteLength(replaced ?? "") + Buffer.byteLength(written) > MAX_DIFF_BYTES) {
+    return describeChange(path, oldText ?? null, newText ?? "");
+}
+
+/** The file a move empties: the result's own text is the only record of what it held. */
+function describeEmptied(entry: unknown, path: string): RecordedChange {
+    const oldText = textProperty(entry, "oldText");
+    return oldText === undefined
+        ? { path, noDiff: PRUNED_BY_OMP }
+        : describeChange(path, oldText, "");
+}
+
+function describeChange(path: string, oldText: string | null, newText: string): RecordedChange {
+    const replaced = oldText ?? "";
+    if (Buffer.byteLength(replaced) + Buffer.byteLength(newText) > MAX_DIFF_BYTES) {
         return { path, noDiff: "it is larger than 1 MiB" };
     }
-    if ((replaced ?? "").includes("\0") || written.includes("\0")) {
+    if (replaced.includes("\0") || newText.includes("\0")) {
         return { path, noDiff: "it is a binary file" };
     }
-    return { path, oldText: replaced, newText: written };
+    return { path, oldText, newText };
 }
 
 export function textContent(text: string): ToolCallContent {

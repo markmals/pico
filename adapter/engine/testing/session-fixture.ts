@@ -174,7 +174,7 @@ export function toolCall(name: string, args: Record<string, unknown> = {}, id?: 
 }
 
 /** The hashline tag the most recent tool result served for `file`. */
-function hashlineTag(context: Context, file: string): string {
+export function hashlineTag(context: Context, file: string): string {
     const transcript = JSON.stringify(context.messages);
     const marker = `[${file}#`;
     const at = transcript.lastIndexOf(marker);

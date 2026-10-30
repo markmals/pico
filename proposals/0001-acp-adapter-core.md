@@ -117,7 +117,7 @@ Grounding covered the ACP v1 specification and the installed `@agentclientprotoc
 - `initialize` claims nothing that Pico does not do.
 - Provider and configuration failures reach Sesh as errors with their cause, never as a quiet `end_turn`.
 - Cancelling a running command stops it, ends the turn as `cancelled`, and leaves the session ready for the next prompt.
-- Nothing written to stdout outside the ACP stream reaches the client, whether it comes from Pico, OMP, an extension or a dependency.
+- Nothing written through `process.stdout` or the `console` by Pico, OMP, an extension or a dependency reaches the client outside the ACP stream.
 
 ### Remaining uncertainty
 
@@ -176,7 +176,7 @@ model key revoked                       → session/prompt fails with the provid
 
 - The adapter source lives in `adapter/`, with tests beside the modules. The entry point is `adapter/main.ts`.
 - `mise run acp:launcher` runs a zero-dependency TypeScript tool that writes `.build/pico-acp`: an executable file whose shebang is the absolute path of the pinned Bun and which imports `<repository>/adapter/main.ts`. `.build/` is gitignored. The launcher needs no `PATH` entry, so it works when seshd launches it with launchd's environment.
-- Before any OMP module loads, `adapter/main.ts` redirects `process.stdout` writes and `console.log`, `console.info` and `console.debug` to stderr, and keeps the original fd 1 handle for the ACP stream only. Output written to stdout by an OMP module, an extension or a dependency appears on stderr and never in the protocol stream.
+- Before any OMP module loads, `adapter/main.ts` redirects `process.stdout` writes and every `console` method that writes to stdout (`log`, `info`, `debug`, `table`, `dir`, `trace`, `group`, timers, counters and the like) to stderr, and keeps the original fd 1 handle for the ACP stream only. Output written that way by an OMP module, an extension or a dependency appears on stderr and never in the protocol stream. Writes straight to file descriptor 1 (`fs.writeSync(1, …)`, `Bun.write(Bun.stdout, …)`) and child processes that inherit stdout cannot be intercepted inside the process; OMP's own tools capture their subprocesses' output, and no OMP code path writing to fd 1 directly is reachable from Pico.
 - Diagnostics go to stderr. Pico never logs MCP server `env` values or `headers`, credentials, or the contents of prompts or tool results.
 - Pico supports any number of sessions on one connection, each independent.
 - When stdin closes, or on SIGTERM or SIGINT, Pico:

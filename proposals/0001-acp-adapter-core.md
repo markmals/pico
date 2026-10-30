@@ -199,10 +199,11 @@ model key revoked                       → session/prompt fails with the provid
 ### `session/new`
 
 - `cwd` must be an absolute path to an existing directory. Otherwise the request fails with an invalid-params error naming the problem.
-- Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`. The `env` values reach the server exactly as sent, with no shell or variable expansion.
+- Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`, and runs with the session's `cwd` as its working directory. The `env` values reach the server exactly as sent, with no shell or variable expansion.
     - An HTTP or SSE entry fails the request with an invalid-params error naming the server and stating that only stdio MCP servers are supported.
     - Two entries with the same name fail the request with an error naming the duplicate.
     - If a stdio server fails to connect or list its tools, or has not listed them within 30 seconds, the request fails with an error naming the server and the cause. No session is created, no partial tool set is used, and servers already started are stopped.
+    - If two tools of one server map to the same OMP tool name (OMP folds characters such as `-` and `_` together, so `a-b` and `a_b` both become `mcp__<server>_a_b`), the request fails with an error naming the server and both tools, rather than silently dropping one.
 - Pico creates the OMP session with:
     - `settings`: `Settings.loadReadOnly({ cwd })` overlaid with `eval.py: false`, `eval.js: false`, `lsp.enabled: false`, `task.maxRecursionDepth: 0`, `tools.approvalMode: yolo`, every configured per-tool approval policy (`tools.approval`) set to allow, and no restricted folders (`tools.restrictedFolders`);
     - `enableLsp: false`, `enableMCP: false` (restricted sessions force this anyway), `hasUI: false`, `autoApprove: true`;
@@ -275,7 +276,7 @@ model key revoked                       → session/prompt fails with the provid
     - `status`: `failed` when the result is an error, otherwise `completed`;
     - `rawOutput`: the result details;
     - `content`:
-        - for a successful `edit` or `write`, a `diff` per affected file, with the absolute `path`, `oldText` (`null` for a newly created file) and `newText` (empty for a removed file). Pico reads each affected file just before the call runs and again after it finishes, so diffs do not depend on what OMP keeps in its result. A file Pico could not read gets a text note naming the file and the cause instead of a diff, and it stays in `locations`. A write to one of OMP's internal URLs (such as `local://notes.md`) is not a project file and shows the result text, not a diff;
+        - for a successful `edit` or `write`, a `diff` per affected file, with the absolute `path`, `oldText` (`null` for a newly created file) and `newText` (empty for a removed file). Pico reads each affected file when the model's batch of tool calls is prepared and again after the call finishes, so diffs do not depend on what OMP keeps in its result. Files are identified by their resolved real path, so a file reached through a symlink is the same file. One limit: when an earlier call in the same batch changed the file by another route that reports no file change, such as a `bash` command, the diff's old text shows the file as it was when the batch was prepared. A file Pico could not read, a binary file (one containing a NUL byte) or a file larger than 1 MiB gets a text note naming the file and the reason instead of a diff, and it stays in `locations`. A write to one of OMP's internal URLs (such as `local://notes.md`) is not a project file and shows the result text, not a diff;
         - for every other result, including failures, the result's text as returned to the model.
 - Every tool executes locally in the Pico process and its subprocesses. Pico does not use the client's `fs/*` or `terminal/*` methods, even when the client advertises them.
 

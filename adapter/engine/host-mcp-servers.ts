@@ -83,12 +83,13 @@ export async function connectHostMcpServers(
         throw new PicoSessionError(`Could not connect the MCP server ${failures}.`);
     }
 
-    const folded = foldedToolNames(manager, names);
+    const folded = foldedToolName(manager, names);
     if (folded) {
         await manager.disconnectAll();
+        const [first, second] = folded.tools;
         throw new PicoSessionError(
-            `The MCP server "${folded.server}" offers ${quoted(folded.tools)}, which Oh My Pi would both call ` +
-                `"${folded.minted}"; rename one of them.`,
+            `The MCP tools "${first.server}"/"${first.tool}" and "${second.server}"/"${second.tool}" would both ` +
+                `be called "${folded.minted}" by Oh My Pi; rename one of them.`,
         );
     }
 
@@ -103,22 +104,32 @@ export async function connectHostMcpServers(
     return { manager, tools: manager.getTools() };
 }
 
+/** One tool as a server advertises it. */
+interface ServerTool {
+    server: string;
+    tool: string;
+}
+
 /**
- * The first server whose advertised tools mint one Oh My Pi tool name. Oh My Pi
- * folds characters such as `-` and `_` together, keeps one of the two tools and
- * drops the other, so a session would silently run a tool the model did not name.
+ * The first pair of tools that mint one Oh My Pi tool name anywhere in the
+ * session's namespace. Oh My Pi folds characters such as `-` and `_` together,
+ * keeps one of the two and drops the other, so a session would silently run a
+ * tool the model did not name. Two servers can collide as readily as two tools
+ * of one server, because the server name is folded the same way.
  */
-function foldedToolNames(
+function foldedToolName(
     manager: MCPManager,
     names: readonly string[],
-): { server: string; tools: string[]; minted: string } | undefined {
+): { tools: [ServerTool, ServerTool]; minted: string } | undefined {
+    const minted = new Map<string, ServerTool>();
     for (const server of names) {
-        const minted = new Map<string, string>();
         for (const tool of manager.getConnection(server)?.tools ?? []) {
             const name = createMCPToolName(server, tool.name);
             const first = minted.get(name);
-            if (first !== undefined) return { server, tools: [first, tool.name], minted: name };
-            minted.set(name, tool.name);
+            if (first !== undefined) {
+                return { tools: [first, { server, tool: tool.name }], minted: name };
+            }
+            minted.set(name, { server, tool: tool.name });
         }
     }
     return undefined;

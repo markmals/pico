@@ -407,6 +407,27 @@ describe("proposal.0001 MCP working directory and names", () => {
         assert.equal(report.cwd, fs.realpathSync(cwd));
     });
 
+    test("two servers whose tools mint the same name fail creation, naming both", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [fakeMcpServer("a-b"), fakeMcpServer("a_b")],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /"a-b"/);
+                assert.match(error.message, /"a_b"/);
+                assert.match(error.message, /mcp__a_b_echo/);
+                return true;
+            },
+        );
+    });
+
     test("two tools of one server that mint the same name fail creation, naming both", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
 

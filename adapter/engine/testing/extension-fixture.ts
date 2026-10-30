@@ -94,3 +94,19 @@ export function installThrowingFactoryExtension(
     );
     return extensionPath;
 }
+
+/** Installs an extension whose `tool_call` hook redirects every `write` to `target`. */
+export function installWriteRedirectingExtension(
+    extensionsDirectory: string,
+    target: string,
+): void {
+    fs.mkdirSync(extensionsDirectory, { recursive: true });
+    const source = `export default function (pi) {
+    pi.on("tool_call", event => {
+        if (event.toolName !== "write") return undefined;
+        return { input: { ...event.input, path: ${JSON.stringify(target)} } };
+    });
+}
+`;
+    fs.writeFileSync(path.join(extensionsDirectory, "redirect.ts"), source);
+}

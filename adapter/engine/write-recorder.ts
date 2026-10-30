@@ -34,15 +34,12 @@ export type RecordedChange =
 /** Files past this size are reported without a diff instead of being held in memory. */
 const MAX_DIFF_BYTES = 1024 * 1024;
 
-/** A NUL byte anywhere in this prefix marks the file binary, as OMP's own readers treat it. */
-const BINARY_SNIFF_BYTES = 8192;
-
 /** The synthetic source Pico's own extension reports; it loads no file. */
 const PICO_WRITE_RECORDER = "<pico:write-recorder>";
 
 /** One file as a tool left it, and when that change landed. */
 interface Change {
-    newText: string;
+    after: FileState;
     at: number;
 }
 
@@ -88,7 +85,7 @@ async function readState(absolutePath: string): Promise<FileState> {
     } catch (error) {
         return unreadable(error);
     }
-    if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return { noDiff: "it is a binary file" };
+    if (bytes.includes(0)) return { noDiff: "it is a binary file" };
     return { text: bytes.toString("utf8") };
 }
 
@@ -96,20 +93,34 @@ function undiffable(state: FileState): state is { readonly noDiff: string } {
     return state !== "missing" && "noDiff" in state;
 }
 
-/** The file a path really names, so a symlink and its target are one file. */
+/** Symlink hops to follow before giving up on a cycle. */
+const MAX_SYMLINK_HOPS = 32;
+
+/**
+ * The file a path really names, so a symlink and its target are one file. A
+ * dangling link is followed too: `fs.realpath` fails on one, yet a call in the
+ * same batch may be about to create its target.
+ */
 async function realPath(absolutePath: string): Promise<string> {
+    let current = absolutePath;
+    for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop += 1) {
+        let link: string;
+        try {
+            link = await fs.readlink(current);
+        } catch {
+            break;
+        }
+        current = path.resolve(path.dirname(current), link);
+    }
     try {
-        return await fs.realpath(absolutePath);
+        return await fs.realpath(current);
     } catch {
         // A file that does not exist yet still has a real directory.
     }
     try {
-        return path.join(
-            await fs.realpath(path.dirname(absolutePath)),
-            path.basename(absolutePath),
-        );
+        return path.join(await fs.realpath(path.dirname(current)), path.basename(current));
     } catch {
-        return absolutePath;
+        return current;
     }
 }
 
@@ -127,7 +138,7 @@ function absolute(target: string, cwd: string): string | undefined {
  * named in an `edit`'s input. Targets that are not filesystem paths (`local://…`)
  * are left out.
  */
-function targets(event: ToolCallEvent, cwd: string): string[] {
+function targets(event: ToolCallEvent | ToolResultEvent, cwd: string): string[] {
     if (event.toolName === "write") {
         if (!("path" in event.input)) return [];
         const target = event.input.path;
@@ -206,26 +217,51 @@ export class WriteRecorder {
         const snapshots = this.#snapshots.get(event.toolCallId);
         if (snapshots === undefined) return;
         this.#snapshots.delete(event.toolCallId);
+        // An extension's `tool_call` hook may have redirected the call. Oh My Pi
+        // hands every hook the same original input and only aggregates the
+        // revisions afterwards, so the effective target is first visible here.
+        const effective = await this.#effectiveTargets(event, snapshots);
         const records: RecordedChange[] = [];
-        for (const snapshot of snapshots) {
-            const change = event.isError ? undefined : await this.#changeOf(snapshot);
-            if (change) {
-                if ("newText" in change) {
-                    this.#changed.set(snapshot.key, {
-                        newText: change.newText,
-                        at: (this.#clock += 1),
-                    });
-                }
-                records.push(change);
+        if (!event.isError) {
+            for (const target of effective) {
+                const change = await this.#changeOf(target);
+                if (change) records.push(change);
             }
-            this.#forgetUnwatched(snapshot.key);
         }
+        for (const snapshot of snapshots) this.#forgetUnwatched(snapshot.key);
+        for (const target of effective) this.#forgetUnwatched(target.key);
         if (records.length > 0) this.#records.set(event.toolCallId, records);
+    }
+
+    /** The files the call really touched, each paired with the state Pico saw before it ran. */
+    async #effectiveTargets(event: ToolResultEvent, snapshots: Snapshot[]): Promise<Snapshot[]> {
+        const files = targets(event, this.#cwd);
+        if (files.length === 0) return snapshots;
+        const seen = new Map(snapshots.map(snapshot => [snapshot.key, snapshot]));
+        const effective: Snapshot[] = [];
+        for (const file of files) {
+            const key = await realPath(file);
+            const snapshot = seen.get(key);
+            effective.push(
+                snapshot ?? {
+                    path: file,
+                    key,
+                    // Pico never saw this file before the call, so it has no old text.
+                    before: { noDiff: "an extension changed which file the call wrote" },
+                    at: this.#clock,
+                },
+            );
+        }
+        return effective;
     }
 
     /** What the call did to one of its targets, or why Pico cannot tell. */
     async #changeOf(snapshot: Snapshot): Promise<RecordedChange | undefined> {
+        // A change that landed after this snapshot is what this call replaced, so
+        // the previous state is read before this call's own state replaces it.
+        const overtaken = this.#changed.get(snapshot.key);
         const after = await readState(snapshot.path);
+        this.#changed.set(snapshot.key, { after, at: (this.#clock += 1) });
         if (undiffable(after)) {
             return { path: snapshot.path, noDiff: after.noDiff };
         }
@@ -235,9 +271,8 @@ export class WriteRecorder {
         // and a symlink to it count as one. A file a `bash` command rewrote inside
         // the same batch is invisible here: nothing reports it, so the snapshot
         // stands.
-        const overtaken = this.#changed.get(snapshot.key);
         const replaced =
-            overtaken && overtaken.at > snapshot.at ? { text: overtaken.newText } : snapshot.before;
+            overtaken && overtaken.at > snapshot.at ? overtaken.after : snapshot.before;
         if (undiffable(replaced)) {
             return { path: snapshot.path, noDiff: replaced.noDiff };
         }

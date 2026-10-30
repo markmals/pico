@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
@@ -8,6 +9,7 @@ import {
     installExitingExtension,
     installRecordingExtension,
     installThrowingFactoryExtension,
+    installWriteRedirectingExtension,
     recordedExtensionEvents,
 } from "./testing/extension-fixture.ts";
 import {
@@ -177,5 +179,45 @@ describe("proposal.0001 extension failures", () => {
             stderr().includes("PICO_FACTORY_FAILED"),
             `stderr does not name the error: ${stderr()}`,
         );
+    });
+});
+
+describe("proposal.0001 rewritten tool input", () => {
+    test("a write an extension redirected is recorded against the file that changed", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const requested = path.join(cwd, "requested.txt");
+        const actual = path.join(cwd, "actual.txt");
+        fs.writeFileSync(requested, "untouched\n");
+        fs.writeFileSync(actual, "before\n");
+        installWriteRedirectingExtension(path.join(cwd, ".omp", "extensions"), "actual.txt");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "requested.txt", content: "after\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write requested.txt");
+
+        assert.equal(fs.readFileSync(requested, "utf8"), "untouched\n");
+        assert.equal(fs.readFileSync(actual, "utf8"), "after\n");
+        const records = session.takeRecordedChanges("write-1");
+        assert.equal(records.length, 1);
+        assert.equal(records[0]?.path, actual);
     });
 });

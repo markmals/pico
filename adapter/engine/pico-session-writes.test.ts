@@ -525,3 +525,138 @@ describe("proposal.0001 undiffable files", () => {
         ]);
     });
 });
+
+describe("proposal.0001 batch corrections", () => {
+    test("a NUL byte past the first pages still marks the file binary", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "late-nul.bin");
+        fs.writeFileSync(absolute, Buffer.concat([Buffer.alloc(8192, 65), Buffer.from([0, 128])]));
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "late-nul.bin", content: "text\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("replace late-nul.bin");
+
+        assert.deepEqual(session.takeRecordedChanges("write-1"), [
+            { path: absolute, noDiff: "it is a binary file" },
+        ]);
+    });
+
+    test("a write after a binary write in the same batch inherits the reason", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "batch.bin");
+        fs.writeFileSync(absolute, "before\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "batch.bin", content: "\u0000binary\n" },
+                                "write-1",
+                            ),
+                            toolCall("write", { path: "batch.bin", content: "final\n" }, "write-2"),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write binary then text");
+
+        assert.deepEqual(session.takeRecordedChanges("write-2"), [
+            { path: absolute, noDiff: "it is a binary file" },
+        ]);
+    });
+
+    test("a file deleted and recreated in one batch is recreated from nothing", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "deleted.txt");
+        fs.writeFileSync(absolute, "before\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    { content: [toolCall("read", { path: "deleted.txt" })] },
+                    editThenWrite("deleted.txt", "REM", "recreated\n", "write-2"),
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("delete then recreate deleted.txt");
+
+        assert.deepEqual(session.takeRecordedChanges("write-2"), [
+            { path: absolute, oldText: null, newText: "recreated\n" },
+        ]);
+    });
+
+    test("a write through a dangling symlink sees what the batch created", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const target = path.join(cwd, "created-target.txt");
+        const dangling = path.join(cwd, "dangling.txt");
+        fs.symlinkSync("created-target.txt", dangling);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "created-target.txt", content: "intermediate\n" },
+                                "write-1",
+                            ),
+                            toolCall(
+                                "write",
+                                { path: "dangling.txt", content: "final\n" },
+                                "write-2",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("create the target then write through the link");
+
+        assert.equal(fs.readFileSync(target, "utf8"), "final\n");
+        assert.deepEqual(session.takeRecordedChanges("write-2"), [
+            { path: dangling, oldText: "intermediate\n", newText: "final\n" },
+        ]);
+    });
+});

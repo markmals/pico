@@ -10,14 +10,25 @@ import { unwrapHashlineHeaderPath } from "@oh-my-pi/pi-coding-agent/tools/plan-m
 import { getEditInputPaths } from "@oh-my-pi/pi-tui/tools/edit";
 import fs from "node:fs/promises";
 
-export interface RecordedChange {
-    /** Absolute path of the file the tool call changed. */
-    path: string;
-    /** `null` when the file did not exist. */
-    oldText: string | null;
-    /** The file's content once the tool call finished, byte for byte. */
-    newText: string;
-}
+/**
+ * What one tool call did to one file: the text it replaced and the text it left,
+ * or — when Pico could not read the file before or after the call — why not.
+ */
+export type RecordedChange =
+    | {
+          /** Absolute path of the file the tool call changed. */
+          path: string;
+          /** `null` when the file did not exist. */
+          oldText: string | null;
+          /** The file's content once the tool call finished, byte for byte; `""` when it was removed. */
+          newText: string;
+      }
+    | {
+          /** Absolute path of the file the tool call targeted. */
+          path: string;
+          /** The read failure that kept Pico from telling what changed. */
+          unreadable: string;
+      };
 
 /** The synthetic source Pico's own extension reports; it loads no file. */
 const PICO_WRITE_RECORDER = "<pico:write-recorder>";
@@ -33,7 +44,7 @@ interface Change {
  * other reason. The third case is held apart from the second so an unreadable
  * file is never reported as a creation or a deletion that never happened.
  */
-type FileState = { readonly text: string } | "missing" | "unreadable";
+type FileState = { readonly text: string } | "missing" | { readonly unreadable: string };
 
 /** One file as it stood before a tool call that may change it. */
 interface Snapshot {
@@ -50,8 +61,13 @@ async function readState(absolutePath: string): Promise<FileState> {
     try {
         return { text: await fs.readFile(absolutePath, "utf8") };
     } catch (error) {
-        return isMissing(error) ? "missing" : "unreadable";
+        if (isMissing(error)) return "missing";
+        return { unreadable: error instanceof Error ? error.message : String(error) };
     }
+}
+
+function isUnreadable(state: FileState): state is { readonly unreadable: string } {
+    return state !== "missing" && "unreadable" in state;
 }
 
 function absolute(target: string, cwd: string): string | undefined {
@@ -146,7 +162,12 @@ export class WriteRecorder {
         for (const snapshot of snapshots) {
             const change = event.isError ? undefined : await this.#changeOf(snapshot);
             if (change) {
-                this.#changed.set(change.path, { newText: change.newText, at: (this.#clock += 1) });
+                if ("newText" in change) {
+                    this.#changed.set(change.path, {
+                        newText: change.newText,
+                        at: (this.#clock += 1),
+                    });
+                }
                 records.push(change);
             }
             this.#forgetUnwatched(snapshot.path);
@@ -154,10 +175,12 @@ export class WriteRecorder {
         if (records.length > 0) this.#records.set(event.toolCallId, records);
     }
 
-    /** What the call did to one of its targets, or nothing when that cannot be told. */
+    /** What the call did to one of its targets, or why Pico cannot tell. */
     async #changeOf(snapshot: Snapshot): Promise<RecordedChange | undefined> {
         const after = await readState(snapshot.path);
-        if (after === "unreadable") return undefined;
+        if (isUnreadable(after)) {
+            return { path: snapshot.path, unreadable: after.unreadable };
+        }
         // OMP prepares every tool call's arguments before it runs any of them, so
         // calls in one batch snapshot the same content. A change that landed after
         // this snapshot is what this call replaced. A file a `bash` command rewrote
@@ -166,7 +189,9 @@ export class WriteRecorder {
         const overtaken = this.#changed.get(snapshot.path);
         const replaced =
             overtaken && overtaken.at > snapshot.at ? { text: overtaken.newText } : snapshot.before;
-        if (replaced === "unreadable") return undefined;
+        if (isUnreadable(replaced)) {
+            return { path: snapshot.path, unreadable: replaced.unreadable };
+        }
         const oldText = replaced === "missing" ? null : replaced.text;
         // A file the call removed reports empty content, so a deletion still carries
         // its path and the text it had. A target that was absent and still is was

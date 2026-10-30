@@ -151,11 +151,13 @@ export class SessionEventMapper {
                 ? [textContent(resultText(result))]
                 : this.#successContent(toolName, result, details, changed),
         };
-        if (!isError && toolName === "edit") {
+        if (!isError) {
             const locations =
                 changed.length > 0
                     ? changed.map(change => ({ path: change.path }))
-                    : editedFiles(details, this.#session.cwd);
+                    : toolName === "edit"
+                      ? editedFiles(details, this.#session.cwd)
+                      : [];
             if (locations.length > 0) update.locations = locations;
         }
         return [update];
@@ -168,12 +170,29 @@ export class SessionEventMapper {
         changed: readonly RecordedChange[],
     ): ToolCallContent[] {
         if (changed.length > 0) {
-            return changed.map(change => ({
-                type: "diff",
-                path: change.path,
-                oldText: change.oldText,
-                newText: change.newText,
-            }));
+            const diffs: ToolCallContent[] = [];
+            // A file Pico could not read back has no diff to show, so the reason takes
+            // its place; the other files still show theirs.
+            const unreadable: ToolCallContent[] = [];
+            for (const change of changed) {
+                if ("newText" in change) {
+                    diffs.push({
+                        type: "diff",
+                        path: change.path,
+                        oldText: change.oldText,
+                        newText: change.newText,
+                    });
+                } else {
+                    unreadable.push(
+                        textContent(
+                            `Could not show the change to ${change.path}: ${change.unreadable}`,
+                        ),
+                    );
+                }
+            }
+            return diffs.length > 0
+                ? [...diffs, ...unreadable]
+                : [textContent(resultText(result)), ...unreadable];
         }
         if (toolName === "edit") {
             const diffs = editDiffs(details, this.#session.cwd);

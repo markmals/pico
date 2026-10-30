@@ -121,7 +121,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
         for (let seed = 1; seed <= 200; seed++) {
             const mapper = new SessionEventMapper({
                 cwd: "/workspace",
-                takeWrite: () => undefined,
+                takeChanges: () => [],
                 mcpToolIdentity: () => undefined,
             });
             const events = randomSequence(seed);
@@ -177,7 +177,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("a second end for the same call reports nothing", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeWrite: () => undefined,
+            takeChanges: () => [],
             mcpToolIdentity: () => undefined,
         });
         mapper.map(toolExecutionStart({ toolCallId: "call-1", toolName: "read", args: {} }));
@@ -200,7 +200,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("an end for a call that never started reports nothing", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeWrite: () => undefined,
+            takeChanges: () => [],
             mcpToolIdentity: () => undefined,
         });
 
@@ -214,7 +214,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("closing open tool calls fails only the calls still running", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeWrite: () => undefined,
+            takeChanges: () => [],
             mcpToolIdentity: () => undefined,
         });
         mapper.map(
@@ -246,7 +246,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("closing open tool calls twice reports nothing the second time", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeWrite: () => undefined,
+            takeChanges: () => [],
             mcpToolIdentity: () => undefined,
         });
         mapper.map(

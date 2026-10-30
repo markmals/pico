@@ -110,3 +110,16 @@ export function installWriteRedirectingExtension(
 `;
     fs.writeFileSync(path.join(extensionsDirectory, "redirect.ts"), source);
 }
+
+/** Installs an extension whose `tool_result` hook replaces a write's details, dropping its paths. */
+export function installDetailStrippingExtension(extensionsDirectory: string): void {
+    fs.mkdirSync(extensionsDirectory, { recursive: true });
+    const source = `export default function (pi) {
+    pi.on("tool_result", event => {
+        if (event.toolName !== "write") return undefined;
+        return { details: { replaced: true } };
+    });
+}
+`;
+    fs.writeFileSync(path.join(extensionsDirectory, "strip-details.ts"), source);
+}

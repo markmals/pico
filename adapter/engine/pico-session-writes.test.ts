@@ -3,10 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import type { RecordedChange } from "./pico-session.ts";
+
 import { createPicoSession } from "./pico-session.ts";
+import { installDetailStrippingExtension } from "./testing/extension-fixture.ts";
 import {
+    collectToolCallIds,
     collectWrites,
     createMockModel,
+    editAfterRead,
     mockAuthStorage,
     picoWorkspace,
     recordToolExecutions,
@@ -57,7 +62,6 @@ describe("proposal.0001 recorded writes", () => {
         const absolute = path.join(cwd, "fresh.txt");
         assert.deepEqual(written, [{ path: absolute, oldText: null, newText: "hi\n" }]);
         assert.equal(fs.readFileSync(absolute, "utf8"), "hi\n");
-        assert.equal(session.takeWrite(absolute), undefined);
     });
 
     test("a write over an existing file records exactly what it replaced", async t => {
@@ -86,7 +90,6 @@ describe("proposal.0001 recorded writes", () => {
             { path: absolute, oldText: null, newText: "one\n" },
             { path: absolute, oldText: "one\n", newText: "two\n" },
         ]);
-        assert.equal(session.takeWrite(absolute), undefined);
     });
 
     test("a write over a CRLF file keeps CRLF on disk, and that is the text recorded", async t => {
@@ -202,11 +205,13 @@ describe("proposal.0001 recorded writes", () => {
             }),
         });
         t.after(() => session.dispose());
+        const ids = collectToolCallIds(session.engine);
 
         await session.engine.prompt("create unclaimed.txt");
 
         assert.equal(fs.readFileSync(path.join(cwd, "unclaimed.txt"), "utf8"), "hi\n");
-        assert.equal(session.takeWrite(path.join(cwd, "unclaimed.txt")), undefined);
+        assert.equal(ids.length, 1);
+        assert.deepEqual(session.takeChanges(ids[0] ?? ""), []);
     });
 });
 
@@ -235,6 +240,31 @@ describe("proposal.0001 undiffable files", () => {
         assert.deepEqual(written, [{ path: absolute, noDiff: "it is larger than 1 MiB" }]);
     });
 
+    test("a file larger than a mebibyte still lends the write its BOM and line endings", async t => {
+        const { cwd, session, written } = await writingSession(t, [
+            { file: "huge-crlf.txt", content: "after\n" },
+        ]);
+        const absolute = path.join(cwd, "huge-crlf.txt");
+        fs.writeFileSync(absolute, `\uFEFF${"x\r\n".repeat(400_000)}`);
+
+        await session.engine.prompt("replace huge-crlf.txt");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "\uFEFFafter\r\n");
+        assert.deepEqual(written, [{ path: absolute, noDiff: "it is larger than 1 MiB" }]);
+    });
+
+    test("a file that is not valid UTF-8 reports no diff and says why", async t => {
+        const { cwd, session, written } = await writingSession(t, [
+            { file: "latin.bin", content: "text\n" },
+        ]);
+        const absolute = path.join(cwd, "latin.bin");
+        fs.writeFileSync(absolute, Buffer.from([0xff, 0xfe, 0x41]));
+
+        await session.engine.prompt("replace latin.bin");
+
+        assert.deepEqual(written, [{ path: absolute, noDiff: "it is a binary file" }]);
+    });
+
     test("a write over a file Pico cannot read reports why, and still runs", async t => {
         const { cwd, session, written } = await writingSession(t, [
             { file: "unreadable.txt", content: "replaced\n" },
@@ -258,5 +288,85 @@ describe("proposal.0001 undiffable files", () => {
         );
         assert.match(record.noDiff, /could not read it/);
         assert.match(record.noDiff, /EACCES/);
+    });
+});
+
+describe("proposal.0001 change attribution", () => {
+    test("an edit's record is attributed to the edit's tool call", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "edited.txt");
+        fs.writeFileSync(absolute, "one\ntwo\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    { content: [toolCall("read", { path: "edited.txt" })] },
+                    editAfterRead("edited.txt", "PUT 2.=2:\n+TWO", "edit-1"),
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+        const byCall = new Map<string, RecordedChange[]>();
+        session.engine.subscribe(event => {
+            if (event.type !== "tool_execution_end") return;
+            byCall.set(event.toolCallId, session.takeChanges(event.toolCallId));
+        });
+
+        await session.engine.prompt("edit edited.txt");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "one\nTWO\n");
+        assert.deepEqual(byCall.get("edit-1"), [
+            { path: absolute, oldText: "one\ntwo\n", newText: "one\nTWO\n" },
+        ]);
+    });
+
+    test("an extension that rewrites a write's details does not strand its record", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "detailed.txt");
+        installDetailStrippingExtension(path.join(cwd, ".omp", "extensions"));
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "detailed.txt", content: "one\n" },
+                                "write-1",
+                            ),
+                            toolCall(
+                                "write",
+                                { path: "detailed.txt", content: "two\n" },
+                                "write-2",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+        const byCall = new Map<string, RecordedChange[]>();
+        session.engine.subscribe(event => {
+            if (event.type !== "tool_execution_end") return;
+            byCall.set(event.toolCallId, session.takeChanges(event.toolCallId));
+        });
+
+        await session.engine.prompt("write detailed.txt twice");
+
+        assert.deepEqual(byCall.get("write-1"), [
+            { path: absolute, oldText: null, newText: "one\n" },
+        ]);
+        assert.deepEqual(byCall.get("write-2"), [
+            { path: absolute, oldText: "one\n", newText: "two\n" },
+        ]);
     });
 });

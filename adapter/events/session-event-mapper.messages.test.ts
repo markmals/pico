@@ -6,7 +6,7 @@ import { SessionEventMapper } from "./session-event-mapper.ts";
 function mapper(): SessionEventMapper {
     return new SessionEventMapper({
         cwd: "/workspace",
-        takeWrite: () => undefined,
+        takeChanges: () => [],
         mcpToolIdentity: () => undefined,
     });
 }

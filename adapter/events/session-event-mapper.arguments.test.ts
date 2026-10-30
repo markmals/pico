@@ -104,7 +104,7 @@ describe("proposal.0001 tool call translation is total", () => {
             const args = randomArgs(next);
             const mapper = new SessionEventMapper({
                 cwd: CWD,
-                takeWrite: () => undefined,
+                takeChanges: () => [],
                 mcpToolIdentity: () => undefined,
             });
 
@@ -128,7 +128,7 @@ describe("proposal.0001 tool call translation is total", () => {
         path => {
             const mapper = new SessionEventMapper({
                 cwd: CWD,
-                takeWrite: () => undefined,
+                takeChanges: () => [],
                 mcpToolIdentity: () => undefined,
             });
 

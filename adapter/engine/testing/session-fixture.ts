@@ -1,0 +1,186 @@
+/** Shared fixtures for the Pico engine tests: temporary workspaces, credentials, a deterministic model, and engine observation. */
+
+import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import type { MockHandler, MockModel } from "@oh-my-pi/pi-ai/providers/mock";
+import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent";
+
+import { registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
+import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
+import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+export { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
+
+registerMockApi();
+
+/** The built-in tools proposal.0001 puts in every Pico session. */
+export const PICO_ROSTER = ["read", "grep", "glob", "edit", "write", "bash", "web_search"];
+
+/** Tools proposal.0001 excludes or defers; none of them may ever be active. */
+export const EXCLUDED_TOOL_NAMES = [
+    "eval",
+    "lsp",
+    "task",
+    "ask",
+    "todo",
+    "find",
+    "wait",
+    "ast_grep",
+    "ast_edit",
+    "checkpoint",
+    "rewind",
+    "debug",
+    "memory_edit",
+    "retain",
+    "recall",
+    "reflect",
+    "learn",
+    "manage_skill",
+    "vibe_spawn",
+    "vibe_send",
+    "vibe_wait",
+    "vibe_kill",
+    "vibe_list",
+];
+
+/** The slice of `node:test`'s context these fixtures need. */
+export interface Cleanups {
+    after(cleanup: () => void | Promise<void>): void;
+}
+
+export function temporaryDirectory(t: Cleanups, prefix: string): string {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), `pico-${prefix}-`));
+    t.after(() => {
+        // The credential-store tests lock their agent directory; unlock it so the removal succeeds.
+        fs.chmodSync(directory, 0o755);
+        fs.rmSync(directory, { recursive: true, force: true });
+    });
+    return directory;
+}
+
+export interface PicoWorkspace {
+    cwd: string;
+    agentDir: string;
+}
+
+/** A temporary working directory and OMP agent directory, so no test reads or writes the user's `~/.omp`. */
+export function picoWorkspace(t: Cleanups, agentConfig?: string): PicoWorkspace {
+    const cwd = temporaryDirectory(t, "cwd");
+    const agentDir = temporaryDirectory(t, "agent");
+    if (agentConfig !== undefined) fs.writeFileSync(path.join(agentDir, "config.yml"), agentConfig);
+    return { cwd, agentDir };
+}
+
+/** A credential store in `agentDir` holding the runtime key the mock provider needs. */
+export async function mockAuthStorage(agentDir: string): Promise<AuthStorage> {
+    const authStorage = await discoverAuthStorage(agentDir);
+    authStorage.keys.setRuntime("mock", "test");
+    return authStorage;
+}
+
+/**
+ * Makes `agentDir` the process's OMP agent directory for one test. User-level
+ * extension discovery reads the process agent directory rather than the one a
+ * session was created with, so a temporary directory can only stand in for the
+ * user's `~/.omp/agent` this way.
+ */
+export function useAsProcessAgentDir(t: Cleanups, agentDir: string): void {
+    const previousDir = getAgentDir();
+    const previousEnv = process.env.PI_CODING_AGENT_DIR;
+    setAgentDir(agentDir);
+    t.after(() => {
+        setAgentDir(previousDir);
+        if (previousEnv === undefined) delete process.env.PI_CODING_AGENT_DIR;
+        else process.env.PI_CODING_AGENT_DIR = previousEnv;
+    });
+}
+
+/** Creates the credential store in `agentDir`, then denies writes to it the way Sesh's Autonomous sandbox does. */
+export async function lockCredentialStore(agentDir: string): Promise<void> {
+    const storage = await discoverAuthStorage(agentDir);
+    storage.close();
+    for (const entry of fs.readdirSync(agentDir)) fs.chmodSync(path.join(agentDir, entry), 0o444);
+    fs.chmodSync(agentDir, 0o555);
+}
+
+/** API keys OMP reads straight from the environment, which would otherwise resolve a model for a bare agent directory. */
+const CREDENTIAL_ENV_PATTERN = /(_KEY|_TOKEN|_CREDENTIALS)$/;
+
+/** Hides the machine's provider credentials for one test, so "no model configured" is the real state. */
+export function withoutProviderCredentials(t: Cleanups): void {
+    const hidden: [string, string][] = [];
+    for (const [variable, value] of Object.entries(process.env)) {
+        if (value === undefined || !CREDENTIAL_ENV_PATTERN.test(variable)) continue;
+        hidden.push([variable, value]);
+        delete process.env[variable];
+    }
+    t.after(() => {
+        for (const [variable, value] of hidden) process.env[variable] = value;
+    });
+}
+
+export function toolCall(name: string, args: Record<string, unknown> = {}) {
+    return { type: "toolCall" as const, name, arguments: args };
+}
+
+/**
+ * An `edit` call built from the hashline tag the preceding `read` returned: the
+ * edit tool rejects an input whose tag does not match the file it last served.
+ */
+export function editAfterRead(file: string, hunk: string): MockHandler {
+    return context => {
+        const transcript = JSON.stringify(context.messages.at(-1));
+        const marker = `[${file}#`;
+        const at = transcript.indexOf(marker);
+        if (at === -1) throw new Error(`no hashline tag for ${file} in the preceding tool result`);
+        const tag = transcript.slice(at + marker.length, at + marker.length + 4);
+        return { content: [toolCall("edit", { input: `[${file}#${tag}]\n${hunk}` })] };
+    };
+}
+
+/** The system prompt the model received on `call`, as one string. */
+export function systemPromptOf(model: MockModel, call = 0): string {
+    const received = model.calls[call];
+    if (received === undefined) throw new Error(`the model was not called ${call + 1} time(s)`);
+    return (received.context.systemPrompt ?? []).join("\n");
+}
+
+export interface ToolExecution {
+    name: string;
+    isError: boolean;
+    text: string;
+}
+
+function resultText(result: unknown): string {
+    if (typeof result !== "object" || result === null || !("content" in result)) return "";
+    const { content } = result;
+    if (!Array.isArray(content)) return "";
+    const texts: string[] = [];
+    for (const block of content) {
+        if (
+            typeof block === "object" &&
+            block !== null &&
+            "text" in block &&
+            typeof block.text === "string"
+        ) {
+            texts.push(block.text);
+        }
+    }
+    return texts.join("");
+}
+
+/** Collects every tool the engine actually executed, in order. */
+export function recordToolExecutions(engine: AgentSession): ToolExecution[] {
+    const executions: ToolExecution[] = [];
+    engine.subscribe((event: AgentSessionEvent) => {
+        if (event.type !== "tool_execution_end") return;
+        executions.push({
+            name: event.toolName,
+            isError: event.isError === true,
+            text: resultText(event.result),
+        });
+    });
+    return executions;
+}

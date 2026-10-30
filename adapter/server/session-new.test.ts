@@ -108,13 +108,13 @@ describe("proposal.0001 session/new reports why a session could not be created",
 });
 
 describe("proposal.0001 session/new creates independent sessions", () => {
-    test("the response carries a session id and nothing else", async () => {
+    test("the response carries a session id and the config options, and nothing else", async () => {
         const engine = await mockEngine([{ content: ["ok"] }]);
         const client = await connect(engine.createSession);
 
         const response = (await newSession(client, temporaryProject())) as NewSessionResponse;
 
-        expect(Object.keys(response)).toEqual(["sessionId"]);
+        expect(Object.keys(response).toSorted()).toEqual(["configOptions", "sessionId"]);
         expect(typeof response.sessionId).toBe("string");
     });
 

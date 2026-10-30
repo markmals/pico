@@ -37,20 +37,28 @@ export function neverSettles<T>(): Promise<T> {
 export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSession {
     const calls: string[] = [];
     const counters = { disposals: 0 };
-    let listener: ((event: AgentSessionEvent) => void) | undefined;
+    const listeners = new Set<(event: AgentSessionEvent) => void>();
     let disposalPhase: DisposalPhase | undefined;
 
     // Only the surface the ACP server drives; the rest of AgentSession is unreachable from here.
+    const model = { provider: "fake", id: "model", name: "Fake model", reasoning: false };
     const engine = {
+        model,
+        getAvailableModels: () => [model],
+        getAvailableThinkingLevels: () => [],
+        configuredThinkingLevel: () => undefined,
         subscribe: (subscriber: (event: AgentSessionEvent) => void) => {
-            listener = subscriber;
+            listeners.add(subscriber);
             return () => {
-                listener = undefined;
+                listeners.delete(subscriber);
             };
         },
         prompt: () => {
             calls.push("prompt");
-            return behaviour.prompt?.(event => listener?.(event)) ?? neverSettles<boolean>();
+            const emit = (event: AgentSessionEvent) => {
+                for (const listener of listeners) listener(event);
+            };
+            return behaviour.prompt?.(emit) ?? neverSettles<boolean>();
         },
         abort: () => {
             calls.push("abort");
@@ -68,6 +76,10 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
             takeChanges: () => [],
             writesSettled: () => behaviour.writesSettled?.() ?? Promise.resolve(),
             mcpToolIdentity: () => undefined,
+            selectModel: () => Promise.reject(new Error("the fake session cannot switch models")),
+            selectThinkingLevel: () => {
+                throw new Error("the fake session cannot set a thinking level");
+            },
             dispose: async () => {
                 calls.push("dispose");
                 counters.disposals++;

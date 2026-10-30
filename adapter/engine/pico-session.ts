@@ -2,6 +2,7 @@ import type { McpServerStdio } from "@agentclientprotocol/sdk";
 import type { Api, AuthStorage, Model } from "@oh-my-pi/pi-ai";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
+import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
 import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
@@ -56,6 +57,14 @@ export interface PicoSession {
     writesSettled(): Promise<void>;
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
+    /**
+     * Switches this session to `model` once its credentials resolve, as they must at startup.
+     * Lasts for this session only; nothing is persisted. Throws `PicoSessionError` when the
+     * credentials cannot be used, leaving the session on its current model.
+     */
+    selectModel(model: Model<Api>): Promise<void>;
+    /** Sets this session's thinking level. Lasts for this session only; nothing is persisted. */
+    selectThinkingLevel(level: ConfiguredThinkingLevel): void;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
 }
@@ -163,6 +172,11 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         takeChanges: toolCallId => writes.takeChanges(toolCallId),
         writesSettled: () => writes.writesSettled(),
         mcpToolIdentity: toolName => identities.get(toolName),
+        selectModel: async model => {
+            await verifyCredentials(liveEngine, model);
+            await liveEngine.setModelTemporary(model);
+        },
+        selectThinkingLevel: level => liveEngine.setThinkingLevel(level, false),
         dispose: async () => {
             if (disposed) return;
             disposed = true;
@@ -231,7 +245,7 @@ async function verifyCredentials(engine: AgentSession, model: Model<Api>): Promi
     if (credential === undefined) {
         throw new PicoSessionError(
             `Pico could not use the credentials for ${named}: Oh My Pi resolved no usable API key for ${model.provider}. ` +
-                "Sign in to that provider in Oh My Pi, then start a new session.",
+                "Sign in to that provider in Oh My Pi first.",
         );
     }
 }

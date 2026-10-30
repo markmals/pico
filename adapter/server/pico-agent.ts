@@ -129,9 +129,18 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
             );
         }
         const sessionId = randomUUID();
-        sessions.set(sessionId, new SessionRuntime(sessionId, session, requireClient(client)));
-        return { sessionId };
+        const runtime = new SessionRuntime(sessionId, session, requireClient(client));
+        sessions.set(sessionId, runtime);
+        return { sessionId, configOptions: runtime.configOptions() };
     }
+
+    app.onRequest("session/set_config_option", async ({ params }) => {
+        const runtime = sessions.get(params.sessionId);
+        if (!runtime) {
+            throw RequestError.invalidParams(undefined, `unknown session "${params.sessionId}"`);
+        }
+        return { configOptions: await runtime.setConfigOption(params.configId, params.value) };
+    });
 
     app.onRequest("session/prompt", async ({ params }) => {
         const runtime = sessions.get(params.sessionId);

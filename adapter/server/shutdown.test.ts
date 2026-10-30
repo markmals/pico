@@ -41,6 +41,8 @@ describe("proposal.0001 shutdown", () => {
                     takeChanges: toolCallId => session.takeChanges(toolCallId),
                     writesSettled: () => session.writesSettled(),
                     mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
+                    selectModel: model => session.selectModel(model),
+                    selectThinkingLevel: level => session.selectThinkingLevel(level),
                     dispose: async () => {
                         disposed.push(session.cwd);
                         await session.dispose();

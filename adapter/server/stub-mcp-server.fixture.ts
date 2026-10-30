@@ -1,6 +1,9 @@
 /**
- * A minimal stdio MCP server, spawned by shutdown tests so they can watch Pico
- * terminate the child it started. It serves the handshake and an empty tool list.
+ * A minimal stdio MCP server, spawned by the server tests so they can watch Pico
+ * mount its tools, call them, and terminate the child it started.
+ *
+ * It offers Sesh's two simplest tools, answers a call by echoing its arguments,
+ * and serves nothing else.
  *
  * Usage: bun stub-mcp-server.fixture.ts <pid-file>
  */
@@ -10,8 +13,33 @@ export {};
 interface JsonRpcMessage {
     id?: number | string;
     method?: string;
-    params?: { protocolVersion?: string };
+    params?: {
+        protocolVersion?: string;
+        name?: string;
+        arguments?: Record<string, unknown>;
+    };
 }
+
+const TOOLS = [
+    {
+        name: "ask_user",
+        description: "Asks the user a question and waits for the answer.",
+        inputSchema: {
+            type: "object",
+            properties: { question: { type: "string" } },
+            required: ["question"],
+        },
+    },
+    {
+        name: "notify",
+        description: "Sends the user a push notification.",
+        inputSchema: {
+            type: "object",
+            properties: { body: { type: "string" } },
+            required: ["body"],
+        },
+    },
+];
 
 const pidFile = process.argv[2];
 if (!pidFile) throw new Error("usage: stub-mcp-server.fixture.ts <pid-file>");
@@ -35,7 +63,17 @@ for await (const line of console) {
             });
             break;
         case "tools/list":
-            reply(message.id, { tools: [] });
+            reply(message.id, { tools: TOOLS });
+            break;
+        case "tools/call":
+            reply(message.id, {
+                content: [
+                    {
+                        type: "text",
+                        text: `${message.params?.name} answered ${JSON.stringify(message.params?.arguments ?? {})}`,
+                    },
+                ],
+            });
             break;
         default:
             reply(message.id, {});

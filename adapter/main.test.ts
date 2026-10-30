@@ -28,12 +28,17 @@ async function readLine(stream: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 describe("proposal.0001 the stdio entry point", () => {
-    test("answers initialize on stdout with the package version", async () => {
-        const pico = Bun.spawn([process.execPath, ENTRY_POINT], {
+    function spawnPico(): Bun.Subprocess<"pipe", "pipe", "pipe"> {
+        return Bun.spawn([process.execPath, ENTRY_POINT], {
             stdin: "pipe",
             stdout: "pipe",
             stderr: "pipe",
         });
+    }
+
+    async function initialize(pico: Bun.Subprocess<"pipe", "pipe", "pipe">): Promise<{
+        result?: { protocolVersion?: number; agentInfo?: { name?: string; version?: string } };
+    }> {
         pico.stdin.write(
             `${JSON.stringify({
                 jsonrpc: "2.0",
@@ -43,10 +48,15 @@ describe("proposal.0001 the stdio entry point", () => {
             })}\n`,
         );
         await pico.stdin.flush();
-
-        const response = JSON.parse(await readLine(pico.stdout)) as {
+        return JSON.parse(await readLine(pico.stdout)) as {
             result?: { protocolVersion?: number; agentInfo?: { name?: string; version?: string } };
         };
+    }
+
+    test("answers initialize on stdout with the package version", async () => {
+        const pico = spawnPico();
+
+        const response = await initialize(pico);
 
         expect(response.result?.protocolVersion).toBe(1);
         expect(response.result?.agentInfo?.name).toBe("pico");
@@ -56,12 +66,21 @@ describe("proposal.0001 the stdio entry point", () => {
         expect(await pico.exited).toBe(0);
     }, 30_000);
 
+    test.each(["SIGTERM", "SIGINT"] as const)(
+        "shuts down cleanly on %s",
+        async signal => {
+            const pico = spawnPico();
+            await initialize(pico);
+
+            pico.kill(signal);
+
+            expect(await pico.exited).toBe(0);
+        },
+        30_000,
+    );
+
     test("exits cleanly when its client disconnects without starting a session", async () => {
-        const pico = Bun.spawn([process.execPath, ENTRY_POINT], {
-            stdin: "pipe",
-            stdout: "pipe",
-            stderr: "pipe",
-        });
+        const pico = spawnPico();
 
         pico.stdin.end();
 

@@ -64,3 +64,19 @@ export function installExitingExtension(extensionsDirectory: string, exitCode = 
     );
     return extensionPath;
 }
+
+/** Installs an extension that logs once when its module runs and once when its factory runs. */
+export function installCountingExtension(extensionsDirectory: string, logPath: string): void {
+    fs.mkdirSync(extensionsDirectory, { recursive: true });
+    const source = `import fs from "node:fs";
+
+const record = line => fs.appendFileSync(${JSON.stringify(logPath)}, line + "\\n");
+
+record("module");
+
+export default function () {
+    record("factory");
+}
+`;
+    fs.writeFileSync(path.join(extensionsDirectory, "counting.ts"), source);
+}

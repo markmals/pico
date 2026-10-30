@@ -17,6 +17,7 @@ export interface ToolCallRecord {
     locations: ToolCallLocation[];
     content: ToolCallContent[];
     rawInput: unknown;
+    rawOutput: unknown;
 }
 
 /**
@@ -39,6 +40,7 @@ export function collectToolCalls(updates: SessionUpdate[]): ToolCallRecord[] {
                 locations: update.locations ?? [],
                 content: update.content ?? [],
                 rawInput: update.rawInput,
+                rawOutput: update.rawOutput,
             });
             continue;
         }
@@ -53,6 +55,7 @@ export function collectToolCalls(updates: SessionUpdate[]): ToolCallRecord[] {
         if (update.locations != null) call.locations = update.locations;
         if (update.content != null) call.content = update.content;
         if (update.rawInput !== undefined) call.rawInput = update.rawInput;
+        if (update.rawOutput !== undefined) call.rawOutput = update.rawOutput;
     }
 
     return [...calls.values()];
@@ -118,6 +121,22 @@ export function commandOutputProblem(
     return textOf(call).includes(output)
         ? null
         : `${call.title}: output does not contain ${JSON.stringify(output)}`;
+}
+
+export function commandExitCodeProblem(
+    calls: ToolCallRecord[],
+    command: string,
+    exitCode: number,
+): string | null {
+    let call = commandCall(calls, command);
+    if (call === undefined) return `no tool call with kind execute for ${JSON.stringify(command)}`;
+    if (call.rawOutput === null || typeof call.rawOutput !== "object") {
+        return `${call.title}: rawOutput is ${JSON.stringify(call.rawOutput) ?? "undefined"}, with no exit code in it`;
+    }
+    let { exitCode: reported } = call.rawOutput as { exitCode?: unknown };
+    return reported === exitCode
+        ? null
+        : `${call.title}: rawOutput.exitCode is ${String(reported)}, expected ${exitCode}`;
 }
 
 // The command the engine was asked to run, not the title: a substring match would accept

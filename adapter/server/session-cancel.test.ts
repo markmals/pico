@@ -13,6 +13,7 @@ import { removeTemporaryDirectories, temporaryProject } from "./engine-harness.t
 import { fakeSession, neverSettles } from "./fake-session.ts";
 import {
     closeOpenConnections,
+    conversationText,
     isRunning,
     settle,
     startPicoSession,
@@ -126,9 +127,14 @@ describe("proposal.0001 session/cancel", () => {
         const second = await session.prompt("the second request");
 
         expect(second.stopReason).toBe("end_turn");
-        const conversation = userText(session.model);
-        expect(conversation).toContain("the first request");
-        expect(conversation).toContain("the second request");
+        const prompts = userText(session.model);
+        expect(prompts).toContain("the first request");
+        expect(prompts).toContain("the second request");
+
+        // What the cancelled turn produced before it was stopped is still context.
+        const conversation = conversationText(session.model);
+        expect(conversation).toContain("Starting.");
+        expect(conversation).toContain("toolCall:bash");
     }, 20_000);
 
     test("a repeated cancel during the same turn is ignored", async () => {

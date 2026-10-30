@@ -5,6 +5,7 @@ import type {
     PromptResponse,
     SessionUpdate,
 } from "@agentclientprotocol/sdk";
+import type { Message } from "@oh-my-pi/pi-ai";
 import type { MockModel, MockResponseSource } from "@oh-my-pi/pi-ai/providers/mock";
 
 import type { ConnectedClient } from "./agent-harness.ts";
@@ -74,6 +75,30 @@ export function userText(model: MockModel): string {
                 : message.content.map(block => (block.type === "text" ? block.text : "")).join(""),
         )
         .join("\n");
+}
+
+/**
+ * The whole conversation the engine put in front of the model for its last call:
+ * every message's text, with each tool the assistant called named as
+ * `toolCall:<name>`.
+ */
+export function conversationText(model: MockModel): string {
+    const messages = model.calls.at(-1)?.context.messages ?? [];
+    return messages.map(describeMessage).join("\n");
+}
+
+function describeMessage(message: Message): string {
+    if (message.role === "assistant") {
+        return message.content
+            .map(block => {
+                if (block.type === "text") return block.text;
+                if (block.type === "thinking") return block.thinking;
+                return block.type === "toolCall" ? `toolCall:${block.name}` : "";
+            })
+            .join("\n");
+    }
+    if (typeof message.content === "string") return message.content;
+    return message.content.map(block => (block.type === "text" ? block.text : "")).join("");
 }
 
 export function updateKinds(updates: SessionUpdate[]): string[] {

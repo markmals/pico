@@ -14,14 +14,23 @@ import { SessionEventMapper } from "./session-event-mapper.ts";
 const TOOL_CALL_IDS = ["call-1", "call-2", "call-3"];
 const TOOL_NAMES = ["read", "write", "edit", "bash", "grep", "mcp__sesh_notify"];
 
-/** Deterministic generator so a failing sequence is reproducible from its seed. */
-function randomSequence(seed: number): AgentSessionEvent[] {
-    let state = seed;
-    const next = (bound: number) => {
-        state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+/**
+ * A 32-bit xorshift, deterministic per seed. Every step stays in uint32: a
+ * multiplying generator loses its low bits once the state passes 2^53, which
+ * silently collapses `% 4` to one branch and stops generating ends at all.
+ */
+function randomSource(seed: number): (bound: number) => number {
+    let state = seed >>> 0 || 0x9e37_79b9;
+    return bound => {
+        state = (state ^ (state << 13)) >>> 0;
+        state = state ^ (state >>> 17);
+        state = (state ^ (state << 5)) >>> 0;
         return state % bound;
     };
+}
 
+function randomSequence(seed: number): AgentSessionEvent[] {
+    const next = randomSource(seed);
     const events: AgentSessionEvent[] = [];
     const length = 1 + next(12);
     for (let index = 0; index < length; index++) {
@@ -57,6 +66,41 @@ function randomSequence(seed: number): AgentSessionEvent[] {
     return events;
 }
 
+/** What the generated sequences actually contained, so the property cannot pass vacuously. */
+interface Coverage {
+    starts: number;
+    updates: number;
+    completedEnds: number;
+    failedEnds: number;
+    /** Ends for a call that had already ended. */
+    duplicateEnds: number;
+    /** Updates or ends for a call that never started. */
+    orphans: number;
+}
+
+function tally(events: AgentSessionEvent[], coverage: Coverage): void {
+    const seen = new Map<string, "running" | "ended">();
+    for (const event of events) {
+        if (event.type === "tool_execution_start") {
+            coverage.starts++;
+            seen.set(event.toolCallId, "running");
+            continue;
+        }
+        if (event.type === "tool_execution_update") {
+            coverage.updates++;
+            if (!seen.has(event.toolCallId)) coverage.orphans++;
+            continue;
+        }
+        if (event.type !== "tool_execution_end") continue;
+        if (event.isError === true) coverage.failedEnds++;
+        else coverage.completedEnds++;
+        const state = seen.get(event.toolCallId);
+        if (state === undefined) coverage.orphans++;
+        else if (state === "ended") coverage.duplicateEnds++;
+        seen.set(event.toolCallId, "ended");
+    }
+}
+
 function toolCallIdOf(update: SessionUpdate): string | undefined {
     return update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update"
         ? update.toolCallId
@@ -65,6 +109,15 @@ function toolCallIdOf(update: SessionUpdate): string | undefined {
 
 describe("proposal.0001 tool call reporting invariants", () => {
     test("for any engine sequence every started call is opened once, in order, and settles once", () => {
+        const coverage: Coverage = {
+            starts: 0,
+            updates: 0,
+            completedEnds: 0,
+            failedEnds: 0,
+            duplicateEnds: 0,
+            orphans: 0,
+        };
+
         for (let seed = 1; seed <= 200; seed++) {
             const mapper = new SessionEventMapper({
                 cwd: "/workspace",
@@ -72,6 +125,7 @@ describe("proposal.0001 tool call reporting invariants", () => {
                 mcpToolIdentity: () => undefined,
             });
             const events = randomSequence(seed);
+            tally(events, coverage);
             const updates = events.flatMap(event => mapper.map(event));
             updates.push(...mapper.closeOpenToolCalls());
 
@@ -109,6 +163,52 @@ describe("proposal.0001 tool call reporting invariants", () => {
                 expect(terminals.length, `${context}: terminal status count`).toBe(1);
             }
         }
+
+        // The property is only worth its name if the sequences contained the shapes
+        // it claims to cover.
+        expect(coverage.starts, "generated starts").toBeGreaterThan(0);
+        expect(coverage.updates, "generated updates").toBeGreaterThan(0);
+        expect(coverage.completedEnds, "generated successful ends").toBeGreaterThan(0);
+        expect(coverage.failedEnds, "generated failed ends").toBeGreaterThan(0);
+        expect(coverage.duplicateEnds, "generated duplicate ends").toBeGreaterThan(0);
+        expect(coverage.orphans, "generated orphan events").toBeGreaterThan(0);
+    });
+
+    test("a second end for the same call reports nothing", () => {
+        const mapper = new SessionEventMapper({
+            cwd: "/workspace",
+            takeRecordedChanges: () => [],
+            mcpToolIdentity: () => undefined,
+        });
+        mapper.map(toolExecutionStart({ toolCallId: "call-1", toolName: "read", args: {} }));
+        mapper.map(
+            toolExecutionEnd({ toolCallId: "call-1", toolName: "read", result: toolResult("a") }),
+        );
+
+        const repeated = mapper.map(
+            toolExecutionEnd({
+                toolCallId: "call-1",
+                toolName: "read",
+                result: toolResult("a"),
+                isError: true,
+            }),
+        );
+
+        expect(repeated).toEqual([]);
+    });
+
+    test("an end for a call that never started reports nothing", () => {
+        const mapper = new SessionEventMapper({
+            cwd: "/workspace",
+            takeRecordedChanges: () => [],
+            mcpToolIdentity: () => undefined,
+        });
+
+        const orphan = mapper.map(
+            toolExecutionEnd({ toolCallId: "call-9", toolName: "read", result: toolResult("a") }),
+        );
+
+        expect(orphan).toEqual([]);
     });
 
     test("closing open tool calls fails only the calls still running", () => {

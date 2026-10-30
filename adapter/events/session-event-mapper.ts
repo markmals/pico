@@ -171,9 +171,9 @@ export class SessionEventMapper {
     ): ToolCallContent[] {
         if (changed.length > 0) {
             const diffs: ToolCallContent[] = [];
-            // A file Pico could not read back has no diff to show, so the reason takes
-            // its place; the other files still show theirs.
-            const unreadable: ToolCallContent[] = [];
+            // A file the engine could not diff says why instead; the others still
+            // show their diffs.
+            const undiffable: ToolCallContent[] = [];
             for (const change of changed) {
                 if ("newText" in change) {
                     diffs.push({
@@ -183,16 +183,12 @@ export class SessionEventMapper {
                         newText: change.newText,
                     });
                 } else {
-                    unreadable.push(
-                        textContent(
-                            `Could not show the change to ${change.path}: ${change.unreadable}`,
-                        ),
-                    );
+                    undiffable.push(textContent(`No diff for ${change.path}: ${change.noDiff}`));
                 }
             }
             return diffs.length > 0
-                ? [...diffs, ...unreadable]
-                : [textContent(resultText(result)), ...unreadable];
+                ? [...diffs, ...undiffable]
+                : [textContent(resultText(result)), ...undiffable];
         }
         if (toolName === "edit") {
             const diffs = editDiffs(details, this.#session.cwd);

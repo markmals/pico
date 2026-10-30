@@ -9,14 +9,15 @@ import { resolvePath } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
 import { unwrapHashlineHeaderPath } from "@oh-my-pi/pi-coding-agent/tools/plan-mode-guard";
 import { getEditInputPaths } from "@oh-my-pi/pi-tui/tools/edit";
 import fs from "node:fs/promises";
+import path from "node:path";
 
 /**
  * What one tool call did to one file: the text it replaced and the text it left,
- * or — when Pico could not read the file before or after the call — why not.
+ * or — when the file cannot be shown as a diff — why not.
  */
 export type RecordedChange =
     | {
-          /** Absolute path of the file the tool call changed. */
+          /** Absolute path of the file the tool call changed, as the call named it. */
           path: string;
           /** `null` when the file did not exist. */
           oldText: string | null;
@@ -26,9 +27,15 @@ export type RecordedChange =
     | {
           /** Absolute path of the file the tool call targeted. */
           path: string;
-          /** The read failure that kept Pico from telling what changed. */
-          unreadable: string;
+          /** Why there is no diff, as a phrase completing "Pico cannot show a diff because …". */
+          noDiff: string;
       };
+
+/** Files past this size are reported without a diff instead of being held in memory. */
+const MAX_DIFF_BYTES = 1024 * 1024;
+
+/** A NUL byte anywhere in this prefix marks the file binary, as OMP's own readers treat it. */
+const BINARY_SNIFF_BYTES = 8192;
 
 /** The synthetic source Pico's own extension reports; it loads no file. */
 const PICO_WRITE_RECORDER = "<pico:write-recorder>";
@@ -44,11 +51,14 @@ interface Change {
  * other reason. The third case is held apart from the second so an unreadable
  * file is never reported as a creation or a deletion that never happened.
  */
-type FileState = { readonly text: string } | "missing" | { readonly unreadable: string };
+type FileState = { readonly text: string } | "missing" | { readonly noDiff: string };
 
 /** One file as it stood before a tool call that may change it. */
 interface Snapshot {
+    /** The path the call named, which is what the user is shown. */
     path: string;
+    /** The resolved real path, so a file and a symlink to it are one file. */
+    key: string;
     before: FileState;
     at: number;
 }
@@ -57,17 +67,50 @@ function isMissing(error: unknown): boolean {
     return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-async function readState(absolutePath: string): Promise<FileState> {
-    try {
-        return { text: await fs.readFile(absolutePath, "utf8") };
-    } catch (error) {
-        if (isMissing(error)) return "missing";
-        return { unreadable: error instanceof Error ? error.message : String(error) };
-    }
+function unreadable(error: unknown): FileState {
+    if (isMissing(error)) return "missing";
+    return {
+        noDiff: `could not read it: ${error instanceof Error ? error.message : String(error)}`,
+    };
 }
 
-function isUnreadable(state: FileState): state is { readonly unreadable: string } {
-    return state !== "missing" && "unreadable" in state;
+async function readState(absolutePath: string): Promise<FileState> {
+    let size: number;
+    try {
+        size = (await fs.stat(absolutePath)).size;
+    } catch (error) {
+        return unreadable(error);
+    }
+    if (size > MAX_DIFF_BYTES) return { noDiff: "it is larger than 1 MiB" };
+    let bytes: Buffer;
+    try {
+        bytes = await fs.readFile(absolutePath);
+    } catch (error) {
+        return unreadable(error);
+    }
+    if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return { noDiff: "it is a binary file" };
+    return { text: bytes.toString("utf8") };
+}
+
+function undiffable(state: FileState): state is { readonly noDiff: string } {
+    return state !== "missing" && "noDiff" in state;
+}
+
+/** The file a path really names, so a symlink and its target are one file. */
+async function realPath(absolutePath: string): Promise<string> {
+    try {
+        return await fs.realpath(absolutePath);
+    } catch {
+        // A file that does not exist yet still has a real directory.
+    }
+    try {
+        return path.join(
+            await fs.realpath(path.dirname(absolutePath)),
+            path.basename(absolutePath),
+        );
+    } catch {
+        return absolutePath;
+    }
 }
 
 function absolute(target: string, cwd: string): string | undefined {
@@ -149,7 +192,12 @@ export class WriteRecorder {
         if (files.length === 0) return;
         const snapshots: Snapshot[] = [];
         for (const file of files) {
-            snapshots.push({ path: file, before: await readState(file), at: (this.#clock += 1) });
+            snapshots.push({
+                path: file,
+                key: await realPath(file),
+                before: await readState(file),
+                at: (this.#clock += 1),
+            });
         }
         this.#snapshots.set(event.toolCallId, snapshots);
     }
@@ -163,14 +211,14 @@ export class WriteRecorder {
             const change = event.isError ? undefined : await this.#changeOf(snapshot);
             if (change) {
                 if ("newText" in change) {
-                    this.#changed.set(change.path, {
+                    this.#changed.set(snapshot.key, {
                         newText: change.newText,
                         at: (this.#clock += 1),
                     });
                 }
                 records.push(change);
             }
-            this.#forgetUnwatched(snapshot.path);
+            this.#forgetUnwatched(snapshot.key);
         }
         if (records.length > 0) this.#records.set(event.toolCallId, records);
     }
@@ -178,19 +226,20 @@ export class WriteRecorder {
     /** What the call did to one of its targets, or why Pico cannot tell. */
     async #changeOf(snapshot: Snapshot): Promise<RecordedChange | undefined> {
         const after = await readState(snapshot.path);
-        if (isUnreadable(after)) {
-            return { path: snapshot.path, unreadable: after.unreadable };
+        if (undiffable(after)) {
+            return { path: snapshot.path, noDiff: after.noDiff };
         }
         // OMP prepares every tool call's arguments before it runs any of them, so
         // calls in one batch snapshot the same content. A change that landed after
-        // this snapshot is what this call replaced. A file a `bash` command rewrote
-        // inside the same batch is invisible here: nothing reports it, so the
-        // snapshot stands.
-        const overtaken = this.#changed.get(snapshot.path);
+        // this snapshot is what this call replaced, matched by real path so a file
+        // and a symlink to it count as one. A file a `bash` command rewrote inside
+        // the same batch is invisible here: nothing reports it, so the snapshot
+        // stands.
+        const overtaken = this.#changed.get(snapshot.key);
         const replaced =
             overtaken && overtaken.at > snapshot.at ? { text: overtaken.newText } : snapshot.before;
-        if (isUnreadable(replaced)) {
-            return { path: snapshot.path, unreadable: replaced.unreadable };
+        if (undiffable(replaced)) {
+            return { path: snapshot.path, noDiff: replaced.noDiff };
         }
         const oldText = replaced === "missing" ? null : replaced.text;
         // A file the call removed reports empty content, so a deletion still carries
@@ -203,11 +252,11 @@ export class WriteRecorder {
     }
 
     /** Prior content is only worth keeping while a call that might have been overtaken is still pending. */
-    #forgetUnwatched(filePath: string): void {
+    #forgetUnwatched(key: string): void {
         for (const snapshots of this.#snapshots.values()) {
-            if (snapshots.some(snapshot => snapshot.path === filePath)) return;
+            if (snapshots.some(snapshot => snapshot.key === key)) return;
         }
-        this.#changed.delete(filePath);
+        this.#changed.delete(key);
     }
 
     /** A call that never produced a result cannot be matched any more once the turn is over. */

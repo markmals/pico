@@ -366,14 +366,14 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
-    test("a write Pico could not read back says so instead of showing a diff", () => {
+    test("a write with no diff to show says why instead", () => {
         const path = join(cwd, "secret.txt");
         const update = endUpdate({
             toolName: "write",
             args: { path: "secret.txt", content: "hi\n" },
             result: toolResult("Successfully wrote 3 bytes to secret.txt", { resolvedPath: path }),
             changes: {
-                "call-1": [{ path, unreadable: `EACCES: permission denied, open '${path}'` }],
+                "call-1": [{ path, noDiff: `it could not be read: EACCES: permission denied` }],
             },
         });
 
@@ -381,33 +381,29 @@ describe("proposal.0001 tool call results", () => {
         expect(update.locations).toEqual([{ path }]);
         expect(update.content).toEqual([
             textContent("Successfully wrote 3 bytes to secret.txt"),
-            textContent(
-                `Could not show the change to ${path}: EACCES: permission denied, open '${path}'`,
-            ),
+            textContent(`No diff for ${path}: it could not be read: EACCES: permission denied`),
         ]);
     });
 
-    test("an edit diffs the files it could read and explains the one it could not", () => {
-        const readable = join(cwd, "a.txt");
-        const unreadable = join(cwd, "b.txt");
+    test("an edit diffs the files it can and explains the one it cannot", () => {
+        const diffable = join(cwd, "a.txt");
+        const undiffable = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: "…" },
             result: toolResult("edited 2 files", {}),
             changes: {
                 "call-1": [
-                    { path: readable, oldText: "a\n", newText: "A\n" },
-                    { path: unreadable, unreadable: "EISDIR: illegal operation on a directory" },
+                    { path: diffable, oldText: "a\n", newText: "A\n" },
+                    { path: undiffable, noDiff: "it is larger than 1 MiB" },
                 ],
             },
         });
 
-        expect(update.locations).toEqual([{ path: readable }, { path: unreadable }]);
+        expect(update.locations).toEqual([{ path: diffable }, { path: undiffable }]);
         expect(update.content).toEqual([
-            { type: "diff", path: readable, oldText: "a\n", newText: "A\n" },
-            textContent(
-                `Could not show the change to ${unreadable}: EISDIR: illegal operation on a directory`,
-            ),
+            { type: "diff", path: diffable, oldText: "a\n", newText: "A\n" },
+            textContent(`No diff for ${undiffable}: it is larger than 1 MiB`),
         ]);
     });
 
@@ -418,7 +414,7 @@ describe("proposal.0001 tool call results", () => {
             args: { input: "…" },
             result: toolResult("Edit rejected: stale tag", { path }),
             isError: true,
-            changes: { "call-1": [{ path, unreadable: "EACCES: permission denied" }] },
+            changes: { "call-1": [{ path, noDiff: "it could not be read" }] },
         });
 
         expect(update.content).toEqual([textContent("Edit rejected: stale tag")]);

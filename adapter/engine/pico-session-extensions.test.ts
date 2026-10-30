@@ -7,6 +7,7 @@ import {
     installCountingExtension,
     installExitingExtension,
     installRecordingExtension,
+    installThrowingFactoryExtension,
     recordedExtensionEvents,
 } from "./testing/extension-fixture.ts";
 import {
@@ -150,5 +151,31 @@ describe("proposal.0001 extension loading", () => {
 
         const loads = recordedExtensionEvents(log);
         assert.deepEqual(loads, ["module", "factory"]);
+    });
+});
+
+describe("proposal.0001 extension failures", () => {
+    test("an extension whose factory throws is reported on stderr and the session still starts", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const broken = installThrowingFactoryExtension(
+            path.join(cwd, ".omp", "extensions"),
+            "PICO_FACTORY_FAILED",
+        );
+        const stderr = captureStderr(t);
+
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        assert.ok(stderr().includes(broken), `stderr does not name the extension: ${stderr()}`);
+        assert.ok(
+            stderr().includes("PICO_FACTORY_FAILED"),
+            `stderr does not name the error: ${stderr()}`,
+        );
     });
 });

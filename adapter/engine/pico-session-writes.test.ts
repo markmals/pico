@@ -412,7 +412,7 @@ describe("proposal.0001 recorded writes", () => {
         ]);
     });
 
-    test("a file the recorder cannot read is reported as unreadable, and the write still runs", async t => {
+    test("a file the recorder cannot read is reported without a diff, and the write still runs", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "unreadable.txt");
         fs.writeFileSync(absolute, "secret\n");
@@ -450,10 +450,78 @@ describe("proposal.0001 recorded writes", () => {
         assert.equal(records.length, 1);
         const [record] = records;
         assert.ok(
-            record && "unreadable" in record,
-            `expected an unreadable record, got ${JSON.stringify(records)}`,
+            record && "noDiff" in record,
+            `expected a no-diff record, got ${JSON.stringify(records)}`,
         );
         assert.equal(record.path, absolute);
-        assert.match(record.unreadable, /EACCES/);
+        assert.match(record.noDiff, /could not read it/);
+        assert.match(record.noDiff, /EACCES/);
+    });
+});
+
+describe("proposal.0001 undiffable files", () => {
+    test("a write over a binary file reports no diff and says why", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "image.bin");
+        fs.writeFileSync(absolute, Buffer.from([0x89, 0x50, 0x00, 0x4e, 0x47]));
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall("write", { path: "image.bin", content: "text\n" }, "write-1"),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("replace image.bin");
+
+        assert.deepEqual(session.takeRecordedChanges("write-1"), [
+            { path: absolute, noDiff: "it is a binary file" },
+        ]);
+    });
+
+    test("a write through a symlink replaces what the earlier write in the batch left", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "target.txt");
+        const alias = path.join(cwd, "alias.txt");
+        fs.writeFileSync(absolute, "before\n");
+        fs.symlinkSync(absolute, alias);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "target.txt", content: "intermediate\n" },
+                                "write-1",
+                            ),
+                            toolCall("write", { path: "alias.txt", content: "final\n" }, "write-2"),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write the file and then its link");
+
+        assert.deepEqual(session.takeRecordedChanges("write-2"), [
+            { path: alias, oldText: "intermediate\n", newText: "final\n" },
+        ]);
     });
 });

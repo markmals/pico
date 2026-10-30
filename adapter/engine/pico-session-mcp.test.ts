@@ -54,6 +54,7 @@ describe("proposal.0001 host MCP servers", () => {
         assert.deepEqual(report, {
             args: ["--flavor", "alpha"],
             env: { PICO_FAKE_MCP_TOKEN: "launch-token" },
+            cwd: fs.realpathSync(cwd),
         });
     });
 
@@ -380,5 +381,52 @@ describe("proposal.0001 MCP secrets", () => {
         await session.engine.prompt("hello");
 
         assert.ok(!stderr().includes(SECRET), "stderr leaks the token");
+    });
+});
+
+describe("proposal.0001 MCP working directory and names", () => {
+    test("a server runs in the session's working directory", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const model = createMockModel({
+            responses: [{ content: [toolCall("mcp__fake_launch_report")] }, { content: ["done"] }],
+        });
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("fake")],
+            authStorage: await mockAuthStorage(agentDir),
+            model,
+        });
+        t.after(() => session.dispose());
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("report how you were launched");
+
+        const report = JSON.parse(executions[0]?.text ?? "null") as { cwd: string };
+        assert.notEqual(fs.realpathSync(cwd), fs.realpathSync(process.cwd()));
+        assert.equal(report.cwd, fs.realpathSync(cwd));
+    });
+
+    test("two tools of one server that mint the same name fail creation, naming both", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [
+                    fakeMcpServer("collision", { flags: ["--tool", "a-b", "--tool", "a_b"] }),
+                ],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /collision/);
+                assert.match(error.message, /a-b/);
+                assert.match(error.message, /a_b/);
+                return true;
+            },
+        );
     });
 });

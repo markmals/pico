@@ -43,7 +43,7 @@ async function importExtension(
         const candidate =
             typeof module === "function" ? module : (module as { default?: unknown }).default;
         if (typeof candidate !== "function") {
-            report(extensionPath, "it exports no factory function");
+            reportExtensionFailure(extensionPath, "it exports no factory function");
             return undefined;
         }
         return {
@@ -53,11 +53,12 @@ async function importExtension(
             error: null,
         };
     } catch (error) {
-        report(extensionPath, describeCause(error));
+        reportExtensionFailure(extensionPath, describeCause(error));
         return undefined;
     }
 }
 
-function report(extensionPath: string, reason: string): void {
+/** Extension failures go to stderr: Oh My Pi's own logger writes to a file nobody reads during a session. */
+export function reportExtensionFailure(extensionPath: string, reason: string): void {
     process.stderr.write(`pico: skipped extension ${extensionPath}: ${reason}\n`);
 }

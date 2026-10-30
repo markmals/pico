@@ -275,7 +275,7 @@ model key revoked                       → session/prompt fails with the provid
     - `status`: `failed` when the result is an error, otherwise `completed`;
     - `rawOutput`: the result details;
     - `content`:
-        - for a successful `edit` or `write`, a `diff` per affected file, with the absolute `path`, `oldText` (`null` for a newly created file) and `newText`;
+        - for a successful `edit` or `write`, a `diff` per affected file, with the absolute `path`, `oldText` (`null` for a newly created file) and `newText` (empty for a removed file). Pico reads each affected file just before the call runs and again after it finishes, so diffs do not depend on what OMP keeps in its result. A file Pico could not read gets a text note naming the file and the cause instead of a diff, and it stays in `locations`. A write to one of OMP's internal URLs (such as `local://notes.md`) is not a project file and shows the result text, not a diff;
         - for every other result, including failures, the result's text as returned to the model.
 - Every tool executes locally in the Pico process and its subprocesses. Pico does not use the client's `fs/*` or `terminal/*` methods, even when the client advertises them.
 
@@ -290,7 +290,7 @@ model key revoked                       → session/prompt fails with the provid
 - For a session with a running turn, Pico calls `abort()` on the engine session. A running `bash` subprocess is terminated, with the engine's 1 s grace period.
 - Every tool call in the turn that has not reached `completed` or `failed` gets a final `tool_call_update` with `status: failed` and the text `Cancelled`. The prompt then resolves `cancelled`.
 - Repeated cancels during the same turn are ignored once the first is in progress. A cancel for an unknown session, or a session with no running turn, is ignored.
-- If `abort()` has not settled within 5 seconds, Pico resolves the prompt `cancelled`, disposes the engine session and its MCP connections, and logs the failure to stderr. Later prompts to that session fail with an error stating that the session was closed after a cancellation could not stop it.
+- A cancellation that cannot stop the turn closes the session. That covers three cases: `abort()` rejects, `abort()` has not settled within 5 seconds, or `abort()` settles but the turn still has not ended 5 seconds later. In each, Pico resolves the prompt `cancelled` as soon as the failure is known (so within 10 seconds of the cancel at most), starts disposing the engine session and its MCP connections without waiting for that to finish, and logs the failure to stderr. Later prompts to that session fail with an error stating that the session was closed after a cancellation could not stop it.
 - After a cancellation that settles, the next `session/prompt` in the session runs normally. Its conversation includes the cancelled turn's messages up to the point of cancellation.
 
 ### Port and attribution

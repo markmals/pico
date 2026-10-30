@@ -79,4 +79,66 @@ describe("proposal.0001 recorded writes", () => {
             { path: file, oldText: "edited\n", newText: "final\n" },
         ]);
     });
+
+    test("a file that becomes unreadable after its snapshot is not reported as deleted", async t => {
+        const cwd = temporaryDirectory(t, "recorder");
+        const file = path.join(cwd, "locked.txt");
+        fs.writeFileSync(file, "before\n");
+        const recorder = new WriteRecorder(cwd);
+        const hooks = await hooksOf(recorder);
+        const toolCall = hooks.get("tool_call");
+        const toolResult = hooks.get("tool_result");
+        assert.ok(toolCall && toolResult, "the recorder registered no tool hooks");
+
+        await toolCall({
+            type: "tool_call",
+            toolName: "write",
+            toolCallId: "write-1",
+            input: { path: "locked.txt", content: "after\n" },
+        });
+
+        fs.chmodSync(file, 0o000);
+        await toolResult({
+            type: "tool_result",
+            toolName: "write",
+            toolCallId: "write-1",
+            isError: false,
+            input: {},
+            content: [],
+        });
+
+        assert.deepEqual(recorder.take("write-1"), []);
+    });
+
+    test("a file that was unreadable at its snapshot is not reported as created", async t => {
+        const cwd = temporaryDirectory(t, "recorder");
+        const file = path.join(cwd, "opaque.txt");
+        fs.writeFileSync(file, "before\n");
+        fs.chmodSync(file, 0o200);
+        const recorder = new WriteRecorder(cwd);
+        const hooks = await hooksOf(recorder);
+        const toolCall = hooks.get("tool_call");
+        const toolResult = hooks.get("tool_result");
+        assert.ok(toolCall && toolResult, "the recorder registered no tool hooks");
+
+        await toolCall({
+            type: "tool_call",
+            toolName: "write",
+            toolCallId: "write-1",
+            input: { path: "opaque.txt", content: "after\n" },
+        });
+
+        fs.writeFileSync(file, "after\n");
+        fs.chmodSync(file, 0o644);
+        await toolResult({
+            type: "tool_result",
+            toolName: "write",
+            toolCallId: "write-1",
+            isError: false,
+            input: {},
+            content: [],
+        });
+
+        assert.deepEqual(recorder.take("write-1"), []);
+    });
 });

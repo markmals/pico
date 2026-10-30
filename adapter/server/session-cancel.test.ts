@@ -2,7 +2,7 @@ import type { NewSessionResponse, PromptResponse, SessionUpdate } from "@agentcl
 import type { MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
 
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { PicoSession } from "../engine/pico-session.ts";
@@ -11,7 +11,14 @@ import type { ConnectedClient } from "./agent-harness.ts";
 import { connectPicoAgent, requestError } from "./agent-harness.ts";
 import { removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
 import { fakeSession, neverSettles } from "./fake-session.ts";
-import { closeOpenConnections, settle, startPicoSession, userText } from "./session-fixture.ts";
+import {
+    closeOpenConnections,
+    isRunning,
+    settle,
+    startPicoSession,
+    userText,
+    waitUntil,
+} from "./session-fixture.ts";
 
 afterEach(closeOpenConnections);
 
@@ -43,13 +50,18 @@ function* scripted(first: MockResponse): Generator<MockResponse> {
 describe("proposal.0001 session/cancel", () => {
     test("cancelling kills the running command, fails its tool call and ends the turn cancelled", async () => {
         const cwd = temporaryProject();
+        const pidFile = join(cwd, "command.pid");
         const session = await startPicoSession(
             scripted({
                 content: [
                     {
                         type: "toolCall",
                         name: "bash",
-                        arguments: { command: "sleep 2 && touch finished-anyway.txt" },
+                        // A bare `sleep` spawns nothing: OMP's embedded shell answers it
+                        // with a builtin. This command publishes its own process id and
+                        // then becomes the long-running process, so the subprocess the
+                        // proposal promises to terminate is one the test can watch.
+                        arguments: { command: `bash -c 'echo $$ > ${pidFile}; exec sleep 30'` },
                     },
                 ],
             }),
@@ -57,6 +69,30 @@ describe("proposal.0001 session/cancel", () => {
         );
 
         const running = session.prompt("run something long");
+        expect(await waitUntil(() => existsSync(pidFile))).toBe(true);
+        const pid = Number(readFileSync(pidFile, "utf8").trim());
+        expect(isRunning(pid)).toBe(true);
+
+        await session.client.agent.notify("session/cancel", { sessionId: session.sessionId });
+        const response = await running;
+
+        expect(response.stopReason).toBe("cancelled");
+        const toolCallId = toolCallIdOf(session.updates());
+        expect(statusesFor(session.updates(), toolCallId).at(-1)).toBe("failed");
+        expect(await waitUntil(() => !isRunning(pid))).toBe(true);
+    }, 30_000);
+
+    test("cancelling stops a command the shell runs without a subprocess", async () => {
+        const session = await startPicoSession(
+            // `sleep` is an embedded-shell builtin, so nothing is spawned to kill.
+            scripted({
+                content: [
+                    { type: "toolCall", name: "bash", arguments: { command: "sleep 31337" } },
+                ],
+            }),
+        );
+
+        const running = session.prompt("wait a very long time");
         await session.client.waitForUpdate(
             session.sessionId,
             update => update.sessionUpdate === "tool_call",
@@ -67,10 +103,7 @@ describe("proposal.0001 session/cancel", () => {
         expect(response.stopReason).toBe("cancelled");
         const toolCallId = toolCallIdOf(session.updates());
         expect(statusesFor(session.updates(), toolCallId).at(-1)).toBe("failed");
-
-        await settle(3_000);
-        expect(existsSync(join(cwd, "finished-anyway.txt"))).toBe(false);
-    }, 20_000);
+    }, 30_000);
 
     test("the next prompt runs and keeps the cancelled turn in its conversation", async () => {
         const session = await startPicoSession(

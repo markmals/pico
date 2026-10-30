@@ -28,18 +28,29 @@ interface Change {
     at: number;
 }
 
+/**
+ * A file as it stood at one moment: its content, absent, or unreadable for some
+ * other reason. The third case is held apart from the second so an unreadable
+ * file is never reported as a creation or a deletion that never happened.
+ */
+type FileState = { readonly text: string } | "missing" | "unreadable";
+
 /** One file as it stood before a tool call that may change it. */
 interface Snapshot {
     path: string;
-    oldText: string | null;
+    before: FileState;
     at: number;
 }
 
-async function readText(absolutePath: string): Promise<string | null> {
+function isMissing(error: unknown): boolean {
+    return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+async function readState(absolutePath: string): Promise<FileState> {
     try {
-        return await fs.readFile(absolutePath, "utf8");
-    } catch {
-        return null;
+        return { text: await fs.readFile(absolutePath, "utf8") };
+    } catch (error) {
+        return isMissing(error) ? "missing" : "unreadable";
     }
 }
 
@@ -122,7 +133,7 @@ export class WriteRecorder {
         if (files.length === 0) return;
         const snapshots: Snapshot[] = [];
         for (const file of files) {
-            snapshots.push({ path: file, oldText: await readText(file), at: (this.#clock += 1) });
+            snapshots.push({ path: file, before: await readState(file), at: (this.#clock += 1) });
         }
         this.#snapshots.set(event.toolCallId, snapshots);
     }
@@ -133,27 +144,37 @@ export class WriteRecorder {
         this.#snapshots.delete(event.toolCallId);
         const records: RecordedChange[] = [];
         for (const snapshot of snapshots) {
-            const content = event.isError ? null : await readText(snapshot.path);
-            // OMP prepares every tool call's arguments before it runs any of
-            // them, so calls in one batch snapshot the same content. A change
-            // that landed after this snapshot is what this call replaced. A
-            // file a `bash` command rewrote inside the same batch is invisible
-            // here: nothing reports it, so the snapshot stands.
-            const overtaken = this.#changed.get(snapshot.path);
-            const oldText =
-                overtaken && overtaken.at > snapshot.at ? overtaken.newText : snapshot.oldText;
-            // A file the call removed reports empty content, so a deletion still
-            // carries its path and the text it had. A target that never existed
-            // and still does not was simply not touched.
-            const removed = content === null && oldText !== null && !event.isError;
-            if (content !== null || removed) {
-                const newText = content ?? "";
-                this.#changed.set(snapshot.path, { newText, at: (this.#clock += 1) });
-                records.push({ path: snapshot.path, oldText, newText });
+            const change = event.isError ? undefined : await this.#changeOf(snapshot);
+            if (change) {
+                this.#changed.set(change.path, { newText: change.newText, at: (this.#clock += 1) });
+                records.push(change);
             }
             this.#forgetUnwatched(snapshot.path);
         }
         if (records.length > 0) this.#records.set(event.toolCallId, records);
+    }
+
+    /** What the call did to one of its targets, or nothing when that cannot be told. */
+    async #changeOf(snapshot: Snapshot): Promise<RecordedChange | undefined> {
+        const after = await readState(snapshot.path);
+        if (after === "unreadable") return undefined;
+        // OMP prepares every tool call's arguments before it runs any of them, so
+        // calls in one batch snapshot the same content. A change that landed after
+        // this snapshot is what this call replaced. A file a `bash` command rewrote
+        // inside the same batch is invisible here: nothing reports it, so the
+        // snapshot stands.
+        const overtaken = this.#changed.get(snapshot.path);
+        const replaced =
+            overtaken && overtaken.at > snapshot.at ? { text: overtaken.newText } : snapshot.before;
+        if (replaced === "unreadable") return undefined;
+        const oldText = replaced === "missing" ? null : replaced.text;
+        // A file the call removed reports empty content, so a deletion still carries
+        // its path and the text it had. A target that was absent and still is was
+        // simply not touched.
+        if (after === "missing") {
+            return oldText === null ? undefined : { path: snapshot.path, oldText, newText: "" };
+        }
+        return { path: snapshot.path, oldText, newText: after.text };
     }
 
     /** Prior content is only worth keeping while a call that might have been overtaken is still pending. */

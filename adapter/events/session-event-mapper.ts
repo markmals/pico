@@ -48,7 +48,9 @@ export class SessionEventMapper {
                     event.intent,
                 );
             case "tool_execution_update":
-                return this.#reported.has(event.toolCallId)
+                // A killed command still drains its output after the engine reported
+                // the end; a settled call must not come back to life.
+                return this.#running.has(event.toolCallId)
                     ? [
                           {
                               sessionUpdate: "tool_call_update",

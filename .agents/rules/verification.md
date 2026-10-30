@@ -34,7 +34,7 @@ Skipping a step is lying.
 | Subagent finished | `git status` and `git diff` show the changes | The subagent's own success report |
 | Preview works | Load or install it, then exercise the changed behavior | The workflow going green |
 | Proposal implemented | `mise run check` exit 0, this turn | The code looking right |
-| All behavior implemented | The behavior inventory from the cross-artifact review | Tests passing |
+| All behavior implemented | The self-check: each Detailed design behavior traced to its test, guide, and code | Tests passing |
 | Adapter behavior works | A real Sesh session exercising it, output read this turn | Unit tests, a hand-driven protocol probe |
 | The prototype is complete | Every acceptance criterion in `PROTOTYPE.md` exercised in Sesh | The gate passing, the code looking right |
 

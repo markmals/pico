@@ -52,6 +52,8 @@ export interface PicoSession {
     readonly disposalPhase: DisposalPhase | undefined;
     /** Consumes what the tool call with this id changed, one entry per affected file. */
     takeChanges(toolCallId: string): RecordedChange[];
+    /** Resolves once no write Pico started is still reaching the filesystem. */
+    writesSettled(): Promise<void>;
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
@@ -159,6 +161,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             return disposalPhase;
         },
         takeChanges: toolCallId => writes.takeChanges(toolCallId),
+        writesSettled: () => writes.writesSettled(),
         mcpToolIdentity: toolName => identities.get(toolName),
         dispose: async () => {
             if (disposed) return;

@@ -19,6 +19,8 @@ const MAX_DIFF_BYTES = 1024 * 1024;
 
 const PRUNED_BY_OMP = "Oh My Pi did not keep the text of an edit this large";
 
+const UNREPORTED_TEXT = "Oh My Pi did not report the file's text";
+
 /** A move renames: neither path reaches the bridge and the result says nothing about the destination. */
 const MOVE_REPLACED = "Oh My Pi did not report what the move replaced";
 
@@ -134,14 +136,10 @@ export function editedFiles(
     return { changes, locations };
 }
 
-function describeEdit(entry: unknown, path: string): RecordedChange | undefined {
+function describeEdit(entry: unknown, path: string): RecordedChange {
     const oldText = textProperty(entry, "oldText");
     const newText = textProperty(entry, "newText");
-    if (oldText === undefined && newText === undefined) {
-        return property(entry, "snapshotsPruned") === true
-            ? { path, noDiff: PRUNED_BY_OMP }
-            : undefined;
-    }
+    if (oldText === undefined && newText === undefined) return missingText(entry, path);
     // A removal reports what it replaced and nothing after it.
     return describeChange(path, oldText ?? null, newText ?? "");
 }
@@ -149,9 +147,17 @@ function describeEdit(entry: unknown, path: string): RecordedChange | undefined 
 /** The file a move empties: the result's own text is the only record of what it held. */
 function describeEmptied(entry: unknown, path: string): RecordedChange {
     const oldText = textProperty(entry, "oldText");
-    return oldText === undefined
+    return oldText === undefined ? missingText(entry, path) : describeChange(path, oldText, "");
+}
+
+/**
+ * A file whose text neither the engine nor the result reports. Pico says so rather
+ * than inventing a diff: an edit Oh My Pi pruned, or a file it could not read as text.
+ */
+function missingText(entry: unknown, path: string): RecordedChange {
+    return property(entry, "snapshotsPruned") === true
         ? { path, noDiff: PRUNED_BY_OMP }
-        : describeChange(path, oldText, "");
+        : { path, noDiff: UNREPORTED_TEXT };
 }
 
 function describeChange(path: string, oldText: string | null, newText: string): RecordedChange {

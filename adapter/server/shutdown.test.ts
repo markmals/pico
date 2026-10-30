@@ -39,6 +39,7 @@ describe("proposal.0001 shutdown", () => {
                         return session.disposalPhase;
                     },
                     takeChanges: toolCallId => session.takeChanges(toolCallId),
+                    writesSettled: () => session.writesSettled(),
                     mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
                     dispose: async () => {
                         disposed.push(session.cwd);

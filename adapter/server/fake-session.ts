@@ -17,6 +17,8 @@ export interface FakeEngine {
     abort?: () => Promise<void>;
     /** Tears the session down. Defaults to resolving at once. */
     dispose?: () => Promise<void>;
+    /** Resolves once the writes the turn started have landed. Defaults to resolving at once. */
+    writesSettled?: () => Promise<void>;
     /** The teardown step the session reports while `dispose()` is pending. */
     disposalPhase?: DisposalPhase;
 }
@@ -64,6 +66,7 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
                 return disposalPhase;
             },
             takeChanges: () => [],
+            writesSettled: () => behaviour.writesSettled?.() ?? Promise.resolve(),
             mcpToolIdentity: () => undefined,
             dispose: async () => {
                 calls.push("dispose");

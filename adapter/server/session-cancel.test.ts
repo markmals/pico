@@ -284,6 +284,29 @@ describe("proposal.0001 a cancellation the engine does not answer", () => {
         await connected.client.close();
     }, 20_000);
 
+    test("writes still in flight after a cancellation close the session", async () => {
+        const cwd = temporaryProject();
+        // The engine stops the turn, but a write it started never lands: letting the
+        // session take another turn would let that write overwrite the next one's file.
+        const fake = fakeSession(cwd, {
+            prompt: async () => true,
+            abort: () => Promise.resolve(),
+            writesSettled: () => neverSettles<void>(),
+        });
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("write something");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
+
+        expect((await running).stopReason).toBe("cancelled");
+        expect(fake.disposals).toBe(1);
+
+        const error = await requestError(connected.prompt("anyone there?"));
+        expect(error.message).toMatch(/closed/i);
+
+        await connected.client.close();
+    }, 20_000);
+
     test("a disposal that stalls does not hold up the cancelled response", async () => {
         const cwd = temporaryProject();
         const fake = fakeSession(cwd, { dispose: () => neverSettles<void>() });

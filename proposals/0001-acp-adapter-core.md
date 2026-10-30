@@ -199,7 +199,10 @@ model key revoked                       → session/prompt fails with the provid
 ### `session/new`
 
 - `cwd` must be an absolute path to an existing directory. Otherwise the request fails with an invalid-params error naming the problem.
-- Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`. An HTTP or SSE entry fails the request with an invalid-params error naming the server and stating that only stdio MCP servers are supported. If a stdio server fails to connect or list its tools, the request fails with an error naming the server and the cause; no session is created and no partial tool set is used.
+- Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`. The `env` values reach the server exactly as sent, with no shell or variable expansion.
+    - An HTTP or SSE entry fails the request with an invalid-params error naming the server and stating that only stdio MCP servers are supported.
+    - Two entries with the same name fail the request with an error naming the duplicate.
+    - If a stdio server fails to connect or list its tools, or has not listed them within 30 seconds, the request fails with an error naming the server and the cause. No session is created, no partial tool set is used, and servers already started are stopped.
 - Pico creates the OMP session with:
     - `settings`: `Settings.loadReadOnly({ cwd })` overlaid with `eval.py: false`, `eval.js: false`, `lsp.enabled: false`, `task.maxRecursionDepth: 0`, `tools.approvalMode: yolo`, every configured per-tool approval policy (`tools.approval`) set to allow, and no restricted folders (`tools.restrictedFolders`);
     - `enableLsp: false`, `enableMCP: false` (restricted sessions force this anyway), `hasUI: false`, `autoApprove: true`;
@@ -210,10 +213,10 @@ model key revoked                       → session/prompt fails with the provid
 
     The connected MCP tools are mounted with `refreshMCPTools()` before the response is sent.
 
-- The model and thinking level are whatever the user's OMP configuration resolves for `cwd`. If no model resolves, or the resolved model has no usable credentials, the request fails with an error that says so; Pico does not substitute another model.
+- The model and thinking level are whatever the user's OMP configuration resolves for `cwd`. The request fails with an error that says so when no model resolves, when the configured model is unavailable and OMP would fall back to another one, or when the model's credentials cannot be resolved; Pico does not substitute another model.
 - If the credential store cannot be opened, the request fails with an error naming the store's path and the cause. When the cause is a read-only or permission-denied failure, the message also says that Sesh's Autonomous sandbox blocks writes to `~/.omp` and that Pico does not support Autonomous sessions yet.
 - The response is `{ sessionId }`, with no `modes` and no `configOptions`. `sessionId` is unique within the process.
-- User and project extension hooks keep working. Restricted sessions skip OMP's own extension discovery (`src/sdk.ts:2831-2842`), so Pico discovers the same user and project extensions itself and passes them to the session preloaded, loading each module once. Their hooks run, and their tools are not exposed (`restrictToolNames`; `src/sdk.ts:3618, 3711`).
+- User and project extension hooks keep working. Restricted sessions skip OMP's own extension discovery (`src/sdk.ts:2831-2842`), so Pico discovers the same user and project extensions itself and passes them to the session preloaded, loading each module once under OMP's host guard. An extension that fails to load is skipped, the session still starts, and the failure is written to stderr naming the extension. Hooks run, and extension tools are not exposed (`restrictToolNames`; `src/sdk.ts:3618, 3711`).
 
 ### Sesh worktrees
 

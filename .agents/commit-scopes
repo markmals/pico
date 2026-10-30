@@ -1,0 +1,27 @@
+# Allowed commit scopes, one per line. Blank lines and # comments are ignored.
+#
+# `tools/check-scoped-commit.ts` also accepts the name of a real proposal file —
+# `proposals/<NNNN>-<slug>.md` is the scope `<NNNN>-<slug>` — so feature work
+# needs no entry here.
+#
+# Prefer the narrowest scope that accurately describes the change.
+
+acp
+agents
+ci
+decision
+deps
+docs
+guides
+hooks
+macos
+policy
+proposal
+rules
+sdk
+sesh
+skills
+templates
+tools
+treewide
+vision

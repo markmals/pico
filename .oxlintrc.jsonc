@@ -1,0 +1,17 @@
+{
+    "$schema": "node_modules/oxlint/configuration_schema.json",
+    "ignorePatterns": [
+        // TypeScript's `include` globs skip dot-directories, so `.agents/` and
+        // `.omp/` are outside this project's type program. They are zero-
+        // dependency Node scripts with their own `node:test` suites, not project
+        // code; Oxfmt still formats them and `mise run test` still runs them.
+        ".agents/**",
+        ".omp/**"
+    ],
+    "rules": {
+        // This repository declares bindings with `let` and reserves `const` for
+        // module-level constants, so the default `prefer-const` would fight the
+        // house style on every local.
+        "eslint/prefer-const": "off"
+    }
+}

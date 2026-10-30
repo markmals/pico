@@ -1,0 +1,33 @@
+{
+    "$schema": "node_modules/oxfmt/configuration_schema.json",
+    "ignorePatterns": [
+        // `bd` owns these: it regenerates them after write commands and writes
+        // metadata.json without a trailing newline. hk excludes them too.
+        ".beads/**"
+    ],
+    "printWidth": 100,
+    "tabWidth": 4,
+    "arrowParens": "avoid",
+    // Markdown line breaks are authored, not reflowed: a prose edit then shows as a
+    // one-line diff instead of a rewrapped paragraph.
+    "proseWrap": "never",
+    "sortPackageJson": true,
+    "sortImports": {
+        "groups": [
+            "type-import",
+            ["value-builtin", "value-external"],
+            "type-internal",
+            "value-internal",
+            ["type-parent", "type-sibling", "type-index"],
+            ["value-parent", "value-sibling", "value-index"],
+            "unknown"
+        ],
+        "partitionByComment": true
+    },
+    "overrides": [
+        {
+            "files": ["**/*.jsonc"],
+            "options": { "trailingComma": "none" }
+        }
+    ]
+}

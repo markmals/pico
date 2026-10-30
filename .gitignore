@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Bun
+# No trailing slash: worktrees link node_modules from the main checkout.
+node_modules
+
+# Local credentials
+.env
+.env.*
+
+# mise — machine-local overrides and their lockfiles. mise.toml and mise.lock are committed.
+mise.local.toml
+mise.*.local.toml
+.mise.local.toml
+.mise/locks/mise.local/
+
+# hk — machine-local hook overrides. hk.pkl is committed.
+hk.local.pkl
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+
+# Tuist generates the Xcode project from Project.swift on demand; Project.swift is
+# the source of truth and these are artifacts. Named rather than globbed, so a
+# hand-made prototype project elsewhere in the tree stays visible.
+*.xcodeproj/
+*.xcworkspace/
+# Where Tuist writes the Info.plist and other inputs it derives for that project.
+Derived/

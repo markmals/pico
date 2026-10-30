@@ -1,0 +1,182 @@
+/// hk owns every git hook in this repository.
+///
+/// Install them with `mise run setup` (which runs `hk install --mise`). Never run
+/// `bd hooks install`: it points `core.hooksPath` at `.beads/hooks`, which disables
+/// every hook hk installed. Beads instead runs as hk steps below, calling the same
+/// `bd hooks run <hook>` entry point beads' own shims call.
+///
+/// The hk version here must match the `hk` pin in mise.toml. Bump both together.
+amends "package://github.com/jdx/hk/releases/download/v2.8.1/hk@2.8.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.8.1/hk@2.8.1#/Builtins.pkl"
+
+/// Files another tool owns and rewrites. `bd` regenerates `.beads/metadata.json`
+/// and `.beads/issues.jsonl`, and it writes `metadata.json` with no trailing
+/// newline, which `newlines` would otherwise fail on after every `mise run setup`.
+exclude = List(".beads/**")
+
+/// Formatters and linters. `check`, `fix` and `pre-commit` all share this set, so a
+/// clean `hk check --all` in CI means a clean pre-commit locally.
+local linters = new Mapping<String, Step> {
+    ["trailing_whitespace"] = Builtins.trailing_whitespace
+    ["newlines"] = Builtins.newlines
+    ["check_merge_conflict"] = Builtins.check_merge_conflict
+
+    // The workflows are part of the gate: `actionlint` is pinned in mise.toml, so
+    // the hook, `mise run check` and CI all check them with the same version. The
+    // builtin globs `.github/workflows/*.yml` and `*.yaml`.
+    ["actionlint"] = Builtins.actionlint
+
+    // Oxfmt formats far more than TypeScript — it also owns JSON, JSONC, YAML,
+    // TOML and Markdown in this repository, including fenced code blocks inside
+    // Markdown. Settings live in .oxfmtrc.jsonc.
+    //
+    // The commands are restated only to launch that same devDependency through
+    // `bun run --bun`: node_modules/.bin/oxfmt is a `#!/usr/bin/env node` shim.
+    // Keep their flags in sync with Builtins.oxfmt when the hk pin moves.
+    ["oxfmt"] = (Builtins.oxfmt) {
+        check = new CommandSpec {
+            command = new Command {
+                argv = List(
+                    "bun",
+                    "run",
+                    "--bun",
+                    "oxfmt",
+                    "--check",
+                    "--no-error-on-unmatched-pattern",
+                    "{{files}}",
+                )
+            }
+            effect = "read"
+        }
+        check_diff = new CommandSpec {
+            command = new Command {
+                argv = List(
+                    "hk",
+                    "util",
+                    "format-diff",
+                    "{{files}}",
+                    "--",
+                    "bun",
+                    "run",
+                    "--bun",
+                    "oxfmt",
+                    "--stdin-filepath",
+                    "{}",
+                )
+            }
+            effect = "read"
+        }
+        fix = new CommandSpec {
+            command = new Command {
+                argv = List(
+                    "bun",
+                    "run",
+                    "--bun",
+                    "oxfmt",
+                    "--write",
+                    "--no-error-on-unmatched-pattern",
+                    "{{files}}",
+                )
+            }
+            effect = "write"
+        }
+    }
+
+    // `--deny-warnings` is the builtin's default, so a rule set to "warn" in
+    // .oxlintrc.jsonc still blocks a commit. This repository ships zero warnings;
+    // if you add a rule you only want advisory, make it advisory for the hook too
+    // rather than leaving the hook red. The commands are restated for the same
+    // reason as Oxfmt's, and track Builtins.ox_lint the same way.
+    ["oxlint"] = (Builtins.ox_lint) {
+        check = new CommandSpec {
+            command = new Command {
+                argv = List("bun", "run", "--bun", "oxlint", "--deny-warnings", "{{files}}")
+            }
+            effect = "read"
+        }
+        fix = new CommandSpec {
+            command = new Command {
+                argv = List("bun", "run", "--bun", "oxlint", "--deny-warnings", "--fix", "{{files}}")
+            }
+            effect = "write"
+        }
+    }
+
+    // Type checking runs through the mise task rather than `tsc` directly, so the
+    // hook, CI and a person at a terminal all use one definition of it.
+    ["typecheck"] {
+        glob = List("**/*.ts", "tsconfig.json")
+        check = "mise run typecheck"
+        exclusive = true
+    }
+}
+
+/// `bd hooks run` exits 3 when the beads database is not initialized. Beads' own
+/// shims treat that as success so a fresh clone can commit before `mise run setup`
+/// has run; these steps do the same.
+hooks {
+    ["check"] {
+        steps = linters
+    }
+
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+
+    ["pre-commit"] {
+        fix = true
+        stage = true
+        stash = "git"
+        steps = (linters) {
+            ["beads"] {
+                check = "bd hooks run pre-commit || [ $? -eq 3 ]"
+                exclusive = true
+            }
+        }
+    }
+
+    ["commit-msg"] {
+        steps {
+            ["scoped-commit"] {
+                check = "bun tools/check-scoped-commit.ts {{commit_msg_file}}"
+            }
+        }
+    }
+
+    ["prepare-commit-msg"] {
+        steps {
+            ["beads"] {
+                check = "bd hooks run prepare-commit-msg {{hook_args}} || [ $? -eq 3 ]"
+            }
+        }
+    }
+
+    ["pre-push"] {
+        steps {
+            ["check"] {
+                check = "mise run check"
+            }
+            ["beads"] {
+                check = "bd hooks run pre-push {{hook_args}} || [ $? -eq 3 ]"
+            }
+        }
+    }
+
+    ["post-checkout"] {
+        steps {
+            ["beads"] {
+                check = "bd hooks run post-checkout {{hook_args}} || [ $? -eq 3 ]"
+            }
+        }
+    }
+
+    ["post-merge"] {
+        steps {
+            ["beads"] {
+                check = "bd hooks run post-merge {{hook_args}} || [ $? -eq 3 ]"
+            }
+        }
+    }
+}

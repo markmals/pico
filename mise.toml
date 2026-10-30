@@ -1,0 +1,149 @@
+#:schema https://mise.jdx.dev/schema/mise.json
+# mise owns the task graph. Every other tool is invoked from a task here, so the
+# local gate and the CI gate cannot drift apart.
+
+[settings]
+# Keep mise.lock current as tools change; `mise lock --platform …` regenerates it.
+lockfile = true
+
+[tools]
+# The only JavaScript runtime here: package manager, test runner, and the
+# interpreter for the zero-dependency TypeScript in tools/ and the skill helpers
+# under .agents/skills. `@types/bun` in package.json tracks this pin.
+bun = "1.4.4"
+# hk's version must match the `amends`/`import` URLs in hk.pkl — bump both together.
+hk = "2.8.1"
+# `tools/status.ts` reads the pull request through `gh`; the hk `actionlint` step
+# and CI check the workflows with the same pinned binary.
+gh = "2.103.2"
+actionlint = "1.7.12"
+worktrunk = "0.81.0" # provides `wt`
+# Beads is not in the mise registry; the GitHub release backend installs the same
+# binary `brew install beads` does. Pin it: an older `bd` refuses to open a newer DB.
+"github:gastownhall/beads" = "1.3.2" # provides `bd`
+# Xcode supplies Swift and xcodebuild. The aqua backend provides Tuist lockfile
+# checksums; `os` keeps the native tool off the Linux workflow runner.
+"aqua:tuist/tuist" = { version = "4.196.1", os = ["macos"] }
+
+# node_modules/.bin stays off PATH: every shim in it starts with
+# `#!/usr/bin/env node`. The tasks below run those same devDependency binaries as
+# `bun run --bun <bin>`, which needs no Node executable.
+
+# ── The uniform surface ──────────────────────────────────────────────────────
+
+[tasks.setup]
+description = "Idempotent first-run bootstrap: dependencies, work tracker, git hooks"
+depends = ["deps:install"]
+run = [
+    # `--skip-agents` stops bd from writing its own agent-instruction files; AGENTS.md
+    # documents the work tracker itself.
+    # `--skip-hooks` is load-bearing: without it `bd init` points core.hooksPath at
+    # .beads/hooks, and every hook hk installs is then ignored by git.
+    "bd init --init-if-missing --non-interactive --prefix pico --skip-agents --skip-hooks",
+    # Commit `.beads/issues.jsonl` so the work graph is reviewable in a diff.
+    "bd config set export.auto true",
+    # hk owns every git hook, beads included (see hk.pkl). Never run `bd hooks install`.
+    "hk install --mise",
+]
+
+[tasks."deps:install"]
+description = "Install dependencies from the committed lockfile"
+run = "bun install --frozen-lockfile"
+
+[tasks.fmt]
+alias = "f"
+description = "Format with Oxfmt; accepts file paths"
+run = "bun run --bun oxfmt"
+
+[tasks.lint]
+alias = "l"
+description = "Lint with Oxlint and apply safe fixes"
+run = "bun run --bun oxlint --fix"
+
+[tasks.typecheck]
+description = "Typecheck the project with tsc"
+run = "bun run --bun tsc"
+
+[tasks.test]
+alias = "t"
+description = "Run the test suite once"
+# Both paths are named because `bun test` does not descend into dot directories,
+# so a bare `bun test` never sees the skill helpers.
+run = "bun test ./tools ./.agents/skills"
+
+[tasks.check]
+alias = "c"
+description = "The single blocking gate: formatting, lint, types, tests, records"
+# `hk check --all` runs every step in hk.pkl: whitespace, newlines, merge markers,
+# actionlint, Oxfmt, Oxlint, and the `typecheck` step (which calls `mise run
+# typecheck`). Formatting, linting and type checking are therefore already in this
+# gate — adding them to `depends` would only run them twice. If you remove a step
+# from hk.pkl, add it back here.
+# `macos:check` carries the native project configuration into this same gate and
+# skips itself anywhere but macOS, so Linux keeps running exactly what it ran before.
+depends = ["test", "macos:check"]
+run = ["hk check --all", "mise run validate"]
+
+[tasks.validate]
+description = "Check proposals, policies, decisions and guides against the record rules"
+run = "bun tools/validate.ts"
+
+[tasks.status]
+description = "Where the work stands: current phase, next action, who acts"
+run = "bun tools/status.ts"
+
+[tasks.changeset]
+description = "Describe this change for the changelog (`mise run changeset -- --empty` when nothing releasable changed)"
+run = "bun run --bun changeset add"
+
+[tasks.version]
+description = "Apply pending changesets: bump the version in package.json, write CHANGELOG.md and the xcconfig"
+run = ["bun run --bun changeset version", "mise run version:sync"]
+
+[tasks."version:sync"]
+description = "Write the version package.json carries into Config/Version.xcconfig"
+run = "bun tools/sync-version.ts"
+
+# ── The macOS companion app ──────────────────────────────────────────────────
+# Project.swift is the whole native project today: it has no Swift sources, so these
+# tasks generate and inspect the configuration and stop there. Building, testing and
+# launching an app arrive with the app's source.
+
+[tasks."macos:generate"]
+description = "Generate Pico.xcodeproj and Pico.xcworkspace from Project.swift"
+run = "tuist generate --no-open"
+
+[tasks."macos:open"]
+description = "Generate the Xcode project and open it in Xcode"
+run = "tuist generate"
+
+[tasks."macos:fmt"]
+description = "Format the Swift manifests in place"
+run = "swift format --in-place --parallel Project.swift Tuist.swift"
+
+[tasks."macos:lint"]
+description = "Check Swift formatting without rewriting it"
+# --strict: without it `swift format lint` prints findings as warnings and still
+# exits 0, so the gate would pass on unformatted code.
+run = "swift format lint --strict --parallel Project.swift Tuist.swift"
+
+[tasks."macos:check"]
+description = "Check the native project configuration: formatting, generation, and the build settings xcodebuild resolves"
+# Everything below needs Xcode, and Tuist is a macOS-only pin, so off macOS this
+# task reports success having run nothing.
+skip_if = 'test "$(uname -s)" != Darwin'
+run = [
+    "mise run macos:lint",
+    "mise run macos:generate",
+    # Generation alone proves the manifest compiles, not that it configures
+    # anything: `-list` reads the generated workspace back, and `-showBuildSettings`
+    # resolves every setting for the target. Neither compiles code — with no
+    # sources there is none — and the settings dump is kept out of the log because
+    # its failures go to stderr.
+    "xcodebuild -workspace Pico.xcworkspace -list",
+    "xcodebuild -project Pico.xcodeproj -target Pico -configuration Debug -showBuildSettings > /dev/null",
+]
+
+[tasks."macos:clean"]
+description = "Remove the generated Xcode project and the files Tuist derives for it"
+run = "rm -rf Pico.xcodeproj Pico.xcworkspace Derived"

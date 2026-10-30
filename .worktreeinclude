@@ -1,0 +1,5 @@
+# What `wt step copy-ignored` carries into a new worktree. A path is copied only if
+# it is both gitignored and listed here, so this file is an allowlist of build caches
+# that are expensive to recreate and safe to share.
+
+node_modules

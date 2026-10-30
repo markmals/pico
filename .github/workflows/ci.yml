@@ -1,0 +1,73 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    # `mise run check` is the one definition of the blocking gate. The pre-push hook
+    # runs the same task, so the local gate and this one cannot drift apart.
+    check:
+        name: Check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+            - uses: jdx/mise-action@v5
+            # Oxfmt, Oxlint and tsc are devDependencies, so `check` needs them.
+            - run: mise run deps:install
+            - run: mise run check
+
+    # The same `macos:check` the gate above skips on Linux. It needs a runner with
+    # Xcode: Tuist generates the project, then xcodebuild reads the configuration
+    # back. Nothing is compiled — the native target has no sources yet.
+    native:
+        name: Native project config
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v7
+            - uses: jdx/mise-action@v5
+            - run: mise run macos:check
+
+    # The commit-msg hook validates one message as it is written; this validates the
+    # whole pull request range, which can carry commits the hook never saw.
+    commits:
+        name: Commit messages
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+            - uses: jdx/mise-action@v5
+            - name: Validate pull request commit messages
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: bun tools/check-pr-commits.ts "$BASE_SHA" "$HEAD_SHA"
+
+    # The release pull request consumes changesets instead of adding one, so it is exempt.
+    changeset:
+        name: Changeset
+        if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
+            - uses: jdx/mise-action@v5
+            - run: mise run deps:install
+            - name: Require a changeset
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: bun tools/require-changeset.ts "$BASE_SHA" "$HEAD_SHA"

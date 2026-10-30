@@ -2,7 +2,7 @@
 id: proposal.0001
 title: ACP Adapter Core Turn Path
 authors: [Mark Malstrom]
-status: active-review
+status: returned-for-revisions
 pull-request: https://github.com/markmals/pico/pull/1
 issues: []
 supersedes: []
@@ -12,7 +12,7 @@ supersedes: []
 
 ## Summary
 
-Pico's first runnable program: a Bun stdio ACP agent, ported from OMP's own ACP mode onto the official ACP SDK. Sesh can launch it as a custom agent, run OMP SDK turns with a curated tool roster that has no eval, built-in LSP or native delegation, see every tool call, and cancel work. Nothing asks for approval.
+Pico's first runnable program: a Bun stdio ACP agent, ported from OMP's own ACP mode onto the official ACP SDK. Sesh can launch it as a custom agent, run OMP SDK turns with a curated tool roster that has no eval, built-in LSP or native delegation, pick the model and thinking level, see every tool call, and cancel work. Nothing asks for approval.
 
 ## Authorization
 
@@ -21,7 +21,8 @@ Direct human consent from Mark Malstrom on 2026-10-30, in the Sesh session that 
 - one proposal for the adapter first and a later one for the companion app;
 - the human approves each gate (no build mandate);
 - a private `markmals/pico` repository with this draft pull request;
-- **the core turn path** as proposal 0001, with model and reasoning selectors, session restore, and child-session delegation left to later proposals;
+- **the core turn path** as proposal 0001, with session restore and child-session delegation left to later proposals;
+- **model and thinking-level selection in 0001** (returned for revisions on 2026-10-30, after the first review, because testing needs specific models): Sesh's Model and Effort menus; a session still fails to start when the configured default model is unavailable; a change made while a turn runs applies from the next model request;
 - **porting OMP's ACP agent onto the official SDK**, over a fresh adapter or in-process reuse of `runAcpMode`;
 - **no approval prompts at all**: Pico auto-approves every tool call;
 - **in-place OAuth refresh** in the user's OMP credential store is acceptable for now; a Pico-owned store may replace it later;
@@ -194,7 +195,7 @@ model key revoked                       → session/prompt fails with the provid
 - If the client requests protocol version 1 or later, Pico answers `protocolVersion: 1`.
 - `agentCapabilities` is `{ loadSession: false, promptCapabilities: { image: false, audio: false, embeddedContext: false }, mcpCapabilities: { http: false, sse: false } }`. There is no `sessionCapabilities`.
 - `agentInfo` is `{ name: "pico", title: "Pico", version }`, where `version` comes from `package.json`. `authMethods` is `[]`.
-- Pico registers no handler for `session/load`, `session/list`, `session/resume`, `session/close`, `session/set_mode`, `session/set_config_option` or `authenticate`, so the SDK answers each with method-not-found. Pico sends no `available_commands_update` and no vendor `_meta` extensions.
+- Pico registers no handler for `session/load`, `session/list`, `session/resume`, `session/close`, `session/set_mode` or `authenticate`, so the SDK answers each with method-not-found. Pico sends no `available_commands_update` and no vendor `_meta` extensions.
 
 ### `session/new`
 
@@ -214,10 +215,24 @@ model key revoked                       → session/prompt fails with the provid
 
     The connected MCP tools are mounted with `refreshMCPTools()` before the response is sent.
 
-- The model and thinking level are whatever the user's OMP configuration resolves for `cwd`. The request fails with an error that says so when no model resolves, when the configured model is unavailable and OMP would fall back to another one, or when the model's credentials cannot be resolved; Pico does not substitute another model.
+- The session starts on the model and thinking level the user's OMP configuration resolves for `cwd`. The request fails with an error that says so when no model resolves, when the configured model is unavailable and OMP would fall back to another one, or when the model's credentials cannot be resolved; Pico does not substitute another model at startup. Once the session exists, the user picks other models through the session config options (see Model and thinking level).
 - If the credential store cannot be opened, the request fails with an error naming the store's path and the cause. When the cause is a read-only or permission-denied failure, the message also says that Sesh's Autonomous sandbox blocks writes to `~/.omp` and that Pico does not support Autonomous sessions yet.
-- The response is `{ sessionId }`, with no `modes` and no `configOptions`. `sessionId` is unique within the process.
+- The response is `{ sessionId, configOptions }`, with no `modes`; `configOptions` is as described under Model and thinking level. `sessionId` is unique within the process.
 - User and project extension hooks keep working. Restricted sessions skip OMP's own extension discovery (`src/sdk.ts:2831-2842`), so Pico discovers the same user and project extensions itself and passes them to the session preloaded, loading each module once under OMP's host guard. An extension that fails to load is skipped, the session still starts, and the failure is written to stderr naming the extension. Hooks run, and extension tools are not exposed (`restrictToolNames`; `src/sdk.ts:3618, 3711`).
+
+### Model and thinking level
+
+- Every `session/new` response, every `session/set_config_option` response and every `config_option_update` carries the session's current config options, in this order:
+    - `model`: id `model`, name `Model`, category `model`, type `select`. Its options are OMP's available models for the session (`AgentSession.getAvailableModels()`: models with configured credentials, after the user's enabled-model filter), each with value `<provider>/<id>`, name the model's display name and description `<provider>/<id>`. `currentValue` is the session's current model.
+    - `thinking`: id `thinking`, name `Thinking`, category `thought_level`, type `select`. Its options are `off` (Off), `auto` (Auto, "Auto-detect per prompt"), then each level the current model supports (`AgentSession.getAvailableThinkingLevels()`), in that order. `currentValue` is the session's configured thinking level, or `off` when the model does not reason.
+    - There is no `mode` option; plan mode stays out of scope.
+- `session/set_config_option` with `configId: "model"` and a value from the model options switches the session to that model for this session only (OMP's `setModelTemporary`; nothing is persisted). Pico first resolves the model's credentials as at startup; if they cannot be used, the request fails with an error naming the model and the cause, and the model does not change. A value not in the options fails with an invalid-params error naming the value.
+- `session/set_config_option` with `configId: "thinking"` and a value from the thinking options sets the session's thinking level for this session only (nothing is persisted). A value not in the options fails with an invalid-params error naming the value.
+- Any other `configId`, or a boolean value, fails with an invalid-params error naming it. A request for an unknown session fails with an invalid-params error.
+- The response is `{ configOptions }` reflecting the change, including a thinking list and current value that follow a model switch (a level the new model does not support is clamped by OMP and reported as such).
+- A change is accepted while a turn is running. It applies from the next model request, which may come later in the same turn, as OMP's `/model` does.
+- When the session's model or thinking level changes other than through `session/set_config_option` (for example OMP clamping or switching it during a turn), Pico sends a `config_option_update` with the current options through the session's ordered update queue.
+- Sesh keeps the user's last choice per agent and may send it with `session/set_config_option` when a session starts; Pico treats it like any other request, so a remembered model that is no longer available fails with the error above and the session stays on its starting model.
 
 ### Sesh worktrees
 
@@ -344,7 +359,7 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
 
 ### Out of scope
 
-- **Model and reasoning selectors, and session load, list and resume.** These are the next proposal; they need config options and persistent session identity.
+- **Session load, list and resume.** These are the next proposal; they need persistent session identity.
 - **Delegation workflow guidance and verification for Sesh child sessions.** This is proposal 0003. The `mcp__sesh_*` session tools are present in 0001 because Sesh supplies them, but the delegation workflow is not designed or verified here.
 - **Approval prompts and remembered decisions.** Mark chose to auto-approve everything.
 - **Sesh Autonomous sessions.** These need a Pico-owned credential and state store in a folder the sandbox allows, which is its own follow-up proposal. Until then, 0001 fails such sessions with an explanatory error.
@@ -365,7 +380,8 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
     - ask the agent to use `intellisense`, ask them a structured question, create an artifact and send a notification;
     - confirm that no eval, LSP or `task` tool appears and that nothing asks for approval;
     - confirm the session worked in a New Branch worktree (Sesh's default);
-    - start one Autonomous session and confirm that it fails at creation with the credential-store error, not by hanging or partially working.
+    - start one Autonomous session and confirm that it fails at creation with the credential-store error, not by hanging or partially working;
+    - pick a different model and thinking level from Sesh's menus, send a prompt, and confirm the reply comes from the chosen model; open the menus again and confirm the thinking list matches the chosen model.
 - Reason: Pico is a CLI-shaped stdio executable, and the only realistic exercise is a real Sesh session driving it. No cheaper artifact shows Sesh's rendering.
 - Cleanup: remove "Pico (dev)" from Sesh's agents and delete `.build/`.
 
@@ -385,7 +401,7 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
 
 ## Future directions
 
-- Config options for model and thinking level, plus session persistence in a Pico-owned directory, with `session/load` replay (the next proposal).
+- Session persistence in a Pico-owned directory, with `session/load` replay (the next proposal).
 - Delegation guidance and verification for Sesh child sessions that run Pico (proposal 0003). Sesh's MCP instructions and `start_session` description tell agents to prefer their own subagents for research; Pico has none, so its own guidance needs to say how research and quick changes are done instead.
 - Returning the deferred tools (`find`, `todo` as ACP `plan` updates, `wait` with background `bash` jobs, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, memory tools) once their ACP representation is defined.
 - A Pico-owned credential and state store in a folder Sesh's sandbox allows (such as `~/.local/state/pico`), which would make Autonomous sessions work and remove in-place refresh of the user's OMP credentials.

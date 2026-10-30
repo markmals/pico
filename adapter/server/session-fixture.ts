@@ -89,3 +89,27 @@ export function settle(ms = 250): Promise<void> {
     setTimeout(resolve, ms);
     return promise;
 }
+
+/** Whether a process id still names a live process. */
+export function isRunning(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Polls until `condition` holds, giving up at `deadlineMs`. Used where the fact a
+ * test waits on belongs to the operating system — a file appearing, a process
+ * exiting — and the protocol announces nothing about it.
+ */
+export async function waitUntil(condition: () => boolean, deadlineMs = 10_000): Promise<boolean> {
+    const deadline = Date.now() + deadlineMs;
+    while (!condition()) {
+        if (Date.now() >= deadline) return false;
+        await settle(25);
+    }
+    return true;
+}

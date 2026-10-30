@@ -126,9 +126,11 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             );
         }
     } catch (error) {
-        await engine?.dispose();
-        await mcp?.manager.disconnectAll();
-        ownedStore?.close();
+        // Every owned resource is released even when an earlier release fails;
+        // the startup failure is what the caller needs to see, not a teardown one.
+        await attempt(() => engine?.dispose());
+        await attempt(() => mcp?.manager.disconnectAll());
+        await attempt(() => ownedStore?.close());
         throw error instanceof PicoSessionError
             ? error
             : new PicoSessionError(describeCause(error));
@@ -151,13 +153,32 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             if (disposed) return;
             disposed = true;
             disposalPhase = "disconnecting MCP servers";
-            await liveMcp.manager.disconnectAll();
+            const disconnected = await attempt(() => liveMcp.manager.disconnectAll());
             disposalPhase = "disposing the engine";
-            await liveEngine.dispose();
-            ownedStore?.close();
+            const engineDisposed = await attempt(() => liveEngine.dispose());
+            const storeClosed = await attempt(() => ownedStore?.close());
+            const failure = disconnected ?? engineDisposed ?? storeClosed;
+            if (failure) {
+                // Leave the phase naming the step that failed, for the shutdown log.
+                disposalPhase =
+                    disconnected === undefined
+                        ? "disposing the engine"
+                        : "disconnecting MCP servers";
+                throw failure.error;
+            }
             disposalPhase = undefined;
         },
     };
+}
+
+/** Runs one teardown step, reporting its failure instead of abandoning the steps after it. */
+async function attempt(step: () => Promise<void> | void): Promise<{ error: unknown } | undefined> {
+    try {
+        await step();
+        return undefined;
+    } catch (error) {
+        return { error };
+    }
 }
 
 /**

@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { Checklist } from "./checklist.ts";
+import { runningPids, waitUntil } from "./processes.ts";
 import {
     agentText,
     collectToolCalls,
@@ -24,7 +25,10 @@ const SMOKE_FILE = "pico-smoke.txt";
 const SMOKE_TEXT = "hello from pico";
 const CAT_COMMAND = `cat ${SMOKE_FILE}`;
 const FAILING_COMMAND = "exit 3";
-const LONG_COMMAND = "sleep 60";
+// An external binary with a distinctive duration, not a bare `sleep`: Oh My Pi's embedded
+// shell runs some commands in-process, and a cancellation that only interrupts a builtin
+// would not show that a running subprocess is killed.
+const LONG_COMMAND = "/bin/sleep 613";
 
 // A real model needs the steps spelled out, including which tool to use, or it answers from
 // memory, batches the work into one command, or tidies up after a failure.
@@ -52,6 +56,11 @@ const CLOSING_PROMPT = "Reply with exactly the word: done. Do not use any tool."
 // The engine gives a killed command a 1 s grace period and Pico gives the abort 5 s before it
 // gives up on the session, so a cancellation that works resolves well inside this.
 const CANCEL_SECONDS = 10;
+
+// A tool call is reported as execution starts, so the process it spawns appears a moment
+// later; after the turn resolves, the kill has already been waited for.
+const COMMAND_SIGHTING_SECONDS = 5;
+const COMMAND_EXIT_SECONDS = 10;
 
 interface Turn {
     stopReason: StopReason;
@@ -175,25 +184,49 @@ async function checkCancellation(turns: Turns, smoke: Smoke): Promise<void> {
     smoke.watchers.push(watcher);
 
     let running = turns.run(LONG_COMMAND_PROMPT, 300);
-    let cancelledAt = await Promise.race([started.then(() => Date.now()), running.then(() => 0)]);
-    if (cancelledAt !== 0) await turns.cancel();
+    let startedFirst = await Promise.race([started.then(() => true), running.then(() => false)]);
+
+    let spawned = false;
+    let cancelledAt = 0;
+    if (startedFirst) {
+        spawned = await waitUntil(
+            COMMAND_SIGHTING_SECONDS,
+            () => runningPids(LONG_COMMAND).length > 0,
+        );
+        cancelledAt = Date.now();
+        await turns.cancel();
+    }
 
     let turn = await running;
     smoke.watchers.splice(smoke.watchers.indexOf(watcher), 1);
 
+    let spawns = `\`${LONG_COMMAND}\` runs as a real process`;
     let stopped = `cancelling \`${LONG_COMMAND}\` ends the turn cancelled`;
     let promptly = `the cancelled turn resolves within ${CANCEL_SECONDS} seconds`;
-    if (cancelledAt === 0) {
-        smoke.checklist.record(stopped, "the turn ended before any execute tool call appeared");
-        smoke.checklist.record(promptly, "the turn was never cancelled");
+    let killed = `the cancelled process is gone within ${COMMAND_EXIT_SECONDS} seconds`;
+    if (!startedFirst) {
+        let unstarted = "the turn ended before any execute tool call appeared";
+        for (let check of [spawns, stopped, promptly, killed]) {
+            smoke.checklist.record(check, unstarted);
+        }
         return;
     }
 
     let seconds = (Date.now() - cancelledAt) / 1000;
+    let gone = await waitUntil(COMMAND_EXIT_SECONDS, () => runningPids(LONG_COMMAND).length === 0);
+
+    smoke.checklist.record(
+        spawns,
+        spawned ? null : `no process ran \`${LONG_COMMAND}\` while its tool call was in flight`,
+    );
     smoke.checklist.record(stopped, stopReasonProblem(turn, "cancelled"));
     smoke.checklist.record(
         promptly,
         seconds <= CANCEL_SECONDS ? null : `took ${seconds.toFixed(1)} seconds`,
+    );
+    smoke.checklist.record(
+        killed,
+        gone ? null : `${runningPids(LONG_COMMAND).join(", ")} still ran \`${LONG_COMMAND}\``,
     );
 }
 

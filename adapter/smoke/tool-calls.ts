@@ -120,13 +120,18 @@ export function commandOutputProblem(
         : `${call.title}: output does not contain ${JSON.stringify(output)}`;
 }
 
+// The command the engine was asked to run, not the title: a substring match would accept
+// `echo extra; cat pico-smoke.txt` as the command the prompt asked for.
 function commandCall(calls: ToolCallRecord[], command: string): ToolCallRecord | undefined {
     return calls.find(
-        candidate =>
-            candidate.kind === "execute" &&
-            (candidate.title.includes(command) ||
-                JSON.stringify(candidate.rawInput ?? null).includes(command)),
+        candidate => candidate.kind === "execute" && commandOf(candidate) === command,
     );
+}
+
+function commandOf(call: ToolCallRecord): string | null {
+    if (call.rawInput === null || typeof call.rawInput !== "object") return null;
+    let { command } = call.rawInput as { command?: unknown };
+    return typeof command === "string" ? command.trim() : null;
 }
 
 function statusProblem(call: ToolCallRecord, expected: ToolCallStatus): string | null {

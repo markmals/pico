@@ -10,22 +10,19 @@ import { connectPicoAgent } from "./agent-harness.ts";
 import { mockEngine, removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
 import { fakeSession, neverSettles } from "./fake-session.ts";
 import { picoAgentShutdown } from "./pico-agent.ts";
-import { closeOpenConnections, settle, startPicoSession } from "./session-fixture.ts";
+import {
+    closeOpenConnections,
+    isRunning,
+    settle,
+    startPicoSession,
+    waitUntil,
+} from "./session-fixture.ts";
 
 const STUB_MCP_SERVER = join(import.meta.dir, "stub-mcp-server.fixture.ts");
 
 afterEach(closeOpenConnections);
 
 afterAll(removeTemporaryDirectories);
-
-function isRunning(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch {
-        return false;
-    }
-}
 
 describe("proposal.0001 shutdown", () => {
     test("closing the connection disposes every session on it", async () => {
@@ -57,7 +54,7 @@ describe("proposal.0001 shutdown", () => {
         await client.agent.request("session/new", { cwd: second, mcpServers: [] });
 
         await client.close();
-        await settle();
+        await picoAgentShutdown(client.app).completed;
 
         expect(disposed.toSorted()).toEqual([first, second].toSorted());
     });
@@ -80,9 +77,9 @@ describe("proposal.0001 shutdown", () => {
         expect(isRunning(pid)).toBe(true);
 
         await session.client.close();
-        await settle(1_000);
+        await picoAgentShutdown(session.client.app).completed;
 
-        expect(isRunning(pid)).toBe(false);
+        expect(await waitUntil(() => !isRunning(pid))).toBe(true);
     }, 20_000);
 
     test("a session that finishes being created after the connection closed is disposed", async () => {
@@ -105,7 +102,7 @@ describe("proposal.0001 shutdown", () => {
         await client.close();
         creation.resolve();
         await pending.catch(() => undefined);
-        await settle();
+        await picoAgentShutdown(client.app).completed;
 
         expect(fake.disposals).toBe(1);
     });
@@ -162,7 +159,7 @@ describe("proposal.0001 shutdown", () => {
         });
         await started.promise;
         await client.close();
-        await settle();
+        await picoAgentShutdown(client.app).completed;
         await running.catch(() => undefined);
 
         expect(fake.calls).toEqual(["prompt", "abort", "dispose"]);

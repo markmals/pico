@@ -411,4 +411,41 @@ describe("proposal.0001 recorded writes", () => {
             { path: kept, oldText: "one\n", newText: "ONE\n" },
         ]);
     });
+
+    test("a file the recorder cannot read yields no record, and the write still runs", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "unreadable.txt");
+        fs.writeFileSync(absolute, "secret\n");
+        fs.chmodSync(absolute, 0o200);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "unreadable.txt", content: "replaced\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("replace unreadable.txt");
+
+        assert.deepEqual(
+            executions.map(execution => [execution.name, execution.isError]),
+            [["write", false]],
+        );
+        assert.deepEqual(session.takeRecordedChanges("write-1"), []);
+    });
 });

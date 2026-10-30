@@ -64,7 +64,7 @@ function toolCallIdOf(update: SessionUpdate): string | undefined {
 }
 
 describe("proposal.0001 tool call reporting invariants", () => {
-    test("for any engine sequence every tool call is opened once, in order, and settles once", () => {
+    test("for any engine sequence every started call is opened once, in order, and settles once", () => {
         for (let seed = 1; seed <= 200; seed++) {
             const mapper = new SessionEventMapper({
                 cwd: "/workspace",
@@ -84,8 +84,19 @@ describe("proposal.0001 tool call reporting invariants", () => {
                 else byToolCallId.set(toolCallId, [update]);
             }
 
-            for (const [toolCallId, group] of byToolCallId) {
+            // Every call the engine started must be reported, and nothing else may be.
+            const started = new Set(
+                events
+                    .filter(event => event.type === "tool_execution_start")
+                    .map(event => event.toolCallId),
+            );
+            expect([...byToolCallId.keys()].toSorted(), `seed ${seed}: reported calls`).toEqual(
+                [...started].toSorted(),
+            );
+
+            for (const toolCallId of started) {
                 const context = `seed ${seed}, tool call ${toolCallId}`;
+                const group = byToolCallId.get(toolCallId) ?? [];
                 const opens = group.filter(update => update.sessionUpdate === "tool_call");
                 expect(opens.length, `${context}: tool_call count`).toBe(1);
                 expect(group[0]?.sessionUpdate, `${context}: first update`).toBe("tool_call");

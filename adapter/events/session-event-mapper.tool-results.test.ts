@@ -103,6 +103,36 @@ describe("proposal.0001 tool call progress", () => {
 
         expect(toolCallUpdate(updates[0]).content).toEqual([textContent("1 pass\n0 fail\n")]);
     });
+
+    test("a partial result that arrives after the call ended is ignored", () => {
+        const { mapper } = recordingMapper();
+        mapper.map(
+            toolExecutionStart({
+                toolCallId: "call-1",
+                toolName: "bash",
+                args: { command: "sleep 30" },
+            }),
+        );
+        mapper.map(
+            toolExecutionEnd({
+                toolCallId: "call-1",
+                toolName: "bash",
+                result: toolResult("Command aborted"),
+                isError: true,
+            }),
+        );
+
+        // The engine drains a killed command's output after it has reported the end.
+        const updates = mapper.map(
+            toolExecutionUpdate({
+                toolCallId: "call-1",
+                toolName: "bash",
+                partialResult: toolResult("[Command cancelled]\n"),
+            }),
+        );
+
+        expect(updates).toEqual([]);
+    });
 });
 
 describe("proposal.0001 tool call results", () => {

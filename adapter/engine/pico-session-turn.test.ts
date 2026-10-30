@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { createPicoSession } from "./pico-session.ts";
+import { fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
     createMockModel,
     editAfterRead,
@@ -130,5 +131,25 @@ describe("proposal.0001 working directory", () => {
         ]);
         assert.equal(fs.readFileSync(path.join(cwd, "worktree.txt"), "utf8"), "branch\n");
         assert.deepEqual(fs.readdirSync(mainCheckout), []);
+    });
+});
+
+describe("proposal.0001 shutdown", () => {
+    test("dispose names the teardown step that is running", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("fake")],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        assert.equal(session.disposalPhase, undefined);
+
+        const pending = session.dispose();
+        assert.equal(session.disposalPhase, "disconnecting MCP servers");
+        await pending;
+
+        assert.equal(session.disposalPhase, undefined);
     });
 });

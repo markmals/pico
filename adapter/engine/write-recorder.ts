@@ -133,16 +133,21 @@ export class WriteRecorder {
         this.#snapshots.delete(event.toolCallId);
         const records: RecordedChange[] = [];
         for (const snapshot of snapshots) {
-            const newText = event.isError ? null : await readText(snapshot.path);
-            if (newText !== null) {
-                // OMP prepares every tool call's arguments before it runs any of
-                // them, so calls in one batch snapshot the same content. A change
-                // that landed after this snapshot is what this call replaced. A
-                // file a `bash` command rewrote inside the same batch is invisible
-                // here: nothing reports it, so the snapshot stands.
-                const overtaken = this.#changed.get(snapshot.path);
-                const oldText =
-                    overtaken && overtaken.at > snapshot.at ? overtaken.newText : snapshot.oldText;
+            const content = event.isError ? null : await readText(snapshot.path);
+            // OMP prepares every tool call's arguments before it runs any of
+            // them, so calls in one batch snapshot the same content. A change
+            // that landed after this snapshot is what this call replaced. A
+            // file a `bash` command rewrote inside the same batch is invisible
+            // here: nothing reports it, so the snapshot stands.
+            const overtaken = this.#changed.get(snapshot.path);
+            const oldText =
+                overtaken && overtaken.at > snapshot.at ? overtaken.newText : snapshot.oldText;
+            // A file the call removed reports empty content, so a deletion still
+            // carries its path and the text it had. A target that never existed
+            // and still does not was simply not touched.
+            const removed = content === null && oldText !== null && !event.isError;
+            if (content !== null || removed) {
+                const newText = content ?? "";
                 this.#changed.set(snapshot.path, { newText, at: (this.#clock += 1) });
                 records.push({ path: snapshot.path, oldText, newText });
             }

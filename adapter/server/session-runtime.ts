@@ -39,7 +39,7 @@ export class SessionRuntime {
     #turn: Turn | undefined;
     #closedReason: string | undefined;
     #disposal: Promise<void> | undefined;
-    #step: string | undefined;
+    #step: "stopping the turn" | "disposing" | undefined;
 
     constructor(sessionId: string, session: PicoSession, client: AgentContext) {
         this.#sessionId = sessionId;
@@ -50,11 +50,18 @@ export class SessionRuntime {
     /**
      * The teardown step still running, for the shutdown diagnostic.
      *
-     * Disconnecting the MCP servers and disposing the engine both happen inside
-     * `PicoSession.dispose()`, which Pico cannot see into, so they are named together.
+     * While the session is being disposed it reports the phase it is on; Pico only
+     * names the whole teardown when the session reports no phase.
      */
     get outstandingStep(): string | undefined {
-        return this.#step;
+        if (this.#step === "stopping the turn") {
+            return `stopping the turn running in session ${this.#sessionId}`;
+        }
+        if (this.#step !== "disposing") return undefined;
+        const phase = this.#session.disposalPhase;
+        return phase
+            ? `session ${this.#sessionId}: ${phase}`
+            : `disposing session ${this.#sessionId} and the MCP servers it started`;
     }
 
     async prompt(text: string): Promise<StopReason> {
@@ -135,10 +142,10 @@ export class SessionRuntime {
     async dispose(): Promise<void> {
         this.cancel();
         if (this.#turn?.aborted) {
-            this.#step = `stopping the turn running in session ${this.#sessionId}`;
+            this.#step = "stopping the turn";
             await this.#turn.aborted;
         }
-        this.#step = `disposing session ${this.#sessionId} and the MCP servers it started`;
+        this.#step = "disposing";
         try {
             await this.#dispose();
         } finally {

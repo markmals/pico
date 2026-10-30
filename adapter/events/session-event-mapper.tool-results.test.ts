@@ -201,6 +201,28 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
+    test("an edit that empties one file still reports both files", () => {
+        const kept = join(cwd, "a.txt");
+        const emptied = join(cwd, "b.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("edited 2 files", {}),
+            changes: {
+                "call-1": [
+                    { path: kept, oldText: "a\n", newText: "A\n" },
+                    { path: emptied, oldText: "b\n", newText: "" },
+                ],
+            },
+        });
+
+        expect(update.locations).toEqual([{ path: kept }, { path: emptied }]);
+        expect(update.content).toEqual([
+            { type: "diff", path: kept, oldText: "a\n", newText: "A\n" },
+            { type: "diff", path: emptied, oldText: "b\n", newText: "" },
+        ]);
+    });
+
     test("an edit the engine recorded nothing for falls back to the result's own text", () => {
         const path = join(cwd, "b.txt");
         const update = endUpdate({

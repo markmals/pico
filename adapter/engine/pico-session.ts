@@ -39,9 +39,17 @@ export interface McpToolIdentity {
     tool: string;
 }
 
+/** The teardown step `dispose()` is on, for shutdown diagnostics. */
+export type DisposalPhase = "disconnecting MCP servers" | "disposing the engine";
+
 export interface PicoSession {
     readonly engine: AgentSession;
     readonly cwd: string;
+    /**
+     * The teardown step currently running: `undefined` before `dispose()` and once it has completed,
+     * and the outstanding step for as long as teardown hangs or after it fails.
+     */
+    readonly disposalPhase: DisposalPhase | undefined;
     /** Consumes what the tool call with this id changed, one entry per affected file. */
     takeRecordedChanges(toolCallId: string): RecordedChange[];
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
@@ -130,17 +138,24 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
     const liveMcp = mcp;
     const identities = mcpToolIdentities(mcp.tools);
     let disposed = false;
+    let disposalPhase: DisposalPhase | undefined;
     return {
         engine,
         cwd,
+        get disposalPhase() {
+            return disposalPhase;
+        },
         takeRecordedChanges: toolCallId => writes.take(toolCallId),
         mcpToolIdentity: toolName => identities.get(toolName),
         dispose: async () => {
             if (disposed) return;
             disposed = true;
+            disposalPhase = "disconnecting MCP servers";
             await liveMcp.manager.disconnectAll();
+            disposalPhase = "disposing the engine";
             await liveEngine.dispose();
             ownedStore?.close();
+            disposalPhase = undefined;
         },
     };
 }
@@ -164,13 +179,15 @@ function mcpToolIdentities(tools: readonly CustomTool[]): Map<string, McpToolIde
 /**
  * Resolves the selected model's real credential — running a command-backed key
  * and refreshing OAuth in place, exactly as a request would — so a session only
- * exists when its first prompt can reach the provider.
+ * exists when its first prompt can reach the provider. The session id is the
+ * same identity OMP's own requests resolve under, so a provider holding several
+ * session-sticky accounts picks this session's.
  */
 async function verifyCredentials(engine: AgentSession, model: Model<Api>): Promise<void> {
     const named = `${model.provider}/${model.id}`;
     let credential: string | undefined;
     try {
-        credential = await engine.modelRegistry.getApiKey(model);
+        credential = await engine.modelRegistry.getApiKey(model, engine.sessionId);
     } catch (error) {
         throw new PicoSessionError(
             `Pico could not use the credentials for ${named}: ${describeCause(error)}`,

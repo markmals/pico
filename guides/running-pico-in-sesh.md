@@ -13,7 +13,7 @@ Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session get
 - **Files and commands:** `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`.
 - **Sesh's own tools,** when Sesh provides them: asking you questions, notifications, artifacts, session information and renaming, and starting and following other sessions. They appear as `mcp__sesh_ask_user`, `mcp__sesh_notify` and so on, titled like `sesh: ask_user`.
 
-Every tool the agent runs appears in the Sesh conversation as its own tool call, with a title, its output, and whether it succeeded or failed. Reads, writes, edits and searches also show the files they work on. A successful edit or write shows a diff of each file it changed.
+Every tool the agent runs appears in the Sesh conversation as its own tool call, with a title, its output, and whether it succeeded or failed. Reads, writes and edits also show the files they work on, and a search shows the folder it searched when the agent named one. A successful edit or write shows a diff of each file it changed.
 
 Pico never asks for approval. Every tool call runs as soon as the agent makes it.
 

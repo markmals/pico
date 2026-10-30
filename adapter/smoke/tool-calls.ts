@@ -111,6 +111,15 @@ export function commandCallProblem(
     return statusProblem(call, status);
 }
 
+// Sesh labels the tool call with its title, and the proposal titles `bash` with its command.
+export function commandTitleProblem(calls: ToolCallRecord[], command: string): string | null {
+    let call = commandCall(calls, command);
+    if (call === undefined) return `no tool call with kind execute for ${JSON.stringify(command)}`;
+    return call.title === command
+        ? null
+        : `title is ${JSON.stringify(call.title)}, expected ${JSON.stringify(command)}`;
+}
+
 export function commandOutputProblem(
     calls: ToolCallRecord[],
     command: string,
@@ -174,6 +183,10 @@ function diffProblem(call: ToolCallRecord, file: string, written: string): strin
     let diff = call.content.find(entry => entry.type === "diff");
     if (diff === undefined) return `${call.title}: no diff content`;
     if (diff.path !== file) return `${call.title}: diff is for ${diff.path}, expected ${file}`;
+    // The file did not exist before the turn, which ACP spells as a null `oldText`.
+    if (diff.oldText !== null) {
+        return `${call.title}: diff oldText is ${JSON.stringify(diff.oldText)}, expected null`;
+    }
     if (!diff.newText.includes(written)) {
         return `${call.title}: diff newText does not contain ${JSON.stringify(written)}`;
     }

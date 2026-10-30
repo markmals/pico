@@ -7,22 +7,33 @@ import { test, type TestContext } from "node:test";
 
 let statusScript = new URL("./status.ts", import.meta.url).pathname;
 
+// hk runs this suite from `pre-push`, and git exports GIT_DIR, GIT_INDEX_FILE and
+// GIT_WORK_TREE to its hooks. A child `git` inheriting those acts on the outer
+// repository rather than on the fixture, so every fixture runs without them.
+let fixtureEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+);
+
 function statusWithPullRequests(t: TestContext, pullRequests: object[]): string {
     let root = mkdtempSync(path.join(tmpdir(), "core-status-"));
     t.after(() => rmSync(root, { force: true, recursive: true }));
-    execFileSync("git", ["init", "-q", "-b", "feature", root]);
-    execFileSync("git", [
-        "-C",
-        root,
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "--allow-empty",
-        "-qm",
-        "fixture",
-    ]);
+    execFileSync("git", ["init", "-q", "-b", "feature", root], { env: fixtureEnv });
+    execFileSync(
+        "git",
+        [
+            "-C",
+            root,
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "fixture",
+        ],
+        { env: fixtureEnv },
+    );
     let bin = path.join(root, "bin");
     mkdirSync(bin);
     let gh = path.join(bin, "gh");
@@ -51,7 +62,7 @@ function statusWithPullRequests(t: TestContext, pullRequests: object[]): string 
         cwd: root,
         encoding: "utf8",
         env: {
-            ...process.env,
+            ...fixtureEnv,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
             TEST_PULL_REQUESTS: JSON.stringify(pullRequests),
         },
@@ -96,20 +107,24 @@ test("does not select an arbitrary PR when a branch name has been reused", t => 
 function statusInRepositoryWithoutRemote(t: TestContext): string {
     let root = mkdtempSync(path.join(tmpdir(), "core-status-local-"));
     t.after(() => rmSync(root, { force: true, recursive: true }));
-    execFileSync("git", ["init", "-q", "-b", "main", root]);
-    execFileSync("git", [
-        "-C",
-        root,
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "--allow-empty",
-        "-qm",
-        "fixture",
-    ]);
-    execFileSync("git", ["-C", root, "switch", "-q", "-c", "feature/x"]);
+    execFileSync("git", ["init", "-q", "-b", "main", root], { env: fixtureEnv });
+    execFileSync(
+        "git",
+        [
+            "-C",
+            root,
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "fixture",
+        ],
+        { env: fixtureEnv },
+    );
+    execFileSync("git", ["-C", root, "switch", "-q", "-c", "feature/x"], { env: fixtureEnv });
 
     // No origin and no usable gh, so refs/heads/main is the only evidence of which
     // branch is the default one.
@@ -123,7 +138,7 @@ function statusInRepositoryWithoutRemote(t: TestContext): string {
         cwd: root,
         encoding: "utf8",
         env: {
-            ...process.env,
+            ...fixtureEnv,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
         },
     });

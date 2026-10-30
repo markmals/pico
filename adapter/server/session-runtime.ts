@@ -41,23 +41,23 @@ export class SessionRuntime {
     #closedReason: string | undefined;
     #disposal: Promise<void> | undefined;
     #step: "stopping the turn" | "disposing" | undefined;
-    /** Config changes in progress; the engine's own change events are not echoed for them. */
+    /** Config changes in progress; the engine's change events during one are settled by its outcome. */
     #applyingConfigOption = 0;
+    /** The menus as the client last received them, so each change reaches it once. */
+    #reportedOptions: string;
     readonly #stopWatchingModel: () => void;
 
     constructor(sessionId: string, session: PicoSession, client: AgentContext) {
         this.#sessionId = sessionId;
         this.#session = session;
         this.#queue = new UpdateQueue(client, sessionId);
+        this.#reportedOptions = JSON.stringify(this.configOptions());
         // The engine can change the model or thinking level itself (a clamp, a retry
         // fallback); the client's menus have to follow, through the ordered queue.
         this.#stopWatchingModel = session.engine.subscribe(event => {
             if (event.type !== "model_changed" && event.type !== "thinking_level_changed") return;
             if (this.#applyingConfigOption > 0) return;
-            this.#queue.push({
-                sessionUpdate: "config_option_update",
-                configOptions: this.configOptions(),
-            });
+            this.#reportChangedOptions();
         });
     }
 
@@ -73,12 +73,27 @@ export class SessionRuntime {
     ): Promise<SessionConfigOption[]> {
         if (this.#closedReason) throw RequestError.internalError(undefined, this.#closedReason);
         this.#applyingConfigOption += 1;
+        let applied = false;
         try {
             await applyConfigOption(this.#session, configId, value);
+            applied = true;
         } finally {
             this.#applyingConfigOption -= 1;
+            // A refused choice has no response to carry what the engine changed
+            // on its own meanwhile, so that change goes out as an update.
+            if (!applied) this.#reportChangedOptions();
         }
-        return this.configOptions();
+        const options = this.configOptions();
+        this.#reportedOptions = JSON.stringify(options);
+        return options;
+    }
+
+    #reportChangedOptions(): void {
+        const options = this.configOptions();
+        const serialized = JSON.stringify(options);
+        if (serialized === this.#reportedOptions) return;
+        this.#reportedOptions = serialized;
+        this.#queue.push({ sessionUpdate: "config_option_update", configOptions: options });
     }
 
     /**

@@ -5,6 +5,10 @@
 # No trailing slash: worktrees link node_modules from the main checkout.
 node_modules
 
+# Build output. `mise run acp:launcher` writes `.build/pico-acp` here; its shebang is
+# the absolute path of this machine's Bun, so it is machine-local by construction.
+.build/
+
 # Local credentials
 .env
 .env.*

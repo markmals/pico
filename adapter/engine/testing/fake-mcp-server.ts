@@ -1,0 +1,139 @@
+/**
+ * A zero-dependency stdio MCP server for the engine tests: newline-delimited
+ * JSON-RPC on stdin/stdout, speaking just enough of MCP (`initialize`,
+ * `tools/list`, `tools/call`) for OMP's MCP client to connect and call a tool.
+ *
+ * Flags select what the tests need:
+ *   --pid-file <path>   write this process's pid, so a test can check it is gone
+ *   --fail-tools-list   answer `initialize`, then fail `tools/list`
+ *   --tool <name>       advertise `<name>` instead of the default tools (repeatable)
+ */
+
+interface JsonRpcRequest {
+    jsonrpc: "2.0";
+    id?: number | string;
+    method: string;
+    params?: Record<string, unknown>;
+}
+
+interface ToolDefinition {
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+}
+
+const NO_ARGUMENTS = { type: "object", properties: {}, additionalProperties: false };
+
+const DEFAULT_TOOLS: ToolDefinition[] = [
+    {
+        name: "echo",
+        description: "Returns the text it was given.",
+        inputSchema: {
+            type: "object",
+            properties: { text: { type: "string", description: "Text to echo back." } },
+            required: ["text"],
+            additionalProperties: false,
+        },
+    },
+    {
+        name: "launch_report",
+        description: "Reports how this server process was launched.",
+        inputSchema: NO_ARGUMENTS,
+    },
+];
+
+/** What a `launch_report` call returns, so a test can assert command, args and env reached the server. */
+export interface LaunchReport {
+    args: string[];
+    token: string | null;
+}
+
+function valuesOf(args: string[], flag: string): string[] {
+    const values: string[] = [];
+    for (let index = 0; index < args.length; index += 1) {
+        if (args[index] === flag && args[index + 1] !== undefined) values.push(args[index + 1]!);
+    }
+    return values;
+}
+
+function send(message: Record<string, unknown>): void {
+    process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
+}
+
+function callResult(args: string[], request: JsonRpcRequest): Record<string, unknown> {
+    const name = request.params?.name;
+    if (name === "launch_report") {
+        const report: LaunchReport = { args, token: process.env.PICO_FAKE_MCP_TOKEN ?? null };
+        return { content: [{ type: "text", text: JSON.stringify(report) }] };
+    }
+    if (name === "echo") {
+        const text = (request.params?.arguments as { text?: unknown } | undefined)?.text;
+        return { content: [{ type: "text", text: typeof text === "string" ? text : "" }] };
+    }
+    return { content: [{ type: "text", text: `called ${String(name)}` }] };
+}
+
+function handle(request: JsonRpcRequest, args: string[], tools: ToolDefinition[]): void {
+    if (request.id === undefined) return;
+    switch (request.method) {
+        case "initialize":
+            send({
+                id: request.id,
+                result: {
+                    protocolVersion: request.params?.protocolVersion ?? "2025-11-25",
+                    capabilities: { tools: { listChanged: false } },
+                    serverInfo: { name: "fake", version: "0.0.0" },
+                },
+            });
+            return;
+        case "tools/list":
+            if (args.includes("--fail-tools-list")) {
+                send({
+                    id: request.id,
+                    error: { code: -32603, message: "fake server refuses to list tools" },
+                });
+                return;
+            }
+            send({ id: request.id, result: { tools } });
+            return;
+        case "tools/call":
+            send({ id: request.id, result: callResult(args, request) });
+            return;
+        default:
+            send({
+                id: request.id,
+                error: { code: -32601, message: `Method not found: ${request.method}` },
+            });
+    }
+}
+
+async function main(): Promise<void> {
+    const args = process.argv.slice(2);
+    const pidFile = valuesOf(args, "--pid-file")[0];
+    if (pidFile !== undefined) await Bun.write(pidFile, String(process.pid));
+
+    const requested = valuesOf(args, "--tool");
+    const tools =
+        requested.length > 0
+            ? requested.map(name => ({
+                  name,
+                  description: `Fake ${name}.`,
+                  inputSchema: NO_ARGUMENTS,
+              }))
+            : DEFAULT_TOOLS;
+
+    const decoder = new TextDecoder();
+    let buffered = "";
+    for await (const chunk of Bun.stdin.stream()) {
+        buffered += decoder.decode(chunk, { stream: true });
+        let newline = buffered.indexOf("\n");
+        while (newline !== -1) {
+            const line = buffered.slice(0, newline).trim();
+            buffered = buffered.slice(newline + 1);
+            if (line.length > 0) handle(JSON.parse(line) as JsonRpcRequest, args, tools);
+            newline = buffered.indexOf("\n");
+        }
+    }
+}
+
+if (import.meta.main) await main();

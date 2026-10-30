@@ -7,6 +7,7 @@ import { createPicoSession } from "./pico-session.ts";
 import {
     createMockModel,
     editAfterRead,
+    editFiles,
     editThenWrite,
     mockAuthStorage,
     picoWorkspace,
@@ -371,5 +372,43 @@ describe("proposal.0001 recorded writes", () => {
             { path: absolute, oldText: "one\ntwo\n", newText: "one\nTWO\n" },
         ]);
         assert.deepEqual(session.takeRecordedChanges("edit-1"), []);
+    });
+
+    test("an edit that deletes one file and changes another records both", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const removed = path.join(cwd, "gone.txt");
+        const kept = path.join(cwd, "kept.txt");
+        fs.writeFileSync(removed, "delete me\n");
+        fs.writeFileSync(kept, "one\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    { content: [toolCall("read", { path: "gone.txt" })] },
+                    { content: [toolCall("read", { path: "kept.txt" })] },
+                    editFiles(
+                        [
+                            { file: "gone.txt", body: "REM" },
+                            { file: "kept.txt", body: "PUT 1.=1:\n+ONE" },
+                        ],
+                        "edit-1",
+                    ),
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("delete gone.txt and change kept.txt");
+
+        assert.equal(fs.existsSync(removed), false);
+        assert.equal(fs.readFileSync(kept, "utf8"), "ONE\n");
+        assert.deepEqual(session.takeRecordedChanges("edit-1"), [
+            { path: removed, oldText: "delete me\n", newText: "" },
+            { path: kept, oldText: "one\n", newText: "ONE\n" },
+        ]);
     });
 });

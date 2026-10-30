@@ -155,12 +155,12 @@ export function toolCall(name: string, args: Record<string, unknown> = {}, id?: 
     };
 }
 
-/** The hashline tag the preceding tool result served for `file`. */
+/** The hashline tag the most recent tool result served for `file`. */
 function hashlineTag(context: Context, file: string): string {
-    const transcript = JSON.stringify(context.messages.at(-1));
+    const transcript = JSON.stringify(context.messages);
     const marker = `[${file}#`;
-    const at = transcript.indexOf(marker);
-    if (at === -1) throw new Error(`no hashline tag for ${file} in the preceding tool result`);
+    const at = transcript.lastIndexOf(marker);
+    if (at === -1) throw new Error(`no hashline tag for ${file} in any preceding tool result`);
     return transcript.slice(at + marker.length, at + marker.length + 4);
 }
 
@@ -196,6 +196,29 @@ export function editThenWrite(
         content: [
             toolCall("edit", { input: `[${file}#${hashlineTag(context, file)}]\n${hunk}` }),
             toolCall("write", { path: file, content }, writeId),
+        ],
+    });
+}
+
+/** One `edit` call spanning several files, each section built from that file's hashline tag. */
+export function editFiles(
+    sections: ReadonlyArray<{ file: string; body: string }>,
+    id: string,
+): MockHandler {
+    return context => ({
+        content: [
+            toolCall(
+                "edit",
+                {
+                    input: sections
+                        .map(
+                            section =>
+                                `[${section.file}#${hashlineTag(context, section.file)}]\n${section.body}`,
+                        )
+                        .join("\n"),
+                },
+                id,
+            ),
         ],
     });
 }

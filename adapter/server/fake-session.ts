@@ -1,7 +1,7 @@
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session-events";
 
-import type { PicoSession } from "../engine/pico-session.ts";
+import type { DisposalPhase, PicoSession } from "../engine/pico-session.ts";
 
 /**
  * A session whose engine does exactly what a test says.
@@ -17,6 +17,8 @@ export interface FakeEngine {
     abort?: () => Promise<void>;
     /** Tears the session down. Defaults to resolving at once. */
     dispose?: () => Promise<void>;
+    /** The teardown step the session reports while `dispose()` is pending. */
+    disposalPhase?: DisposalPhase;
 }
 
 export interface FakeSession {
@@ -34,6 +36,7 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
     const calls: string[] = [];
     const counters = { disposals: 0 };
     let listener: ((event: AgentSessionEvent) => void) | undefined;
+    let disposalPhase: DisposalPhase | undefined;
 
     // Only the surface the ACP server drives; the rest of AgentSession is unreachable from here.
     const engine = {
@@ -57,12 +60,17 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
         session: {
             engine,
             cwd,
+            get disposalPhase() {
+                return disposalPhase;
+            },
             takeRecordedChanges: () => [],
             mcpToolIdentity: () => undefined,
-            dispose: () => {
+            dispose: async () => {
                 calls.push("dispose");
                 counters.disposals++;
-                return behaviour.dispose?.() ?? Promise.resolve();
+                disposalPhase = behaviour.disposalPhase;
+                await (behaviour.dispose?.() ?? Promise.resolve());
+                disposalPhase = undefined;
             },
         },
         calls,

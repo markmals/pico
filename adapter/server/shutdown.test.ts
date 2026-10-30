@@ -4,7 +4,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { PicoSession } from "../engine/pico-session.ts";
+import type { DisposalPhase, PicoSession } from "../engine/pico-session.ts";
 
 import { connectPicoAgent } from "./agent-harness.ts";
 import { mockEngine, removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
@@ -38,6 +38,9 @@ describe("proposal.0001 shutdown", () => {
                 return {
                     engine: session.engine,
                     cwd: session.cwd,
+                    get disposalPhase() {
+                        return session.disposalPhase;
+                    },
                     takeRecordedChanges: toolCallId => session.takeRecordedChanges(toolCallId),
                     mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
                     dispose: async () => {
@@ -165,7 +168,33 @@ describe("proposal.0001 shutdown", () => {
         expect(fake.calls).toEqual(["prompt", "abort", "dispose"]);
     });
 
-    test("a stalled session teardown is named as outstanding", async () => {
+    test.each<DisposalPhase>(["disconnecting MCP servers", "disposing the engine"])(
+        "a teardown stalled on %s is named as outstanding",
+        async phase => {
+            const cwd = temporaryProject();
+            const fake = fakeSession(cwd, {
+                dispose: () => neverSettles<void>(),
+                disposalPhase: phase,
+            });
+            const client = connectPicoAgent({
+                version: "0.0.0-test",
+                createSession: () => Promise.resolve(fake.session),
+            });
+            await client.initialize();
+            const created = (await client.agent.request("session/new", {
+                cwd,
+                mcpServers: [],
+            })) as NewSessionResponse;
+
+            await client.close();
+            const shutdown = picoAgentShutdown(client.app);
+            await settle();
+
+            expect(shutdown.outstanding()).toEqual([`session ${created.sessionId}: ${phase}`]);
+        },
+    );
+
+    test("a teardown that reports no step is still named as outstanding", async () => {
         const cwd = temporaryProject();
         const fake = fakeSession(cwd, { dispose: () => neverSettles<void>() });
         const client = connectPicoAgent({

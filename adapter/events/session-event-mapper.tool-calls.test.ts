@@ -5,6 +5,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { McpToolIdentity } from "../engine/pico-session.ts";
+
 import { toolExecutionStart } from "./engine-event-fixtures.ts";
 import { SessionEventMapper } from "./session-event-mapper.ts";
 
@@ -24,11 +26,15 @@ afterAll(() => {
 function startUpdate(
     toolName: string,
     args: unknown,
-    intent?: string,
+    options: { intent?: string; mcpTool?: McpToolIdentity } = {},
 ): ToolCall & { sessionUpdate: string } {
-    const mapper = new SessionEventMapper({ cwd, takeRecordedWrite: () => undefined });
+    const mapper = new SessionEventMapper({
+        cwd,
+        takeRecordedChanges: () => [],
+        mcpToolIdentity: () => options.mcpTool,
+    });
     const updates = mapper.map(
-        toolExecutionStart({ toolCallId: "call-1", toolName, args, intent }),
+        toolExecutionStart({ toolCallId: "call-1", toolName, args, intent: options.intent }),
     );
     expect(updates).toHaveLength(1);
     const update = updates[0] as SessionUpdate & { sessionUpdate: "tool_call" };
@@ -66,14 +72,16 @@ describe("proposal.0001 tool call start", () => {
 describe("proposal.0001 tool call titles", () => {
     test("bash is titled with its command, even when an intent is present", () => {
         expect(
-            startUpdate("bash", { command: "cat hello.txt" }, "Reading the greeting").title,
+            startUpdate("bash", { command: "cat hello.txt" }, { intent: "Reading the greeting" })
+                .title,
         ).toBe("cat hello.txt");
     });
 
     test("another tool prefers the call's intent", () => {
-        expect(startUpdate("read", { path: "src/app.ts" }, "Checking the entry point").title).toBe(
-            "Checking the entry point",
-        );
+        expect(
+            startUpdate("read", { path: "src/app.ts" }, { intent: "Checking the entry point" })
+                .title,
+        ).toBe("Checking the entry point");
     });
 
     test("without an intent, the first path argument titles the call", () => {
@@ -90,10 +98,20 @@ describe("proposal.0001 tool call titles", () => {
         );
     });
 
-    test("an MCP tool with no path, pattern or query is titled server: tool", () => {
+    test("an MCP tool is titled with the server and tool its connection reported", () => {
         expect(
-            startUpdate("mcp__sesh_ask_user", { questions: [{ text: "Which one?" }] }).title,
-        ).toBe("sesh: ask_user");
+            startUpdate(
+                "mcp__my_server_ping",
+                { questions: [{ text: "Which one?" }] },
+                { mcpTool: { server: "my_server", tool: "ping" } },
+            ).title,
+        ).toBe("my_server: ping");
+    });
+
+    test("an MCP tool the session cannot identify keeps its minted name", () => {
+        expect(startUpdate("mcp__my_server_ping", { questions: [] }).title).toBe(
+            "mcp__my_server_ping",
+        );
     });
 
     test("a call with nothing else to say is titled with the tool name", () => {

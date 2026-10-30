@@ -33,15 +33,28 @@ interface Turn {
 
 /** One ACP session: its engine session, its update queue, and the turn running on it. */
 export class SessionRuntime {
+    readonly #sessionId: string;
     readonly #session: PicoSession;
     readonly #queue: UpdateQueue;
     #turn: Turn | undefined;
     #closedReason: string | undefined;
     #disposal: Promise<void> | undefined;
+    #step: string | undefined;
 
     constructor(sessionId: string, session: PicoSession, client: AgentContext) {
+        this.#sessionId = sessionId;
         this.#session = session;
         this.#queue = new UpdateQueue(client, sessionId);
+    }
+
+    /**
+     * The teardown step still running, for the shutdown diagnostic.
+     *
+     * Disconnecting the MCP servers and disposing the engine both happen inside
+     * `PicoSession.dispose()`, which Pico cannot see into, so they are named together.
+     */
+    get outstandingStep(): string | undefined {
+        return this.#step;
     }
 
     async prompt(text: string): Promise<StopReason> {
@@ -121,8 +134,16 @@ export class SessionRuntime {
      */
     async dispose(): Promise<void> {
         this.cancel();
-        await this.#turn?.aborted;
-        await this.#dispose();
+        if (this.#turn?.aborted) {
+            this.#step = `stopping the turn running in session ${this.#sessionId}`;
+            await this.#turn.aborted;
+        }
+        this.#step = `disposing session ${this.#sessionId} and the MCP servers it started`;
+        try {
+            await this.#dispose();
+        } finally {
+            this.#step = undefined;
+        }
     }
 
     async #settleCancellation(turn: Turn, aborted: Promise<AbortOutcome>): Promise<void> {

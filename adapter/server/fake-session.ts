@@ -57,7 +57,8 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
         session: {
             engine,
             cwd,
-            takeRecordedWrite: () => undefined,
+            takeRecordedChanges: () => [],
+            mcpToolIdentity: () => undefined,
             dispose: () => {
                 calls.push("dispose");
                 counters.disposals++;

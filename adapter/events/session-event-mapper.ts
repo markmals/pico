@@ -3,7 +3,7 @@
 import type { SessionUpdate, ToolCallContent } from "@agentclientprotocol/sdk";
 import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session-events";
 
-import type { PicoSession } from "../engine/pico-session.ts";
+import type { PicoSession, RecordedChange } from "../engine/pico-session.ts";
 
 import {
     editDiffs,
@@ -16,7 +16,7 @@ import {
     toolTitle,
 } from "./tool-call-translation.ts";
 
-type SessionView = Pick<PicoSession, "cwd" | "takeRecordedWrite">;
+type SessionView = Pick<PicoSession, "cwd" | "takeRecordedChanges" | "mcpToolIdentity">;
 
 type StreamDelta = Extract<AgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
 
@@ -115,7 +115,7 @@ export class SessionEventMapper {
             sessionUpdate: "tool_call",
             toolCallId,
             name: toolName,
-            title: toolTitle(toolName, args, intent),
+            title: toolTitle(toolName, args, intent, this.#session.mcpToolIdentity(toolName)),
             kind: toolKind(toolName),
             status: "in_progress",
             rawInput: args,
@@ -134,9 +134,12 @@ export class SessionEventMapper {
         this.#running.delete(toolCallId);
 
         const details = resultDetails(result);
-        // The record is consumed even when the result is an error, so nothing the
-        // engine kept for this call outlives it.
-        const written = toolName === "write" ? this.#writtenFile(toolCallId) : undefined;
+        // Only `write` and `edit` are recorded, and the record is consumed even when
+        // the result is an error, so nothing the engine kept for this call outlives it.
+        const changed =
+            toolName === "write" || toolName === "edit"
+                ? this.#session.takeRecordedChanges(toolCallId)
+                : [];
         const update: SessionUpdate = {
             sessionUpdate: "tool_call_update",
             toolCallId,
@@ -144,10 +147,13 @@ export class SessionEventMapper {
             rawOutput: details,
             content: isError
                 ? [textContent(resultText(result))]
-                : this.#successContent(toolName, result, details, written),
+                : this.#successContent(toolName, result, details, changed),
         };
         if (!isError && toolName === "edit") {
-            const locations = editedFiles(details, this.#session.cwd);
+            const locations =
+                changed.length > 0
+                    ? changed.map(change => ({ path: change.path }))
+                    : editedFiles(details, this.#session.cwd);
             if (locations.length > 0) update.locations = locations;
         }
         return [update];
@@ -157,24 +163,20 @@ export class SessionEventMapper {
         toolName: string,
         result: unknown,
         details: unknown,
-        written: ToolCallContent | undefined,
+        changed: readonly RecordedChange[],
     ): ToolCallContent[] {
+        if (changed.length > 0) {
+            return changed.map(change => ({
+                type: "diff",
+                path: change.path,
+                oldText: change.oldText,
+                newText: change.newText,
+            }));
+        }
         if (toolName === "edit") {
             const diffs = editDiffs(details, this.#session.cwd);
             if (diffs.length > 0) return diffs;
         }
-        if (written) return [written];
         return [textContent(resultText(result))];
-    }
-
-    #writtenFile(toolCallId: string): ToolCallContent | undefined {
-        const recorded = this.#session.takeRecordedWrite(toolCallId);
-        if (!recorded) return undefined;
-        return {
-            type: "diff",
-            path: recorded.path,
-            oldText: recorded.oldText,
-            newText: recorded.newText,
-        };
     }
 }

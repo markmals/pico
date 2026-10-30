@@ -80,6 +80,16 @@ export async function mockAuthStorage(agentDir: string): Promise<AuthStorage> {
     return authStorage;
 }
 
+/** A credential store in `agentDir` with no key for the mock provider. */
+export function unauthenticatedAuthStorage(agentDir: string): Promise<AuthStorage> {
+    return discoverAuthStorage(agentDir);
+}
+
+/** Persists the mock provider's key in `agentDir`, for a session that opens its own credential store. */
+export function writeMockProviderKey(agentDir: string): void {
+    fs.writeFileSync(path.join(agentDir, "models.yml"), "providers:\n  mock:\n    apiKey: test\n");
+}
+
 /**
  * Makes `agentDir` the process's OMP agent directory for one test. User-level
  * extension discovery reads the process agent directory rather than the one a
@@ -158,9 +168,11 @@ function hashlineTag(context: Context, file: string): string {
  * An `edit` call built from the hashline tag the preceding `read` returned: the
  * edit tool rejects an input whose tag does not match the file it last served.
  */
-export function editAfterRead(file: string, hunk: string): MockHandler {
+export function editAfterRead(file: string, hunk: string, id?: string): MockHandler {
     return context => ({
-        content: [toolCall("edit", { input: `[${file}#${hashlineTag(context, file)}]\n${hunk}` })],
+        content: [
+            toolCall("edit", { input: `[${file}#${hashlineTag(context, file)}]\n${hunk}` }, id),
+        ],
     });
 }
 

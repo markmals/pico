@@ -10,7 +10,9 @@ import {
     lockCredentialStore,
     mockAuthStorage,
     picoWorkspace,
+    unauthenticatedAuthStorage,
     withoutProviderCredentials,
+    writeMockProviderKey,
 } from "./testing/session-fixture.ts";
 
 describe("proposal.0001 credential store", () => {
@@ -68,6 +70,7 @@ describe("proposal.0001 credential store", () => {
 
     test("the store Pico opened is closed when the session is disposed", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
+        writeMockProviderKey(agentDir);
         const session = await createPicoSession({
             cwd,
             agentDir,
@@ -112,6 +115,45 @@ describe("proposal.0001 model selection", () => {
                     error.message.includes(cwd),
                     `the message does not say which project has no model: ${error.message}`,
                 );
+                return true;
+            },
+        );
+    });
+
+    test("a model Oh My Pi substituted for the configured one fails creation", async t => {
+        const { cwd, agentDir } = picoWorkspace(
+            t,
+            "modelRoles:\n  default: openai/pico-no-such-model\n",
+        );
+        const authStorage = await mockAuthStorage(agentDir);
+        authStorage.keys.setRuntime("anthropic", "test-key");
+
+        await assert.rejects(
+            createPicoSession({ cwd, agentDir, mcpServers: [], authStorage }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /openai\/pico-no-such-model/);
+                assert.match(error.message, /substitute/i);
+                return true;
+            },
+        );
+    });
+
+    test("a model whose credentials cannot be resolved fails creation", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [],
+                authStorage: await unauthenticatedAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /credential/i);
+                assert.match(error.message, /mock/);
                 return true;
             },
         );

@@ -13,23 +13,33 @@ import { SessionEventMapper } from "./session-event-mapper.ts";
 
 const cwd = "/workspace";
 
-interface RecordedWriteFixture {
+interface RecordedChangeFixture {
     path: string;
     oldText: string | null;
     newText: string;
 }
 
-/** What the engine recorded for each `write` call, consumed when that call ends. */
-function mapperWithWrites(writes: Record<string, RecordedWriteFixture> = {}): SessionEventMapper {
-    const pending = new Map(Object.entries(writes));
-    return new SessionEventMapper({
+interface RecordingMapper {
+    readonly mapper: SessionEventMapper;
+    /** The tool call ids the mapper asked the session about, in order. */
+    readonly taken: string[];
+}
+
+/** What the engine recorded for each call, consumed when that call ends. */
+function recordingMapper(changes: Record<string, RecordedChangeFixture[]> = {}): RecordingMapper {
+    const pending = new Map(Object.entries(changes));
+    const taken: string[] = [];
+    const mapper = new SessionEventMapper({
         cwd,
-        takeRecordedWrite: toolCallId => {
-            const recorded = pending.get(toolCallId);
+        takeRecordedChanges: toolCallId => {
+            taken.push(toolCallId);
+            const recorded = pending.get(toolCallId) ?? [];
             pending.delete(toolCallId);
             return recorded;
         },
+        mcpToolIdentity: () => undefined,
     });
+    return { mapper, taken };
 }
 
 function toolCallUpdate(update: SessionUpdate | undefined): ToolCallUpdate {
@@ -43,7 +53,7 @@ function textContent(text: string): ToolCallContent {
 
 describe("proposal.0001 tool call progress", () => {
     test("a partial result becomes a tool_call_update carrying the output so far", () => {
-        const mapper = mapperWithWrites();
+        const { mapper } = recordingMapper();
         mapper.map(
             toolExecutionStart({
                 toolCallId: "call-1",
@@ -67,7 +77,7 @@ describe("proposal.0001 tool call progress", () => {
     });
 
     test("a later partial result replaces the content with the combined output", () => {
-        const mapper = mapperWithWrites();
+        const { mapper } = recordingMapper();
         mapper.map(
             toolExecutionStart({
                 toolCallId: "call-1",
@@ -101,9 +111,9 @@ describe("proposal.0001 tool call results", () => {
         args?: unknown;
         result: unknown;
         isError?: boolean;
-        writes?: Record<string, RecordedWriteFixture>;
-    }): ToolCallUpdate {
-        const mapper = mapperWithWrites(options.writes);
+        changes?: Record<string, RecordedChangeFixture[]>;
+    }): ToolCallUpdate & { taken: string[] } {
+        const { mapper, taken } = recordingMapper(options.changes);
         mapper.map(
             toolExecutionStart({
                 toolCallId: "call-1",
@@ -120,7 +130,7 @@ describe("proposal.0001 tool call results", () => {
             }),
         );
         expect(updates).toHaveLength(1);
-        return toolCallUpdate(updates[0]);
+        return { ...toolCallUpdate(updates[0]), taken };
     }
 
     test("a successful command completes with its output and the result details", () => {
@@ -148,18 +158,15 @@ describe("proposal.0001 tool call results", () => {
         expect(update.content).toEqual([textContent("Command failed with exit code 3\n")]);
     });
 
-    test("a successful edit reports a diff for the file it changed", () => {
+    test("a successful edit reports a diff for the file the engine recorded", () => {
         const path = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: `[b.txt#2543]\nPUT 2.=2:\n+TWO` },
-            result: toolResult("[b.txt#CFBD]\n1:one\n2:TWO\n3:three", {
-                path,
-                oldText: "one\ntwo\nthree\n",
-                newText: "one\nTWO\nthree\n",
-                diff: " 1|one\n-2|two\n+2|TWO\n 3|three",
-                op: "update",
-            }),
+            result: toolResult("[b.txt#CFBD]\n1:one\n2:TWO\n3:three", { path, op: "update" }),
+            changes: {
+                "call-1": [{ path, oldText: "one\ntwo\nthree\n", newText: "one\nTWO\nthree\n" }],
+            },
         });
 
         expect(update.status).toBe("completed");
@@ -169,18 +176,22 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
-    test("a successful multi-file edit reports one diff per affected file", () => {
+    test("a multi-file edit the engine pruned still reports one diff per file", () => {
         const first = join(cwd, "a.txt");
         const second = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: "…" },
+            // Pruned snapshots: the result names the files but carries no text.
             result: toolResult("edited 2 files", {
-                perFileResults: [
+                perFileResults: [{ path: first }, { path: second }],
+            }),
+            changes: {
+                "call-1": [
                     { path: first, oldText: "a\n", newText: "A\n" },
                     { path: second, oldText: "b\n", newText: "B\n" },
                 ],
-            }),
+            },
         });
 
         expect(update.locations).toEqual([{ path: first }, { path: second }]);
@@ -190,16 +201,48 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
-    test("a failed edit reports the error text instead of a diff", () => {
+    test("an edit the engine recorded nothing for falls back to the result's own text", () => {
+        const path = join(cwd, "b.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: `[b.txt#2543]\nPUT 2.=2:\n+TWO` },
+            result: toolResult("[b.txt#CFBD]\n1:one\n2:TWO\n3:three", {
+                path,
+                oldText: "one\ntwo\nthree\n",
+                newText: "one\nTWO\nthree\n",
+            }),
+        });
+
+        expect(update.locations).toEqual([{ path }]);
+        expect(update.content).toEqual([
+            { type: "diff", path, oldText: "one\ntwo\nthree\n", newText: "one\nTWO\nthree\n" },
+        ]);
+    });
+
+    test("an edit with neither a record nor result text reports what the model saw", () => {
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("Nothing to change", {}),
+        });
+
+        expect(update.status).toBe("completed");
+        expect(update.content).toEqual([textContent("Nothing to change")]);
+    });
+
+    test("a failed edit reports the error text, and its record is consumed", () => {
+        const path = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: "[b.txt#0000]\nPUT 2.=2:\n+TWO" },
-            result: toolResult("Edit rejected: stale tag", { path: join(cwd, "b.txt") }),
+            result: toolResult("Edit rejected: stale tag", { path }),
             isError: true,
+            changes: { "call-1": [{ path, oldText: "one\n", newText: "ONE\n" }] },
         });
 
         expect(update.status).toBe("failed");
         expect(update.content).toEqual([textContent("Edit rejected: stale tag")]);
+        expect(update.taken).toEqual(["call-1"]);
     });
 
     test("a write to a new file reports a diff with no old text", () => {
@@ -210,7 +253,7 @@ describe("proposal.0001 tool call results", () => {
             result: toolResult("[a.txt#E3D3]\nSuccessfully wrote 3 bytes to a.txt", {
                 resolvedPath: path,
             }),
-            writes: { "call-1": { path, oldText: null, newText: "hi\n" } },
+            changes: { "call-1": [{ path, oldText: null, newText: "hi\n" }] },
         });
 
         expect(update.status).toBe("completed");
@@ -225,7 +268,7 @@ describe("proposal.0001 tool call results", () => {
             result: toolResult("[a.txt#AAAA]\nSuccessfully wrote 4 bytes to a.txt", {
                 resolvedPath: path,
             }),
-            writes: { "call-1": { path, oldText: "old\n", newText: "new\n" } },
+            changes: { "call-1": [{ path, oldText: "old\n", newText: "new\n" }] },
         });
 
         expect(update.content).toEqual([
@@ -239,7 +282,7 @@ describe("proposal.0001 tool call results", () => {
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
             result: toolResult("wrote a.txt", {}),
-            writes: { "call-1": { path: recorded, oldText: null, newText: "hi\n" } },
+            changes: { "call-1": [{ path: recorded, oldText: null, newText: "hi\n" }] },
         });
 
         expect(update.content).toEqual([
@@ -247,18 +290,19 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
-    test("a failed write reports the error text instead of a diff", () => {
+    test("a failed write reports the error text, and its record is consumed", () => {
         const path = join(cwd, "a.txt");
         const update = endUpdate({
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
             result: toolResult("Permission denied", {}),
             isError: true,
-            writes: { "call-1": { path, oldText: null, newText: "hi\n" } },
+            changes: { "call-1": [{ path, oldText: null, newText: "hi\n" }] },
         });
 
         expect(update.status).toBe("failed");
         expect(update.content).toEqual([textContent("Permission denied")]);
+        expect(update.taken).toEqual(["call-1"]);
     });
 
     test("a write the engine recorded nothing for reports the result text", () => {

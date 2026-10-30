@@ -121,11 +121,13 @@ describe("proposal.0001 working directory", () => {
         await session.engine.prompt("create worktree.txt");
 
         assert.equal(session.cwd, cwd);
-        assert.deepEqual(session.takeRecordedWrite("write-1"), {
-            path: path.join(cwd, "worktree.txt"),
-            oldText: null,
-            newText: "branch\n",
-        });
+        assert.deepEqual(session.takeRecordedChanges("write-1"), [
+            {
+                path: path.join(cwd, "worktree.txt"),
+                oldText: null,
+                newText: "branch\n",
+            },
+        ]);
         assert.equal(fs.readFileSync(path.join(cwd, "worktree.txt"), "utf8"), "branch\n");
         assert.deepEqual(fs.readdirSync(mainCheckout), []);
     });

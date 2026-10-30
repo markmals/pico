@@ -40,8 +40,14 @@ describe("proposal.0001 recorded writes", () => {
             toolCallId: "write-1",
             input: { path: "pruned.txt", content: "final\n" },
         });
+        await toolCall({
+            type: "tool_call",
+            toolName: "edit",
+            toolCallId: "edit-1",
+            input: { input: "[pruned.txt#ABCD]\nPUT 1.=1:\n+edited" },
+        });
 
-        // An oversized multi-file edit: OMP drops `newText` and marks the entry pruned.
+        // An oversized multi-file edit: OMP drops `oldText`/`newText` and marks the entry pruned.
         fs.writeFileSync(file, "edited\n");
         await toolResult({
             type: "tool_result",
@@ -66,10 +72,11 @@ describe("proposal.0001 recorded writes", () => {
             content: [],
         });
 
-        assert.deepEqual(recorder.take("write-1"), {
-            path: file,
-            oldText: "edited\n",
-            newText: "final\n",
-        });
+        assert.deepEqual(recorder.take("edit-1"), [
+            { path: file, oldText: "before\n", newText: "edited\n" },
+        ]);
+        assert.deepEqual(recorder.take("write-1"), [
+            { path: file, oldText: "edited\n", newText: "final\n" },
+        ]);
     });
 });

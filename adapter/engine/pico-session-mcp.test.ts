@@ -185,6 +185,25 @@ describe("proposal.0001 host MCP servers", () => {
         );
     });
 
+    test("an MCP tool's server and tool name come from the connection, not from its minted name", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("my_server", { flags: ["--tool", "ping"] })],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        assert.deepEqual(session.mcpToolIdentity("mcp__my_server_ping"), {
+            server: "my_server",
+            tool: "ping",
+        });
+        assert.equal(session.mcpToolIdentity("read"), undefined);
+        assert.equal(session.mcpToolIdentity("mcp__other_thing"), undefined);
+    });
+
     test("two servers sharing a name are rejected by name", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
 

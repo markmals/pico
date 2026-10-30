@@ -30,10 +30,16 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 await connection.closed;
 
+const shutdown = picoAgentShutdown(app);
 const expiry = Promise.withResolvers<false>();
 const timer = setTimeout(() => expiry.resolve(false), SHUTDOWN_GRACE_MS);
-const disposed = await Promise.race([picoAgentShutdown(app).then(() => true), expiry.promise]);
+const disposed = await Promise.race([shutdown.completed.then(() => true), expiry.promise]);
 clearTimeout(timer);
 
-if (!disposed) console.error(`pico: sessions were still disposing after ${SHUTDOWN_GRACE_MS}ms`);
+if (!disposed) {
+    const steps = shutdown.outstanding();
+    const detail =
+        steps.length > 0 ? `still ${steps.join("; still ")}` : "no step reported it was running";
+    console.error(`pico: shutdown did not finish within ${SHUTDOWN_GRACE_MS}ms; ${detail}`);
+}
 process.exit(disposed ? 0 : 1);

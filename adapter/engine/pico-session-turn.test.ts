@@ -24,7 +24,11 @@ describe("proposal.0001 recorded writes", () => {
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
                 responses: [
-                    { content: [toolCall("write", { path: "fresh.txt", content: "hi\n" })] },
+                    {
+                        content: [
+                            toolCall("write", { path: "fresh.txt", content: "hi\n" }, "write-1"),
+                        ],
+                    },
                     { content: ["done"] },
                 ],
             }),
@@ -34,9 +38,13 @@ describe("proposal.0001 recorded writes", () => {
         await session.engine.prompt("create fresh.txt");
 
         const absolute = path.join(cwd, "fresh.txt");
-        assert.deepEqual(session.takeRecordedWrite(absolute), { oldText: null, newText: "hi\n" });
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: absolute,
+            oldText: null,
+            newText: "hi\n",
+        });
         assert.equal(fs.readFileSync(absolute, "utf8"), "hi\n");
-        assert.equal(session.takeRecordedWrite(absolute), undefined);
+        assert.equal(session.takeRecordedWrite("write-1"), undefined);
     });
 
     test("a write over an existing file records what was there before", async t => {
@@ -50,7 +58,15 @@ describe("proposal.0001 recorded writes", () => {
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
                 responses: [
-                    { content: [toolCall("write", { path: "existing.txt", content: "new\n" })] },
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "existing.txt", content: "new\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
                     { content: ["done"] },
                 ],
             }),
@@ -59,14 +75,15 @@ describe("proposal.0001 recorded writes", () => {
 
         await session.engine.prompt("replace existing.txt");
 
-        assert.deepEqual(session.takeRecordedWrite(absolute), {
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: absolute,
             oldText: "old\n",
             newText: "new\n",
         });
         assert.equal(fs.readFileSync(absolute, "utf8"), "new\n");
     });
 
-    test("repeated writes to one path are taken in the order they happened", async t => {
+    test("two writes to one path in a turn each report their own text", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
@@ -77,8 +94,8 @@ describe("proposal.0001 recorded writes", () => {
                 responses: [
                     {
                         content: [
-                            toolCall("write", { path: "notes.txt", content: "one\n" }),
-                            toolCall("write", { path: "notes.txt", content: "two\n" }),
+                            toolCall("write", { path: "notes.txt", content: "one\n" }, "write-1"),
+                            toolCall("write", { path: "notes.txt", content: "two\n" }, "write-2"),
                         ],
                     },
                     { content: ["done"] },
@@ -90,12 +107,119 @@ describe("proposal.0001 recorded writes", () => {
         await session.engine.prompt("write notes.txt twice");
 
         const absolute = path.join(cwd, "notes.txt");
-        assert.deepEqual(session.takeRecordedWrite(absolute), { oldText: null, newText: "one\n" });
-        assert.deepEqual(session.takeRecordedWrite(absolute), {
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: absolute,
+            oldText: null,
+            newText: "one\n",
+        });
+        assert.deepEqual(session.takeRecordedWrite("write-2"), {
+            path: absolute,
             oldText: "one\n",
             newText: "two\n",
         });
-        assert.equal(session.takeRecordedWrite(absolute), undefined);
+        assert.equal(session.takeRecordedWrite("write-1"), undefined);
+    });
+
+    test("a write over a CRLF file keeps CRLF on disk, and that is the text recorded", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "crlf.txt");
+        fs.writeFileSync(absolute, "one\r\ntwo\r\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "crlf.txt", content: "one\nTWO\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("replace crlf.txt");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "one\r\nTWO\r\n");
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: absolute,
+            oldText: "one\r\ntwo\r\n",
+            newText: "one\r\nTWO\r\n",
+        });
+    });
+
+    test("a write over a file with a byte order mark keeps the mark", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "bom.txt");
+        fs.writeFileSync(absolute, "\uFEFFhello\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall("write", { path: "bom.txt", content: "goodbye\n" }, "write-1"),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("replace bom.txt");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "\uFEFFgoodbye\n");
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: absolute,
+            oldText: "\uFEFFhello\n",
+            newText: "\uFEFFgoodbye\n",
+        });
+    });
+
+    test("a write to an internal URL records nothing and still runs", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "local://notes.md", content: "hi\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("write a note");
+
+        assert.deepEqual(
+            executions.map(execution => [execution.name, execution.isError]),
+            [["write", false]],
+        );
+        assert.equal(session.takeRecordedWrite("write-1"), undefined);
     });
 });
 
@@ -188,7 +312,15 @@ describe("proposal.0001 working directory", () => {
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
                 responses: [
-                    { content: [toolCall("write", { path: "worktree.txt", content: "branch\n" })] },
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "worktree.txt", content: "branch\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
                     { content: ["done"] },
                 ],
             }),
@@ -198,7 +330,8 @@ describe("proposal.0001 working directory", () => {
         await session.engine.prompt("create worktree.txt");
 
         assert.equal(session.cwd, cwd);
-        assert.deepEqual(session.takeRecordedWrite(path.join(cwd, "worktree.txt")), {
+        assert.deepEqual(session.takeRecordedWrite("write-1"), {
+            path: path.join(cwd, "worktree.txt"),
             oldText: null,
             newText: "branch\n",
         });

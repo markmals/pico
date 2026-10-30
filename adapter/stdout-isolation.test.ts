@@ -7,6 +7,16 @@ const NOISE = [
     "noise from console.log",
     "noise from console.info",
     "noise from console.debug",
+    "noise from console.dir",
+    "noise from console.dirxml",
+    "noise from console.table",
+    "noise from console.group",
+    "noise from console.groupCollapsed",
+    "noise from console.count",
+    "noise from console.time",
+    "noise from console.trace",
+    "noise from console.assert",
+    "noise from console.write",
     "noise written straight to stdout",
 ];
 

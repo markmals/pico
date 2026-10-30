@@ -4,9 +4,11 @@
  * `tools/list`, `tools/call`) for OMP's MCP client to connect and call a tool.
  *
  * Flags select what the tests need:
- *   --pid-file <path>   write this process's pid, so a test can check it is gone
- *   --fail-tools-list   answer `initialize`, then fail `tools/list`
- *   --tool <name>       advertise `<name>` instead of the default tools (repeatable)
+ *   --pid-file <path>        write this process's pid, so a test can check it is gone
+ *   --fail-tools-list        answer `initialize`, then fail `tools/list`
+ *   --delay-tools-list <ms>  answer `tools/list` only after `<ms>`
+ *   --instructions <text>    return `<text>` as the server's instructions
+ *   --tool <name>            advertise `<name>` instead of the default tools (repeatable)
  */
 
 interface JsonRpcRequest {
@@ -42,10 +44,13 @@ const DEFAULT_TOOLS: ToolDefinition[] = [
     },
 ];
 
+/** Environment variables the fixture reports back verbatim. */
+const REPORTED_ENV_PREFIX = "PICO_FAKE_";
+
 /** What a `launch_report` call returns, so a test can assert command, args and env reached the server. */
 export interface LaunchReport {
     args: string[];
-    token: string | null;
+    env: Record<string, string>;
 }
 
 function valuesOf(args: string[], flag: string): string[] {
@@ -56,6 +61,14 @@ function valuesOf(args: string[], flag: string): string[] {
     return values;
 }
 
+function reportedEnv(): Record<string, string> {
+    const reported: Record<string, string> = {};
+    for (const [name, value] of Object.entries(process.env)) {
+        if (name.startsWith(REPORTED_ENV_PREFIX) && value !== undefined) reported[name] = value;
+    }
+    return reported;
+}
+
 function send(message: Record<string, unknown>): void {
     process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
 }
@@ -63,7 +76,7 @@ function send(message: Record<string, unknown>): void {
 function callResult(args: string[], request: JsonRpcRequest): Record<string, unknown> {
     const name = request.params?.name;
     if (name === "launch_report") {
-        const report: LaunchReport = { args, token: process.env.PICO_FAKE_MCP_TOKEN ?? null };
+        const report: LaunchReport = { args, env: reportedEnv() };
         return { content: [{ type: "text", text: JSON.stringify(report) }] };
     }
     if (name === "echo") {
@@ -73,20 +86,27 @@ function callResult(args: string[], request: JsonRpcRequest): Record<string, unk
     return { content: [{ type: "text", text: `called ${String(name)}` }] };
 }
 
-function handle(request: JsonRpcRequest, args: string[], tools: ToolDefinition[]): void {
+async function handle(
+    request: JsonRpcRequest,
+    args: string[],
+    tools: ToolDefinition[],
+): Promise<void> {
     if (request.id === undefined) return;
     switch (request.method) {
-        case "initialize":
+        case "initialize": {
+            const instructions = valuesOf(args, "--instructions")[0];
             send({
                 id: request.id,
                 result: {
                     protocolVersion: request.params?.protocolVersion ?? "2025-11-25",
                     capabilities: { tools: { listChanged: false } },
                     serverInfo: { name: "fake", version: "0.0.0" },
+                    ...(instructions === undefined ? {} : { instructions }),
                 },
             });
             return;
-        case "tools/list":
+        }
+        case "tools/list": {
             if (args.includes("--fail-tools-list")) {
                 send({
                     id: request.id,
@@ -94,8 +114,11 @@ function handle(request: JsonRpcRequest, args: string[], tools: ToolDefinition[]
                 });
                 return;
             }
+            const delay = valuesOf(args, "--delay-tools-list")[0];
+            if (delay !== undefined) await Bun.sleep(Number(delay));
             send({ id: request.id, result: { tools } });
             return;
+        }
         case "tools/call":
             send({ id: request.id, result: callResult(args, request) });
             return;
@@ -130,7 +153,7 @@ async function main(): Promise<void> {
         while (newline !== -1) {
             const line = buffered.slice(0, newline).trim();
             buffered = buffered.slice(newline + 1);
-            if (line.length > 0) handle(JSON.parse(line) as JsonRpcRequest, args, tools);
+            if (line.length > 0) await handle(JSON.parse(line) as JsonRpcRequest, args, tools);
             newline = buffered.indexOf("\n");
         }
     }

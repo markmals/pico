@@ -4,6 +4,7 @@ import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 
 import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
+import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedWrite } from "./write-recorder.ts";
 
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
@@ -34,8 +35,8 @@ export interface PicoSessionOptions {
 export interface PicoSession {
     readonly engine: AgentSession;
     readonly cwd: string;
-    /** Consumes (FIFO per path) what the write tool wrote to `absolutePath` and what was there before. */
-    takeRecordedWrite(absolutePath: string): RecordedWrite | undefined;
+    /** Consumes what the `write` with this tool call id replaced, and what the file holds now. */
+    takeRecordedWrite(toolCallId: string): RecordedWrite | undefined;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
 }
@@ -43,14 +44,17 @@ export interface PicoSession {
 export async function createPicoSession(options: PicoSessionOptions): Promise<PicoSession> {
     const { cwd, mcpServers } = options;
     const agentDir = options.agentDir ?? getAgentDir();
+    // Only a store Pico opened is Pico's to close; an injected one belongs to its caller.
     const authStorage = options.authStorage ?? (await openCredentialStore(agentDir));
-    const settings = await loadPicoSettings({ cwd, agentDir });
-    const mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
+    const ownedStore = options.authStorage === undefined ? authStorage : undefined;
 
-    const mcpToolNames = mcp.tools.map(tool => tool.name);
-    let engine: AgentSession;
-    let modelFallbackMessage: string | undefined;
+    let mcp: HostMcpServers | undefined;
+    let engine: AgentSession | undefined;
+    const writes = new WriteRecorder(cwd);
     try {
+        const settings = await loadPicoSettings({ cwd, agentDir });
+        mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
+        const mcpToolNames = mcp.tools.map(tool => tool.name);
         const created = await createAgentSession({
             cwd,
             agentDir,
@@ -64,55 +68,58 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             autoApprove: true,
             restrictToolNames: true,
             toolNames: [...PICO_BUILTIN_TOOLS, ...mcpToolNames],
-            preloadedPreparedExtensions: await prepareDiscoveredExtensions(cwd, settings),
+            preloadedPreparedExtensions: [
+                writes.extension(),
+                ...(await prepareDiscoveredExtensions(cwd, settings)),
+            ],
             appendSystemPrompt: PICO_GUIDANCE,
             systemPrompt: withoutSubagentUrl,
         });
         engine = created.session;
-        modelFallbackMessage = created.modelFallbackMessage;
+
+        if (!engine.model) {
+            const reason = created.modelFallbackMessage ? ` ${created.modelFallbackMessage}` : "";
+            throw new PicoSessionError(
+                `Oh My Pi has no model configured for ${cwd}, and Pico does not substitute one.${reason} ` +
+                    "Configure a default model for this project in Oh My Pi, then start a new session.",
+            );
+        }
+
+        const connected = mcp;
+        engine.setMcpServerInstructionsSource(() => connected.manager.getServerInstructions());
+        await engine.refreshMCPTools(mcp.tools);
+
+        const unexpected = findUnexpectedTools(engine.getActiveToolNames(), [
+            ...PICO_BUILTIN_TOOLS,
+            ...mcpToolNames,
+        ]);
+        if (unexpected.length > 0) {
+            throw new PicoSessionError(
+                `Pico does not allow these tools, but the session activated them: ${unexpected.join(", ")}.`,
+            );
+        }
     } catch (error) {
-        await mcp.manager.disconnectAll();
-        throw new PicoSessionError(describeCause(error));
+        await engine?.dispose();
+        await mcp?.manager.disconnectAll();
+        ownedStore?.close();
+        throw error instanceof PicoSessionError
+            ? error
+            : new PicoSessionError(describeCause(error));
     }
 
+    const liveEngine = engine;
+    const liveMcp = mcp;
     let disposed = false;
-    const dispose = async (): Promise<void> => {
-        if (disposed) return;
-        disposed = true;
-        await mcp.manager.disconnectAll();
-        await engine.dispose();
-    };
-    const fail = async (message: string): Promise<never> => {
-        await dispose();
-        throw new PicoSessionError(message);
-    };
-
-    if (!engine.model) {
-        const reason = modelFallbackMessage ? ` ${modelFallbackMessage}` : "";
-        await fail(
-            `Oh My Pi has no model configured for ${cwd}, and Pico does not substitute one.${reason} ` +
-                "Configure a default model for this project in Oh My Pi, then start a new session.",
-        );
-    }
-
-    await engine.refreshMCPTools(mcp.tools);
-    const unexpected = findUnexpectedTools(engine.getActiveToolNames(), [
-        ...PICO_BUILTIN_TOOLS,
-        ...mcpToolNames,
-    ]);
-    if (unexpected.length > 0) {
-        await fail(
-            `Pico does not allow these tools, but the session activated them: ${unexpected.join(", ")}.`,
-        );
-    }
-
-    const writes = new WriteRecorder();
-    engine.setClientBridge(writes.bridge);
-
     return {
         engine,
         cwd,
-        takeRecordedWrite: absolutePath => writes.take(absolutePath),
-        dispose,
+        takeRecordedWrite: toolCallId => writes.take(toolCallId),
+        dispose: async () => {
+            if (disposed) return;
+            disposed = true;
+            await liveMcp.manager.disconnectAll();
+            await liveEngine.dispose();
+            ownedStore?.close();
+        },
     };
 }

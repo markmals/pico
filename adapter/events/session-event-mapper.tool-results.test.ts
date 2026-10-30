@@ -14,17 +14,19 @@ import { SessionEventMapper } from "./session-event-mapper.ts";
 const cwd = "/workspace";
 
 interface RecordedWriteFixture {
+    path: string;
     oldText: string | null;
     newText: string;
 }
 
+/** What the engine recorded for each `write` call, consumed when that call ends. */
 function mapperWithWrites(writes: Record<string, RecordedWriteFixture> = {}): SessionEventMapper {
     const pending = new Map(Object.entries(writes));
     return new SessionEventMapper({
         cwd,
-        takeRecordedWrite: path => {
-            const recorded = pending.get(path);
-            pending.delete(path);
+        takeRecordedWrite: toolCallId => {
+            const recorded = pending.get(toolCallId);
+            pending.delete(toolCallId);
             return recorded;
         },
     });
@@ -208,7 +210,7 @@ describe("proposal.0001 tool call results", () => {
             result: toolResult("[a.txt#E3D3]\nSuccessfully wrote 3 bytes to a.txt", {
                 resolvedPath: path,
             }),
-            writes: { [path]: { oldText: null, newText: "hi\n" } },
+            writes: { "call-1": { path, oldText: null, newText: "hi\n" } },
         });
 
         expect(update.status).toBe("completed");
@@ -223,7 +225,7 @@ describe("proposal.0001 tool call results", () => {
             result: toolResult("[a.txt#AAAA]\nSuccessfully wrote 4 bytes to a.txt", {
                 resolvedPath: path,
             }),
-            writes: { [path]: { oldText: "old\n", newText: "new\n" } },
+            writes: { "call-1": { path, oldText: "old\n", newText: "new\n" } },
         });
 
         expect(update.content).toEqual([
@@ -231,15 +233,44 @@ describe("proposal.0001 tool call results", () => {
         ]);
     });
 
+    test("the diff names the file the engine recorded, not the argument", () => {
+        const recorded = join(cwd, "src", "a.txt");
+        const update = endUpdate({
+            toolName: "write",
+            args: { path: "a.txt", content: "hi\n" },
+            result: toolResult("wrote a.txt", {}),
+            writes: { "call-1": { path: recorded, oldText: null, newText: "hi\n" } },
+        });
+
+        expect(update.content).toEqual([
+            { type: "diff", path: recorded, oldText: null, newText: "hi\n" },
+        ]);
+    });
+
     test("a failed write reports the error text instead of a diff", () => {
+        const path = join(cwd, "a.txt");
         const update = endUpdate({
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
             result: toolResult("Permission denied", {}),
             isError: true,
+            writes: { "call-1": { path, oldText: null, newText: "hi\n" } },
         });
 
         expect(update.status).toBe("failed");
         expect(update.content).toEqual([textContent("Permission denied")]);
+    });
+
+    test("a write the engine recorded nothing for reports the result text", () => {
+        const update = endUpdate({
+            toolName: "write",
+            args: { path: "local://notes.md", content: "hi\n" },
+            result: toolResult("Successfully wrote 3 bytes to local://notes.md", {}),
+        });
+
+        expect(update.status).toBe("completed");
+        expect(update.content).toEqual([
+            textContent("Successfully wrote 3 bytes to local://notes.md"),
+        ]);
     });
 });

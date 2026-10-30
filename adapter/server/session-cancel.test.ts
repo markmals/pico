@@ -1,15 +1,16 @@
 import type { NewSessionResponse, PromptResponse, SessionUpdate } from "@agentclientprotocol/sdk";
 import type { MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { PicoSession } from "../engine/pico-session.ts";
+import type { ConnectedClient } from "./agent-harness.ts";
 
 import { connectPicoAgent, requestError } from "./agent-harness.ts";
 import { removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
+import { fakeSession, neverSettles } from "./fake-session.ts";
 import { closeOpenConnections, settle, startPicoSession, userText } from "./session-fixture.ts";
 
 afterEach(closeOpenConnections);
@@ -133,64 +134,96 @@ describe("proposal.0001 session/cancel", () => {
     });
 });
 
-describe("proposal.0001 a cancellation that cannot stop the engine", () => {
-    /** An engine whose abort never settles: no scripted model can produce that. */
-    function unstoppableSession(cwd: string): { session: PicoSession; disposals: number } {
-        const counters = { disposals: 0 };
-        const engine = {
-            subscribe: () => () => {},
-            prompt: () => Promise.withResolvers<boolean>().promise,
-            abort: () => Promise.withResolvers<void>().promise,
-            dispose: () => Promise.withResolvers<void>().promise,
-        } as unknown as AgentSession;
-        const session: PicoSession = {
-            engine,
-            cwd,
-            takeRecordedWrite: () => undefined,
-            dispose: async () => {
-                counters.disposals++;
-            },
-        };
-        return {
-            session,
-            get disposals() {
-                return counters.disposals;
-            },
-        };
+describe("proposal.0001 a cancellation the engine does not answer", () => {
+    interface Connected {
+        client: ConnectedClient;
+        sessionId: string;
+        prompt(text: string): Promise<PromptResponse>;
     }
 
-    test("the turn ends cancelled, the session is disposed, and later prompts say so", async () => {
-        const cwd = temporaryProject();
-        const unstoppable = unstoppableSession(cwd);
+    async function connect(session: PicoSession, cwd: string): Promise<Connected> {
         const client = connectPicoAgent({
             version: "0.0.0-test",
-            createSession: () => Promise.resolve(unstoppable.session),
+            createSession: () => Promise.resolve(session),
         });
         await client.initialize();
         const created = (await client.agent.request("session/new", {
             cwd,
             mcpServers: [],
         })) as NewSessionResponse;
-
-        const running = client.agent.request("session/prompt", {
+        return {
+            client,
             sessionId: created.sessionId,
-            prompt: [{ type: "text", text: "hang" }],
-        }) as Promise<PromptResponse>;
-        await client.agent.notify("session/cancel", { sessionId: created.sessionId });
+            prompt: text =>
+                client.agent.request("session/prompt", {
+                    sessionId: created.sessionId,
+                    prompt: [{ type: "text", text }],
+                }) as Promise<PromptResponse>,
+        };
+    }
+
+    test("an abort that never settles ends the turn cancelled and closes the session", async () => {
+        const cwd = temporaryProject();
+        const fake = fakeSession(cwd);
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("hang");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
         const response = await running;
 
         expect(response.stopReason).toBe("cancelled");
-        expect(unstoppable.disposals).toBe(1);
+        expect(fake.disposals).toBe(1);
 
-        const error = await requestError(
-            client.agent.request("session/prompt", {
-                sessionId: created.sessionId,
-                prompt: [{ type: "text", text: "anyone there?" }],
-            }),
-        );
+        const error = await requestError(connected.prompt("anyone there?"));
         expect(error.message).toMatch(/closed/i);
         expect(error.message).toMatch(/cancel/i);
 
-        await client.close();
+        await connected.client.close();
     }, 20_000);
+
+    test("a turn stays reserved while its cancellation is still unwinding", async () => {
+        const cwd = temporaryProject();
+        // The engine answers the prompt the moment the abort starts, and keeps
+        // unwinding afterwards. Releasing the turn here would let a second prompt
+        // start on a session the expiring cancellation is about to dispose.
+        const aborting = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd, {
+            prompt: async () => {
+                await aborting.promise;
+                return true;
+            },
+            abort: () => {
+                aborting.resolve();
+                return neverSettles<void>();
+            },
+        });
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("start something");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
+        await settle(300);
+
+        const refusal = await requestError(connected.prompt("meanwhile"));
+        expect(refusal.message).toContain("already running");
+        expect((await running).stopReason).toBe("cancelled");
+
+        await connected.client.close();
+    }, 20_000);
+
+    test("an abort that fails is a failed cancellation", async () => {
+        const cwd = temporaryProject();
+        const fake = fakeSession(cwd, { abort: () => Promise.reject(new Error("abort exploded")) });
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("hang");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
+
+        expect((await running).stopReason).toBe("cancelled");
+        expect(fake.disposals).toBe(1);
+
+        const error = await requestError(connected.prompt("anyone there?"));
+        expect(error.message).toMatch(/closed/i);
+
+        await connected.client.close();
+    }, 10_000);
 });

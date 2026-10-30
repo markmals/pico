@@ -121,8 +121,28 @@ export function withoutProviderCredentials(t: Cleanups): void {
     });
 }
 
-export function toolCall(name: string, args: Record<string, unknown> = {}) {
-    return { type: "toolCall" as const, name, arguments: args };
+/** Everything Pico writes to stderr while the test runs. */
+export function captureStderr(t: Cleanups): () => string {
+    const original = process.stderr.write.bind(process.stderr);
+    let captured = "";
+    process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+        captured += typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+        return (original as (...args: never[]) => boolean)(chunk as never, ...(rest as never[]));
+    }) as typeof process.stderr.write;
+    t.after(() => {
+        process.stderr.write = original;
+    });
+    return () => captured;
+}
+
+/** A scripted tool call; `id` pins the engine's tool call id so a test can look its record up. */
+export function toolCall(name: string, args: Record<string, unknown> = {}, id?: string) {
+    return {
+        type: "toolCall" as const,
+        name,
+        arguments: args,
+        ...(id === undefined ? {} : { id }),
+    };
 }
 
 /**

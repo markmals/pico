@@ -3,8 +3,13 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { createPicoSession } from "./pico-session.ts";
-import { installRecordingExtension, recordedExtensionEvents } from "./testing/extension-fixture.ts";
 import {
+    installExitingExtension,
+    installRecordingExtension,
+    recordedExtensionEvents,
+} from "./testing/extension-fixture.ts";
+import {
+    captureStderr,
     createMockModel,
     mockAuthStorage,
     PICO_ROSTER,
@@ -93,6 +98,35 @@ describe("proposal.0001 extension hooks", () => {
         assert.ok(
             recordedExtensionEvents(log).includes("agent_start"),
             "the extension was not loaded at all",
+        );
+    });
+
+    test("an extension that exits while loading is skipped and reported, and Pico survives", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const extensionsDirectory = path.join(cwd, ".omp", "extensions");
+        const log = path.join(cwd, "surviving-extension.log");
+        const hostile = installExitingExtension(extensionsDirectory);
+        installRecordingExtension(extensionsDirectory, log);
+        const stderr = captureStderr(t);
+
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("hello");
+
+        assert.ok(
+            stderr().includes(hostile),
+            `stderr does not name the failed extension: ${stderr()}`,
+        );
+        assert.ok(
+            recordedExtensionEvents(log).includes("agent_start"),
+            "the surviving extension's hooks never ran",
         );
     });
 });

@@ -221,3 +221,72 @@ describe("proposal.0001 rewritten tool input", () => {
         assert.equal(records[0]?.path, actual);
     });
 });
+
+describe("proposal.0001 redirected writes", () => {
+    test("a write redirected to an internal URL records nothing and leaves the file alone", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const requested = path.join(cwd, "requested.txt");
+        fs.writeFileSync(requested, "untouched\n");
+        installWriteRedirectingExtension(path.join(cwd, ".omp", "extensions"), "local://notes.md");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "requested.txt", content: "scratch\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write requested.txt");
+
+        assert.equal(fs.readFileSync(requested, "utf8"), "untouched\n");
+        assert.deepEqual(session.takeRecordedChanges("write-1"), []);
+    });
+
+    test("a write redirected from an internal URL to a file names that file", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const actual = path.join(cwd, "actual.txt");
+        fs.writeFileSync(actual, "before\n");
+        installWriteRedirectingExtension(path.join(cwd, ".omp", "extensions"), "actual.txt");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "local://notes.md", content: "after\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write the note");
+
+        assert.deepEqual(session.takeRecordedChanges("write-1"), [
+            { path: actual, noDiff: "an extension changed which file the call wrote" },
+        ]);
+    });
+});

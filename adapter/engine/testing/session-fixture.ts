@@ -277,19 +277,23 @@ function resultText(result: unknown): string {
  * session clears what nothing took when the turn ends.
  */
 export function collectWrites(
-    session: Pick<PicoSession, "engine" | "takeWrite">,
+    session: Pick<PicoSession, "engine" | "takeChanges">,
 ): RecordedChange[] {
     const taken: RecordedChange[] = [];
     session.engine.subscribe((event: AgentSessionEvent) => {
-        if (event.type !== "tool_execution_end" || event.toolName !== "write") return;
-        const details = event.result?.details;
-        if (typeof details !== "object" || details === null || !("resolvedPath" in details)) return;
-        const { resolvedPath } = details;
-        if (typeof resolvedPath !== "string") return;
-        const record = session.takeWrite(resolvedPath);
-        if (record !== undefined) taken.push(record);
+        if (event.type !== "tool_execution_end") return;
+        taken.push(...session.takeChanges(event.toolCallId));
     });
     return taken;
+}
+
+/** The ids of the tool calls the engine executed, in order. */
+export function collectToolCallIds(engine: AgentSession): string[] {
+    const ids: string[] = [];
+    engine.subscribe((event: AgentSessionEvent) => {
+        if (event.type === "tool_execution_end") ids.push(event.toolCallId);
+    });
+    return ids;
 }
 
 /** Collects every tool the engine actually executed, in order. */

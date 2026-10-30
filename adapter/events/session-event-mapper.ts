@@ -11,15 +11,17 @@ import {
     resultDetails,
     resultText,
     startLocations,
-    stringProperty,
     textContent,
     toolKind,
     toolTitle,
 } from "./tool-call-translation.ts";
 
-type SessionView = Pick<PicoSession, "cwd" | "takeWrite" | "mcpToolIdentity">;
+type SessionView = Pick<PicoSession, "cwd" | "takeChanges" | "mcpToolIdentity">;
 
 type StreamDelta = Extract<AgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
+
+/** The tools whose file writes the engine attributes to their call. */
+const CHANGING_TOOLS = ["write", "edit"];
 
 const NOTHING_CHANGED: EditedFiles = { changes: [], locations: [] };
 
@@ -139,9 +141,11 @@ export class SessionEventMapper {
         this.#running.delete(toolCallId);
 
         const details = resultDetails(result);
-        // A write's record is consumed even when the call failed, so nothing the
-        // engine kept for this call outlives it.
-        const written = toolName === "write" ? this.#takeWrite(details) : undefined;
+        // The writes attributed to this call are consumed even when it failed, so
+        // none of them can be reported against a later call to the same file.
+        const written = CHANGING_TOOLS.includes(toolName)
+            ? this.#session.takeChanges(toolCallId)
+            : [];
         const changed = isError ? NOTHING_CHANGED : this.#changedFiles(toolName, details, written);
         const update: SessionUpdate = {
             sessionUpdate: "tool_call_update",
@@ -156,24 +160,19 @@ export class SessionEventMapper {
         return [update];
     }
 
-    /** The file a `write` replaced, as the engine recorded it when the tool ran. */
-    #takeWrite(details: unknown): RecordedChange | undefined {
-        const resolvedPath = stringProperty(details, "resolvedPath");
-        return resolvedPath ? this.#session.takeWrite(resolvedPath) : undefined;
-    }
-
     #changedFiles(
         toolName: string,
         details: unknown,
-        written: RecordedChange | undefined,
+        written: readonly RecordedChange[],
     ): EditedFiles {
+        // A `write` is exactly the writes the engine attributed to it; its result
+        // names a path an extension may have replaced.
         if (toolName === "write") {
-            return written
-                ? { changes: [written], locations: [{ path: written.path }] }
-                : NOTHING_CHANGED;
+            return { changes: [...written], locations: written.map(({ path }) => ({ path })) };
         }
-        // An `edit` reports its own before and after text; nothing else is recorded.
-        return toolName === "edit" ? editedFiles(details, this.#session.cwd) : NOTHING_CHANGED;
+        return toolName === "edit"
+            ? editedFiles(details, this.#session.cwd, written)
+            : NOTHING_CHANGED;
     }
 }
 

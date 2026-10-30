@@ -19,6 +19,9 @@ const MAX_DIFF_BYTES = 1024 * 1024;
 
 const PRUNED_BY_OMP = "Oh My Pi did not keep the text of an edit this large";
 
+/** A move renames: neither path reaches the bridge and the result says nothing about the destination. */
+const MOVE_REPLACED = "Oh My Pi did not report what the move replaced";
+
 export function toolKind(toolName: string): ToolKind {
     switch (toolName) {
         case "read":
@@ -81,25 +84,56 @@ export interface EditedFiles {
 }
 
 /**
- * What an `edit` result says it changed, one entry per file, in result order.
+ * What an `edit` changed, file by file, in result order.
  *
- * The text comes from the engine's own result: a single-file edit reports on
- * `details`, a multi-file edit on `details.perFileResults`. A file whose text is
- * absent or unusable carries the reason instead of a diff.
+ * The writes the engine attributed to the call are the authority: they are exact
+ * and never pruned. The result's own `details` fill in a file the bridge never
+ * saw — a removal, the source of a move — and a file with neither carries the
+ * reason instead of a diff.
  */
-export function editedFiles(details: unknown, cwd: string): EditedFiles {
+export function editedFiles(
+    details: unknown,
+    cwd: string,
+    records: readonly RecordedChange[],
+): EditedFiles {
+    const written = new Map<string, RecordedChange[]>();
+    for (const record of records) {
+        const queued = written.get(record.path);
+        if (queued) queued.push(record);
+        else written.set(record.path, [record]);
+    }
+
     const changes: RecordedChange[] = [];
     const locations: ToolCallLocation[] = [];
     for (const entry of editEntries(details)) {
         const path = resolveLocationPath(stringProperty(entry, "path"), cwd);
         if (!path) continue;
-        const change = describeEdit(entry, path);
-        if (change) changes.push(change);
         locations.push({ path });
-        // A move leaves the origin behind: it is affected, but its content is now
-        // the destination's, so there is nothing to diff for it.
         const origin = resolveLocationPath(stringProperty(entry, "sourcePath"), cwd);
-        if (origin && origin !== path) locations.push({ path: origin });
+        const moved = origin !== undefined && origin !== path;
+        const attributed = written.get(path)?.shift();
+        const change =
+            attributed ?? (moved ? { path, noDiff: MOVE_REPLACED } : describeEdit(entry, path));
+        if (change) changes.push(change);
+        // A move empties the origin: it is affected, and its text is what the
+        // result reports for the file that now holds it.
+        if (moved) {
+            locations.push({ path: origin });
+            changes.push({
+                path: origin,
+                oldText: textProperty(entry, "oldText") ?? null,
+                newText: "",
+            });
+        }
+    }
+
+    // Files the engine wrote that the result never mentioned, so a rewritten
+    // result cannot hide what the call did.
+    for (const [path, queued] of written) {
+        for (const record of queued) {
+            changes.push(record);
+            locations.push({ path });
+        }
     }
     return { changes, locations };
 }

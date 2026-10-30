@@ -50,8 +50,8 @@ export interface PicoSession {
      * and the outstanding step for as long as teardown hangs or after it fails.
      */
     readonly disposalPhase: DisposalPhase | undefined;
-    /** Consumes (FIFO per path) what the `write` tool replaced at `absolutePath`. */
-    takeWrite(absolutePath: string): RecordedChange | undefined;
+    /** Consumes what the tool call with this id changed, one entry per affected file. */
+    takeChanges(toolCallId: string): RecordedChange[];
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
@@ -67,7 +67,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     let mcp: HostMcpServers | undefined;
     let engine: AgentSession | undefined;
-    const writes = new WriteBridge();
+    const writes = new WriteBridge(cwd);
     try {
         const settings = await loadPicoSettings({ cwd, agentDir });
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
@@ -85,7 +85,10 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             autoApprove: true,
             restrictToolNames: true,
             toolNames: [...PICO_BUILTIN_TOOLS, ...mcpToolNames],
-            preloadedPreparedExtensions: await prepareDiscoveredExtensions(cwd, settings),
+            preloadedPreparedExtensions: [
+                writes.extension(),
+                ...(await prepareDiscoveredExtensions(cwd, settings)),
+            ],
             appendSystemPrompt: PICO_GUIDANCE,
             systemPrompt: withoutSubagentUrl,
         });
@@ -155,7 +158,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         get disposalPhase() {
             return disposalPhase;
         },
-        takeWrite: absolutePath => writes.takeWrite(absolutePath),
+        takeChanges: toolCallId => writes.takeChanges(toolCallId),
         mcpToolIdentity: toolName => identities.get(toolName),
         dispose: async () => {
             if (disposed) return;

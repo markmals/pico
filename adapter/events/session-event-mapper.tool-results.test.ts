@@ -17,19 +17,19 @@ const cwd = "/workspace";
 
 interface RecordingMapper {
     readonly mapper: SessionEventMapper;
-    /** The absolute paths the mapper asked the session about, in order. */
+    /** The tool call ids the mapper asked the session about, in order. */
     readonly taken: string[];
 }
 
-/** What the engine recorded for each written file, consumed FIFO per path. */
-function recordingMapper(writes: Record<string, RecordedChange[]> = {}): RecordingMapper {
-    const pending = new Map(Object.entries(writes).map(([path, records]) => [path, [...records]]));
+/** The writes the engine attributed to each tool call, consumed when that call ends. */
+function recordingMapper(changes: Record<string, RecordedChange[]> = {}): RecordingMapper {
+    const pending = new Map(Object.entries(changes).map(([id, records]) => [id, [...records]]));
     const taken: string[] = [];
     const mapper = new SessionEventMapper({
         cwd,
-        takeWrite: path => {
-            taken.push(path);
-            return pending.get(path)?.shift();
+        takeChanges: toolCallId => {
+            taken.push(toolCallId);
+            return pending.get(toolCallId)?.splice(0) ?? [];
         },
         mcpToolIdentity: () => undefined,
     });
@@ -130,25 +130,23 @@ describe("proposal.0001 tool call progress", () => {
 });
 
 interface EndOptions {
+    toolCallId?: string;
     toolName: string;
     args?: unknown;
     result: unknown;
     isError?: boolean;
-    writes?: Record<string, RecordedChange[]>;
+    changes?: Record<string, RecordedChange[]>;
 }
 
 function endUpdate(options: EndOptions): ToolCallUpdate & { taken: string[] } {
-    const { mapper, taken } = recordingMapper(options.writes);
+    const { mapper, taken } = recordingMapper(options.changes);
+    const toolCallId = options.toolCallId ?? "call-1";
     mapper.map(
-        toolExecutionStart({
-            toolCallId: "call-1",
-            toolName: options.toolName,
-            args: options.args ?? {},
-        }),
+        toolExecutionStart({ toolCallId, toolName: options.toolName, args: options.args ?? {} }),
     );
     const updates = mapper.map(
         toolExecutionEnd({
-            toolCallId: "call-1",
+            toolCallId,
             toolName: options.toolName,
             result: options.result,
             isError: options.isError,
@@ -184,7 +182,7 @@ describe("proposal.0001 command results", () => {
         expect(update.content).toEqual([textContent("Command failed with exit code 3\n")]);
     });
 
-    test("a command never asks the session about a written file", () => {
+    test("a command never asks the session what it changed", () => {
         const update = endUpdate({
             toolName: "bash",
             args: { command: "echo hello" },
@@ -202,11 +200,11 @@ describe("proposal.0001 write results", () => {
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
             result: toolResult("Successfully wrote 3 bytes to a.txt", { resolvedPath: path }),
-            writes: { [path]: [{ path, oldText: null, newText: "hi\n" }] },
+            changes: { "call-1": [{ path, oldText: null, newText: "hi\n" }] },
         });
 
         expect(update.status).toBe("completed");
-        expect(update.taken).toEqual([path]);
+        expect(update.taken).toEqual(["call-1"]);
         expect(update.locations).toEqual([{ path }]);
         expect(update.content).toEqual([{ type: "diff", path, oldText: null, newText: "hi\n" }]);
     });
@@ -217,7 +215,7 @@ describe("proposal.0001 write results", () => {
             toolName: "write",
             args: { path: "a.txt", content: "new\n" },
             result: toolResult("Successfully wrote 4 bytes to a.txt", { resolvedPath: path }),
-            writes: { [path]: [{ path, oldText: "old\n", newText: "new\n" }] },
+            changes: { "call-1": [{ path, oldText: "old\n", newText: "new\n" }] },
         });
 
         expect(update.content).toEqual([
@@ -225,20 +223,19 @@ describe("proposal.0001 write results", () => {
         ]);
     });
 
-    test("the diff names the file the engine recorded, not the one it was asked about", () => {
-        const resolved = join(cwd, "a.txt");
-        const recorded = join(cwd, "src", "a.txt");
+    // An extension's `tool_result` hook may replace the result wholesale; the write
+    // the engine attributed to the call is still the write that happened.
+    test("a write whose result no longer names a file still reports its diff", () => {
+        const path = join(cwd, "a.txt");
         const update = endUpdate({
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
-            result: toolResult("wrote a.txt", { resolvedPath: resolved }),
-            writes: { [resolved]: [{ path: recorded, oldText: null, newText: "hi\n" }] },
+            result: toolResult("wrote it", { custom: true }),
+            changes: { "call-1": [{ path, oldText: null, newText: "hi\n" }] },
         });
 
-        expect(update.locations).toEqual([{ path: recorded }]);
-        expect(update.content).toEqual([
-            { type: "diff", path: recorded, oldText: null, newText: "hi\n" },
-        ]);
+        expect(update.locations).toEqual([{ path }]);
+        expect(update.content).toEqual([{ type: "diff", path, oldText: null, newText: "hi\n" }]);
     });
 
     test("a write with no diff to show says why instead", () => {
@@ -247,7 +244,7 @@ describe("proposal.0001 write results", () => {
             toolName: "write",
             args: { path: "secret.txt", content: "hi\n" },
             result: toolResult("Successfully wrote 3 bytes to secret.txt", { resolvedPath: path }),
-            writes: { [path]: [{ path, noDiff: "it is a binary file" }] },
+            changes: { "call-1": [{ path, noDiff: "it is a binary file" }] },
         });
 
         expect(update.status).toBe("completed");
@@ -258,50 +255,63 @@ describe("proposal.0001 write results", () => {
         ]);
     });
 
-    test("a write the engine recorded nothing for reports the result text", () => {
-        const path = join(cwd, "notes.md");
-        const update = endUpdate({
-            toolName: "write",
-            args: { path: "notes.md", content: "hi\n" },
-            result: toolResult("Successfully wrote 3 bytes to notes.md", { resolvedPath: path }),
-        });
-
-        expect(update.status).toBe("completed");
-        expect(update.taken).toEqual([path]);
-        expect(update.content).toEqual([textContent("Successfully wrote 3 bytes to notes.md")]);
-    });
-
-    test("a write to a target that is not a file asks the session about nothing", () => {
+    test("a write the engine attributed nothing to reports the result text", () => {
         const update = endUpdate({
             toolName: "write",
             args: { path: "local://notes.md", content: "hi\n" },
             result: toolResult("Successfully wrote 3 bytes to local://notes.md", {}),
         });
 
-        expect(update.taken).toEqual([]);
+        expect(update.status).toBe("completed");
+        expect(update.taken).toEqual(["call-1"]);
         expect(update.content).toEqual([
             textContent("Successfully wrote 3 bytes to local://notes.md"),
         ]);
     });
 
-    test("a failed write reports the error text and still clears its record", () => {
+    test("a failed write reports the error text and still clears its records", () => {
         const path = join(cwd, "a.txt");
         const update = endUpdate({
             toolName: "write",
             args: { path: "a.txt", content: "hi\n" },
             result: toolResult("Permission denied", { resolvedPath: path }),
             isError: true,
-            writes: { [path]: [{ path, oldText: null, newText: "hi\n" }] },
+            changes: { "call-1": [{ path, oldText: null, newText: "hi\n" }] },
         });
 
         expect(update.status).toBe("failed");
         expect(update.content).toEqual([textContent("Permission denied")]);
-        expect(update.taken).toEqual([path]);
+        expect(update.taken).toEqual(["call-1"]);
+    });
+
+    // Codex's repro: both calls land in one batch and both write the same file.
+    test("an edit and a write to one file in the same batch each show their own change", () => {
+        const path = join(cwd, "a.txt");
+        const { mapper } = recordingMapper({
+            "edit-1": [{ path, oldText: "before\n", newText: "edited\n" }],
+            "write-1": [{ path, oldText: "edited\n", newText: "final\n" }],
+        });
+        const run = (toolCallId: string, toolName: string, result: unknown) => {
+            mapper.map(toolExecutionStart({ toolCallId, toolName, args: {} }));
+            return toolCallUpdate(
+                mapper.map(toolExecutionEnd({ toolCallId, toolName, result }))[0],
+            );
+        };
+
+        const edited = run("edit-1", "edit", toolResult("edited a.txt", { path }));
+        const written = run("write-1", "write", toolResult("wrote a.txt", { resolvedPath: path }));
+
+        expect(edited.content).toEqual([
+            { type: "diff", path, oldText: "before\n", newText: "edited\n" },
+        ]);
+        expect(written.content).toEqual([
+            { type: "diff", path, oldText: "edited\n", newText: "final\n" },
+        ]);
     });
 });
 
 describe("proposal.0001 edit results", () => {
-    test("a successful edit reports the diff its own result carries", () => {
+    test("a successful edit reports the change the engine attributed to it", () => {
         const path = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
@@ -309,41 +319,78 @@ describe("proposal.0001 edit results", () => {
             result: toolResult("[b.txt#CFBD]\n1:one\n2:TWO\n3:three", {
                 path,
                 op: "update",
-                oldText: "one\ntwo\nthree\n",
-                newText: "one\nTWO\nthree\n",
+                oldText: "stale\n",
+                newText: "stale\n",
             }),
+            changes: {
+                "call-1": [{ path, oldText: "one\ntwo\nthree\n", newText: "one\nTWO\nthree\n" }],
+            },
         });
 
         expect(update.status).toBe("completed");
-        expect(update.taken).toEqual([]);
+        expect(update.taken).toEqual(["call-1"]);
         expect(update.locations).toEqual([{ path }]);
         expect(update.content).toEqual([
             { type: "diff", path, oldText: "one\ntwo\nthree\n", newText: "one\nTWO\nthree\n" },
         ]);
     });
 
-    test("a multi-file edit reports one diff per affected file", () => {
-        const first = join(cwd, "a.txt");
-        const second = join(cwd, "b.txt");
+    // Codex's repro: OMP drops the snapshot of an edit this large, the bridge does not.
+    test("an edit whose text Oh My Pi pruned still shows the exact change", () => {
+        const path = join(cwd, "big.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("edited big.txt", { path, snapshotsPruned: true }),
+            changes: { "call-1": [{ path, oldText: "before\n", newText: "after\n" }] },
+        });
+
+        expect(update.content).toEqual([
+            { type: "diff", path, oldText: "before\n", newText: "after\n" },
+        ]);
+    });
+
+    test("an edit Oh My Pi pruned with nothing attributed to it says why", () => {
+        const path = join(cwd, "big.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("edited big.txt", { path, snapshotsPruned: true }),
+        });
+
+        expect(update.locations).toEqual([{ path }]);
+        expect(update.content).toEqual([
+            textContent("edited big.txt"),
+            textContent(
+                `No diff for ${path}: Oh My Pi did not keep the text of an edit this large`,
+            ),
+        ]);
+    });
+
+    test("a multi-file edit falls back to the result for a file nothing was attributed to", () => {
+        const recorded = join(cwd, "a.txt");
+        const reported = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: "…" },
             result: toolResult("edited 2 files", {
                 perFileResults: [
-                    { path: first, oldText: "a\n", newText: "A\n" },
-                    { path: second, oldText: "b\n", newText: "B\n" },
+                    { path: recorded, oldText: "stale\n", newText: "stale\n" },
+                    { path: reported, oldText: "b\n", newText: "B\n" },
                 ],
             }),
+            changes: { "call-1": [{ path: recorded, oldText: "a\n", newText: "A\n" }] },
         });
 
-        expect(update.locations).toEqual([{ path: first }, { path: second }]);
+        expect(update.locations).toEqual([{ path: recorded }, { path: reported }]);
         expect(update.content).toEqual([
-            { type: "diff", path: first, oldText: "a\n", newText: "A\n" },
-            { type: "diff", path: second, oldText: "b\n", newText: "B\n" },
+            { type: "diff", path: recorded, oldText: "a\n", newText: "A\n" },
+            { type: "diff", path: reported, oldText: "b\n", newText: "B\n" },
         ]);
     });
 
-    // `REM` reports `op: "delete"` with `oldText` and no `newText` (engine, 2026-10-30).
+    // `REM` reports `op: "delete"` with `oldText`, no `newText`, and writes nothing
+    // through the bridge (engine, 2026-10-30).
     test("an edit that removes a file reports a diff with empty new text", () => {
         const path = join(cwd, "a.txt");
         const update = endUpdate({
@@ -363,8 +410,9 @@ describe("proposal.0001 edit results", () => {
         ]);
     });
 
-    // `MV` reports the destination as `path`, the origin as `sourcePath` (engine, 2026-10-30).
-    test("an edit that moves a file reports both files, diffing the destination", () => {
+    // `MV` renames: neither path reaches the bridge, and the result says nothing
+    // about what the destination held before (engine, 2026-10-30).
+    test("an edit that moves a file empties the source and names the destination", () => {
         const source = join(cwd, "c.txt");
         const destination = join(cwd, "d.txt");
         const update = endUpdate({
@@ -383,29 +431,9 @@ describe("proposal.0001 edit results", () => {
 
         expect(update.locations).toEqual([{ path: destination }, { path: source }]);
         expect(update.content).toEqual([
-            { type: "diff", path: destination, oldText: "cee\n", newText: "cee\n" },
-        ]);
-    });
-
-    test("a file whose text Oh My Pi pruned is named with the reason instead", () => {
-        const kept = join(cwd, "a.txt");
-        const pruned = join(cwd, "b.txt");
-        const update = endUpdate({
-            toolName: "edit",
-            args: { input: "…" },
-            result: toolResult("edited 2 files", {
-                perFileResults: [
-                    { path: kept, oldText: "a\n", newText: "A\n" },
-                    { path: pruned, snapshotsPruned: true },
-                ],
-            }),
-        });
-
-        expect(update.locations).toEqual([{ path: kept }, { path: pruned }]);
-        expect(update.content).toEqual([
-            { type: "diff", path: kept, oldText: "a\n", newText: "A\n" },
+            { type: "diff", path: source, oldText: "cee\n", newText: "" },
             textContent(
-                `No diff for ${pruned}: Oh My Pi did not keep the text of an edit this large`,
+                `No diff for ${destination}: Oh My Pi did not report what the move replaced`,
             ),
         ]);
     });
@@ -459,20 +487,18 @@ describe("proposal.0001 edit results", () => {
         expect(update.content).toEqual([textContent("Nothing to change")]);
     });
 
-    test("a failed edit reports the error text instead of a diff", () => {
+    test("a failed edit reports the error text and still clears its records", () => {
         const path = join(cwd, "b.txt");
         const update = endUpdate({
             toolName: "edit",
             args: { input: "[b.txt#0000]\nPUT 2.=2:\n+TWO" },
-            result: toolResult("Edit rejected: stale tag", {
-                path,
-                oldText: "one\n",
-                newText: "ONE\n",
-            }),
+            result: toolResult("Edit rejected: stale tag", { path, oldText: "one\n" }),
             isError: true,
+            changes: { "call-1": [{ path, oldText: "one\n", newText: "ONE\n" }] },
         });
 
         expect(update.status).toBe("failed");
         expect(update.content).toEqual([textContent("Edit rejected: stale tag")]);
+        expect(update.taken).toEqual(["call-1"]);
     });
 });

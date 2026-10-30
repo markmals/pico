@@ -1,10 +1,18 @@
 // Derived from oh-my-pi 18.14.0 src/tools/write.ts (MIT; see THIRD-PARTY-NOTICES.md).
 import { restoreLineEndings } from "@oh-my-pi/pi-coding-agent/edit/normalize";
+import { BINARY_SNIFF_BYTES, isProbablyBinaryHeader } from "@oh-my-pi/pi-utils/binary";
 
 /** Line-ending and BOM convention of a text file a write is about to replace. */
 export interface TextFileConvention {
     bom: boolean;
     crlf: boolean;
+}
+
+/** Bytes read per step while looking for a first line break past the binary sniff window. */
+const LINE_BREAK_SCAN_BYTES = 64 * 1024;
+
+function leadingBom(bytes: Uint8Array): boolean {
+    return bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
 }
 
 /**
@@ -14,9 +22,36 @@ export interface TextFileConvention {
  * the same rule reads straight from them.
  */
 export function readTextFileConvention(bytes: Uint8Array): TextFileConvention {
-    const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
     const lineFeed = bytes.indexOf(0x0a);
-    return { bom, crlf: lineFeed > 0 && bytes[lineFeed - 1] === 0x0d };
+    return { bom: leadingBom(bytes), crlf: lineFeed > 0 && bytes[lineFeed - 1] === 0x0d };
+}
+
+/**
+ * The same convention for a file too large to hold in memory, read from a bounded
+ * prefix exactly as OMP reads it: the first sniff window decides whether the file
+ * is text at all, then the scan walks forward in chunks until the first line break.
+ * `undefined` for a binary file, whose bytes say nothing about text line endings.
+ */
+export async function scanTextFileConvention(
+    absolutePath: string,
+    size: number,
+): Promise<TextFileConvention | undefined> {
+    const file = Bun.file(absolutePath);
+    let chunk = await file.slice(0, BINARY_SNIFF_BYTES).bytes();
+    if (isProbablyBinaryHeader(chunk)) return undefined;
+    const bom = leadingBom(chunk);
+    let offset = 0;
+    let previous: number | undefined;
+    for (;;) {
+        const lineFeed = chunk.indexOf(0x0a);
+        if (lineFeed !== -1) {
+            return { bom, crlf: (lineFeed > 0 ? chunk[lineFeed - 1] : previous) === 0x0d };
+        }
+        offset += chunk.length;
+        if (chunk.length === 0 || offset >= size) return { bom, crlf: false };
+        previous = chunk[chunk.length - 1];
+        chunk = await file.slice(offset, offset + LINE_BREAK_SCAN_BYTES).bytes();
+    }
 }
 
 /**

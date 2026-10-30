@@ -87,6 +87,12 @@ Grounding covered the ACP v1 specification and the installed `@agentclientprotoc
 - Custom agents are registered under Settings › Machines › Add an Agent › Custom…, which records a name and an executable path only ([more agents](https://sesh.codes/docs/more-agents/); `~/Library/Application Support/Sesh/agents.json`).
 - seshd runs one agent process per session. The agent receives `SESH_SESSION_ID`, `SESH_ROOT_PATH` and related variables, and a launchd-style `PATH` (seshd's own is `/usr/bin:/bin:/usr/sbin:/sbin`).
 - Sesh's MCP server arrives as a stdio entry the agent spawns (`seshd mcp`). Its environment carries `SESH_MCP_URL` and the secret `SESH_MCP_TOKEN`; the agent's own environment does not.
+- Sesh's MCP server offers 13 tools, which OMP names `mcp__sesh_<tool>` (tool descriptions and schemas as received by this session; [agents that start sessions](https://sesh.codes/docs/agents-that-start-sessions/)). The server also sends instructions, which OMP adds to the system prompt.
+    - **Talking to the user:** `ask_user` (1–4 questions with options, previews, multi-select and typed answers; answerable from a phone; `waitFor` resumes unanswered questions), `notify` (push notification, body ≤ 200 characters, at most 5 per 10 minutes), `create_artifact` and `update_artifact` (Sesh-native component trees or a self-contained HTML page beside the chat).
+    - **This session:** `session_info` (name, branch, base branch, worktree, project, running dev servers) and `rename_session`.
+    - **Other sessions:** `list_projects`, `list_sessions`, `start_session` (own worktree by default; `inPlace`, `baseBranch`, `name`, `agent` defaulting to the caller's own agent, `reportBack` on by default), `send_message`, `read_session`, `wait_for_sessions` and `stop_session`.
+    - Two per-machine settings gate these: **Sesh Tools for Agents** turns all of them on or off, and **Let Agents Manage Sessions** turns starting, messaging and stopping sessions on or off.
+    - An agent can have at most 8 of its sessions working at once, and a session an agent started cannot start sessions of its own.
 - OMP's `bash` tool still finds `~/.cargo/bin/intellisense` from that launchd environment, as this session's own tool calls showed.
 - Sesh renders ACP tool calls by kind, title, absolute locations, text content and status, and shows `failed` as failed (Sesh session `events.jsonl` records).
 - **Autonomous** sessions never ask the user ([approvals and Autonomous](https://sesh.codes/docs/approvals-and-autonomous/)).
@@ -217,8 +223,10 @@ model key revoked                       → session/prompt fails with the provid
 ### Effective roster
 
 - The built-in roster is `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`. On top of that come the tools the session's host MCP servers supply, named `mcp__<server>_<tool>` (for Sesh: `mcp__sesh_ask_user`, `mcp__sesh_create_artifact`, `mcp__sesh_notify`, `mcp__sesh_start_session` and the rest Sesh offers).
-- **Permanently excluded:** `eval` (with the eval-only `agent()` and `workpool()` helpers), `lsp` and `task`. Pico's settings overlay disables each of them, as well as leaving them off the allowlist.
-- **Deferred, not excluded:** `find`, `ask`, `todo`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, the memory tools, and extension-contributed tools. Each comes back through its own change once it has a defined ACP representation. Until then the model never receives their schemas. Hidden tools are excluded, and no `xd://` device routes exist for any tool.
+- **Replaced by Sesh's tools:** OMP's `ask` by `mcp__sesh_ask_user`. Native delegation (`task`, the eval-only `agent()` and `workpool()` helpers, and vibe mode's `vibe_spawn`, `vibe_send`, `vibe_wait`, `vibe_kill` and `vibe_list`) by Sesh's session tools. These are permanently excluded.
+- **Permanently excluded:** `eval` and `lsp`, and the delegation tools above. Pico's settings overlay disables `eval`, `lsp` and `task`, as well as leaving them off the allowlist. The `vibe_*` tools exist only in vibe mode and are kept out by the allowlist.
+- **Deferred, not excluded:** `find` (semantic code search), `todo`, `wait` (Sesh's `wait_for_sessions` covers waiting on sessions, but not OMP's background `bash` jobs), `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, the memory tools, and extension-contributed tools. Each comes back through its own change once it has a defined ACP representation. Until then the model never receives their schemas. Hidden tools are excluded, and no `xd://` device routes exist for any tool.
+- Sesh tools exist only when Sesh supplies them. If a machine turns Sesh's tools off, the session has none of them, and Pico substitutes nothing.
 - After MCP tools are mounted, Pico compares the session's active tools with the allowlist. If any tool outside the allowlist is active, `session/new` fails with an error naming it, and no session is created. An allowlisted built-in the engine does not admit (as with `find` in OMP 18.14.0) is simply absent.
 - If the model emits a call to a tool outside the roster, the engine emits `tool_execution_start` and then rejects the call as `Tool <name> not found` (`pi-agent-core/src/agent-loop.ts:3567-3601`). That attempted call is reported as a `failed` tool call like any other failed execution, and nothing runs.
 - LSP diagnostics, format-on-write and LSP startup never happen, because `enableLsp: false` and `lsp.enabled: false` disable the subsystem.
@@ -367,8 +375,8 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
 ## Future directions
 
 - Config options for model and thinking level, plus session persistence in a Pico-owned directory, with `session/load` replay (the next proposal).
-- Delegation guidance and verification for Sesh child sessions that run Pico (proposal 0003).
-- Returning the deferred tools (`find`, `ask`, `todo` as ACP `plan` updates, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, memory tools) once their ACP representation is defined.
+- Delegation guidance and verification for Sesh child sessions that run Pico (proposal 0003). Sesh's MCP instructions and `start_session` description tell agents to prefer their own subagents for research; Pico has none, so its own guidance needs to say how research and quick changes are done instead.
+- Returning the deferred tools (`find`, `todo` as ACP `plan` updates, `wait` with background `bash` jobs, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, memory tools) once their ACP representation is defined.
 - A Pico-owned credential and state store in a folder Sesh's sandbox allows (such as `~/.local/state/pico`), which would make Autonomous sessions work and remove in-place refresh of the user's OMP credentials.
 - Arbitrary MCP servers configured through the companion app.
 - Client terminal bridging, if Sesh's `terminal/*` rendering proves better than text output.

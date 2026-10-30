@@ -17,6 +17,7 @@ import {
     commandCallProblem,
     commandExitCodeProblem,
     commandOutputProblem,
+    commandTitleProblem,
     editCallProblem,
     readCallProblem,
 } from "./tool-calls.ts";
@@ -27,6 +28,8 @@ const SMOKE_TEXT = "hello from pico";
 const CAT_COMMAND = `cat ${SMOKE_FILE}`;
 const FAILING_EXIT_CODE = 3;
 const FAILING_COMMAND = `exit ${FAILING_EXIT_CODE}`;
+// What Oh My Pi puts in the tool call's text, and what the guide's worked example promises.
+const FAILING_EXIT_TEXT = `Command exited with code ${FAILING_EXIT_CODE}`;
 // An external binary with a distinctive duration, not a bare `sleep`: Oh My Pi's embedded
 // shell runs some commands in-process, and a cancellation that only interrupts a builtin
 // would not show that a running subprocess is killed.
@@ -164,6 +167,10 @@ async function checkWriteReadRun(turns: Turns, smoke: Smoke): Promise<void> {
         commandCallProblem(calls, CAT_COMMAND, "completed"),
     );
     checklist.record(
+        `the \`${CAT_COMMAND}\` tool call is titled with its command`,
+        commandTitleProblem(calls, CAT_COMMAND),
+    );
+    checklist.record(
         `\`${CAT_COMMAND}\` reports what was written`,
         commandOutputProblem(calls, CAT_COMMAND, SMOKE_TEXT),
     );
@@ -184,7 +191,7 @@ async function checkFailingCommand(turns: Turns, checklist: Checklist): Promise<
     );
     checklist.record(
         `\`${FAILING_COMMAND}\` names its exit code in the tool call's text`,
-        commandOutputProblem(calls, FAILING_COMMAND, `code ${FAILING_EXIT_CODE}`),
+        commandOutputProblem(calls, FAILING_COMMAND, FAILING_EXIT_TEXT),
     );
 }
 

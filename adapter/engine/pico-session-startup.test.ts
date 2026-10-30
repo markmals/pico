@@ -12,6 +12,7 @@ import {
     lockCredentialStore,
     mockAuthStorage,
     picoWorkspace,
+    temporaryDirectory,
     unauthenticatedAuthStorage,
     withoutProviderCredentials,
     writeMockProviderKey,
@@ -184,9 +185,38 @@ describe("proposal.0001 model selection", () => {
     });
 });
 
+/** A project-level OMP configuration, as a checkout carries one. */
+function writeProjectConfig(projectDir: string, config: string): void {
+    fs.mkdirSync(path.join(projectDir, ".omp"), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, ".omp", "config.yml"), config);
+}
 describe("proposal.0001 thinking level", () => {
     test("the session uses the thinking level the configuration selects", async t => {
         const { cwd, agentDir } = picoWorkspace(t, "defaultThinkingLevel: low\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        assert.equal(session.engine.thinkingLevel, "low");
+    });
+
+    test("project settings come from the session's worktree, not the main checkout", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const mainCheckout = temporaryDirectory(t, "sesh-root");
+        writeProjectConfig(cwd, "defaultThinkingLevel: low\n");
+        writeProjectConfig(mainCheckout, "defaultThinkingLevel: high\n");
+        const previous = process.env.SESH_ROOT_PATH;
+        process.env.SESH_ROOT_PATH = mainCheckout;
+        t.after(() => {
+            if (previous === undefined) delete process.env.SESH_ROOT_PATH;
+            else process.env.SESH_ROOT_PATH = previous;
+        });
+
         const session = await createPicoSession({
             cwd,
             agentDir,

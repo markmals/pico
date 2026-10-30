@@ -82,4 +82,4 @@ This repository has no `origin` yet. Creating or naming one is the human's decis
 
 Pushing directly to the default branch is prohibited. Work reaches the default branch only by merging its pull request.
 
-Force-pushing, deleting a branch, publishing a package, tagging a release, and merging require explicit human confirmation, or a bounded build mandate that delegates that specific action. Merging happens in phase 5 after acceptance, not because the agent judges the work acceptable.
+Force-pushing, deleting a branch, publishing a package, tagging a release, and merging require explicit human confirmation for that specific action. Merging happens in phase 5 after acceptance, not because the agent judges the work acceptable.

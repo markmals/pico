@@ -39,47 +39,6 @@ the change and its value plainly. It does not need to flow into the next section
 
 <What changes and why it matters.>
 
-## Authorization
-
-<!--
-Record who authorized this change and when.
-
-Ordinary work: the human's direct consent for this change, with the date.
-
-Under a bounded build mandate (AGENTS.md#bounded-build-mandates): link the mandate
-proposal and the approved revision relied on, say why this change fits inside its
-outcome, scope, and constraints, name which delegated authority is being used, and
-keep the strategist's approval decisions here as they are made.
-
-A mandate never authorizes itself, and an agent never records authority it was not given.
--->
-
-<Direct human consent on <YYYY-MM-DD>, or the mandate, approved revision, and fit.>
-
-## Build mandate
-
-<!--
-Delete this whole section unless this proposal grants a mandate. A proposal that
-grants one is itself ordinary work: the human approves it, and it cannot authorize
-itself or widen an existing mandate.
-
-A mandate must specify the outcome and observable completion criteria; scope and
-non-goals; fixed constraints, including trust boundaries and compatibility promises;
-delegated decisions and actions, naming any permission to create PRs, push feature
-branches, accept work, and merge into a named target branch; resource and spending
-limits, with nothing authorized by omission; required verification, independent
-review, and preview evidence; an expiry or completion condition; and dated human
-approval with retrievable evidence of the approved revision.
--->
-
-- Outcome: <observable completion criteria>
-- Scope and non-goals: <boundaries>
-- Constraints: <trust boundaries, compatibility promises, spending limits>
-- Delegated actions: <proposal approval, acceptance, merge target — name each explicitly>
-- Required evidence: <verification, independent review, preview>
-- Expiry: <date or completion condition>
-- Approved by: <human> on <YYYY-MM-DD>, revision <link>
-
 ## Motivation
 
 <!--

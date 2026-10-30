@@ -2,7 +2,7 @@
 id: proposal.0001
 title: ACP Adapter Core Turn Path
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/1
 issues: []
 supersedes: []

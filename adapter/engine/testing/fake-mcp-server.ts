@@ -8,6 +8,7 @@
  *   --fail-tools-list        answer `initialize`, then fail `tools/list`
  *   --delay-tools-list <ms>  answer `tools/list` only after `<ms>`
  *   --instructions <text>    return `<text>` as the server's instructions
+ *   --exit-after-initialize  answer `initialize`, then exit before `tools/list`
  *   --tool <name>            advertise `<name>` instead of the default tools (repeatable)
  */
 
@@ -104,6 +105,7 @@ async function handle(
                     ...(instructions === undefined ? {} : { instructions }),
                 },
             });
+            if (args.includes("--exit-after-initialize")) process.exit(4);
             return;
         }
         case "tools/list": {

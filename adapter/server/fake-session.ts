@@ -15,6 +15,8 @@ export interface FakeEngine {
     prompt?: (emit: (event: AgentSessionEvent) => void) => Promise<boolean>;
     /** Stops the turn. Defaults to a promise that never settles. */
     abort?: () => Promise<void>;
+    /** Tears the session down. Defaults to resolving at once. */
+    dispose?: () => Promise<void>;
 }
 
 export interface FakeSession {
@@ -56,9 +58,10 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
             engine,
             cwd,
             takeRecordedWrite: () => undefined,
-            dispose: async () => {
+            dispose: () => {
                 calls.push("dispose");
                 counters.disposals++;
+                return behaviour.dispose?.() ?? Promise.resolve();
             },
         },
         calls,

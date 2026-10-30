@@ -120,6 +120,50 @@ describe("proposal.0001 host MCP servers", () => {
         );
     });
 
+    test("an inherited startup window never silently omits a slow server", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const previous = process.env.OMP_MCP_STARTUP_TIMEOUT_MS;
+        process.env.OMP_MCP_STARTUP_TIMEOUT_MS = "100";
+        t.after(() => {
+            if (previous === undefined) delete process.env.OMP_MCP_STARTUP_TIMEOUT_MS;
+            else process.env.OMP_MCP_STARTUP_TIMEOUT_MS = previous;
+        });
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [fakeMcpServer("slow", { flags: ["--delay-tools-list", "600"] })],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /slow/);
+                return true;
+            },
+        );
+    });
+
+    test("a server that dies before listing its tools fails creation, naming it", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [fakeMcpServer("quitter", { flags: ["--exit-after-initialize"] })],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /quitter/);
+                return true;
+            },
+        );
+    });
+
     test("a server named __proto__ is connected like any other", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
         const session = await createPicoSession({

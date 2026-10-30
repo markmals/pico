@@ -6,6 +6,7 @@ import type {
     InitializeResponse,
     McpServer,
     McpServerStdio,
+    NewSessionRequest,
     NewSessionResponse,
 } from "@agentclientprotocol/sdk";
 
@@ -41,6 +42,8 @@ export function picoAgentShutdown(app: AgentApp): Promise<void> {
 /** One app serves one stdio connection: the client Sesh launches it for. */
 export function createPicoAgent(options: PicoAgentOptions): AgentApp {
     const sessions = new Map<string, SessionRuntime>();
+    /** Session creations still running; shutdown waits for each to land or dispose itself. */
+    const starting = new Set<Promise<void>>();
     let client: AgentContext | undefined;
     let closed = false;
 
@@ -57,6 +60,7 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
             app,
             connection.closed.then(async () => {
                 closed = true;
+                await Promise.all(starting);
                 await Promise.all([...sessions.values()].map(runtime => runtime.dispose()));
                 sessions.clear();
             }),
@@ -74,7 +78,21 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
         agentInfo: { name: "pico", title: "Pico", version: options.version },
     }));
 
-    app.onRequest("session/new", async ({ params, signal }): Promise<NewSessionResponse> => {
+    app.onRequest("session/new", ({ params, signal }): Promise<NewSessionResponse> => {
+        const started = startSession(params, signal);
+        const settled = started.then(
+            () => undefined,
+            () => undefined,
+        );
+        starting.add(settled);
+        void settled.finally(() => starting.delete(settled));
+        return started;
+    });
+
+    async function startSession(
+        params: NewSessionRequest,
+        signal: AbortSignal,
+    ): Promise<NewSessionResponse> {
         requireExistingDirectory(params.cwd);
         const mcpServers = params.mcpServers.map(requireStdioTransport);
         const session = await createSession(options.createSession, params.cwd, mcpServers);
@@ -90,7 +108,7 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
         const sessionId = randomUUID();
         sessions.set(sessionId, new SessionRuntime(sessionId, session, requireClient(client)));
         return { sessionId };
-    });
+    }
 
     app.onRequest("session/prompt", async ({ params }) => {
         const runtime = sessions.get(params.sessionId);

@@ -13,7 +13,7 @@ import { openCredentialStore } from "./credential-store.ts";
 import { describeCause, PicoSessionError } from "./errors.ts";
 import { connectHostMcpServers } from "./host-mcp-servers.ts";
 import { loadPicoSettings } from "./pico-settings.ts";
-import { prepareDiscoveredExtensions } from "./session-extensions.ts";
+import { prepareDiscoveredExtensions, reportExtensionFailure } from "./session-extensions.ts";
 import { findUnexpectedTools, PICO_BUILTIN_TOOLS } from "./tool-roster.ts";
 import { WriteRecorder } from "./write-recorder.ts";
 
@@ -93,6 +93,11 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             systemPrompt: withoutSubagentUrl,
         });
         engine = created.session;
+        // Oh My Pi skips an extension whose factory throws and logs it to a file;
+        // the failure has to reach the session's stderr to be seen.
+        for (const failure of created.extensionsResult.errors) {
+            reportExtensionFailure(failure.path, failure.error);
+        }
 
         const model = engine.model;
         if (!model) {

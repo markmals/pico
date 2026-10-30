@@ -6,6 +6,7 @@ import type { MCPLoadResult } from "@oh-my-pi/pi-coding-agent/mcp";
 import type { MCPServerConfig } from "@oh-my-pi/pi-coding-agent/mcp/types";
 
 import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp";
+import { createMCPToolName } from "@oh-my-pi/pi-coding-agent/mcp/tool-bridge";
 
 import { PicoSessionError } from "./errors.ts";
 
@@ -14,7 +15,7 @@ export interface HostMcpServers {
     tools: CustomTool[];
 }
 
-function toConfig(server: McpServerStdio): MCPServerConfig {
+function toConfig(server: McpServerStdio, cwd: string): MCPServerConfig {
     // Null prototype: a `__proto__` environment key must become an own property.
     const env: Record<string, string> = Object.create(null);
     for (const variable of server.env) env[variable.name] = variable.value;
@@ -23,6 +24,9 @@ function toConfig(server: McpServerStdio): MCPServerConfig {
         command: server.command,
         args: server.args,
         env,
+        // Without this a server inherits Pico's own working directory, not the
+        // session's, so a relative path it resolves points at the wrong project.
+        cwd,
         // The client's values are opaque: without this OMP runs a `!command`
         // value through a shell, replaces a value that names a host variable
         // with that variable's value, and drops empty values.
@@ -57,7 +61,7 @@ export async function connectHostMcpServers(
                 `The MCP server "${server.name}" was sent more than once; server names must be unique.`,
             );
         }
-        configs[server.name] = toConfig(server);
+        configs[server.name] = toConfig(server, cwd);
         sources[server.name] = toSource(server.name);
     }
 
@@ -79,6 +83,15 @@ export async function connectHostMcpServers(
         throw new PicoSessionError(`Could not connect the MCP server ${failures}.`);
     }
 
+    const folded = foldedToolNames(manager, names);
+    if (folded) {
+        await manager.disconnectAll();
+        throw new PicoSessionError(
+            `The MCP server "${folded.server}" offers ${quoted(folded.tools)}, which Oh My Pi would both call ` +
+                `"${folded.minted}"; rename one of them.`,
+        );
+    }
+
     const connected = new Set(result.connectedServers);
     const missing = names.filter(name => !connected.has(name));
     if (missing.length > 0) {
@@ -88,6 +101,27 @@ export async function connectHostMcpServers(
         );
     }
     return { manager, tools: manager.getTools() };
+}
+
+/**
+ * The first server whose advertised tools mint one Oh My Pi tool name. Oh My Pi
+ * folds characters such as `-` and `_` together, keeps one of the two tools and
+ * drops the other, so a session would silently run a tool the model did not name.
+ */
+function foldedToolNames(
+    manager: MCPManager,
+    names: readonly string[],
+): { server: string; tools: string[]; minted: string } | undefined {
+    for (const server of names) {
+        const minted = new Map<string, string>();
+        for (const tool of manager.getConnection(server)?.tools ?? []) {
+            const name = createMCPToolName(server, tool.name);
+            const first = minted.get(name);
+            if (first !== undefined) return { server, tools: [first, tool.name], minted: name };
+            minted.set(name, tool.name);
+        }
+    }
+    return undefined;
 }
 
 /** Pico's own bound on the whole connection step, independent of OMP's request deadlines. */

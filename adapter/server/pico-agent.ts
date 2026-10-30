@@ -71,8 +71,10 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
         shutdowns.set(app, {
             completed: connection.closed.then(async () => {
                 closed = true;
-                await Promise.all(starting);
-                await Promise.all([...sessions.values()].map(runtime => runtime.dispose()));
+                // Stopping the sessions that exist cannot wait behind a creation that
+                // may never land; one that does land disposes itself.
+                const disposals = [...sessions.values()].map(runtime => runtime.dispose());
+                await Promise.all([...starting, ...disposals]);
                 sessions.clear();
             }),
             outstanding: () => {

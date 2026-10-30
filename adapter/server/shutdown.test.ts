@@ -133,6 +133,57 @@ describe("proposal.0001 shutdown", () => {
         await pending.catch(() => undefined);
     });
 
+    test("a session already running is stopped without waiting for one still starting", async () => {
+        const started = Promise.withResolvers<void>();
+        const creatingSecond = Promise.withResolvers<void>();
+        const heldCreation = Promise.withResolvers<void>();
+        const running = fakeSession(temporaryProject(), {
+            prompt: () => {
+                started.resolve();
+                return neverSettles<boolean>();
+            },
+            abort: () => Promise.resolve(),
+        });
+        const starting = fakeSession(temporaryProject());
+        let creations = 0;
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: async () => {
+                creations++;
+                if (creations === 1) return running.session;
+                creatingSecond.resolve();
+                await heldCreation.promise;
+                return starting.session;
+            },
+        });
+        await client.initialize();
+        const first = (await client.agent.request("session/new", {
+            cwd: running.session.cwd,
+            mcpServers: [],
+        })) as NewSessionResponse;
+        const turn = client.agent.request("session/prompt", {
+            sessionId: first.sessionId,
+            prompt: [{ type: "text", text: "hang" }],
+        });
+        await started.promise;
+        const second = client.agent.request("session/new", {
+            cwd: starting.session.cwd,
+            mcpServers: [],
+        });
+        await creatingSecond.promise;
+
+        await client.close();
+
+        // The held creation never finishes: the session already running must not wait
+        // behind it to have its turn stopped and its MCP servers disconnected.
+        expect(await waitUntil(() => running.calls.includes("dispose"), 5_000)).toBe(true);
+        expect(running.calls).toEqual(["prompt", "abort", "dispose"]);
+
+        heldCreation.resolve();
+        await second.catch(() => undefined);
+        await turn.catch(() => undefined);
+    }, 20_000);
+
     test("a running turn is stopped before its session's MCP servers are disconnected", async () => {
         const cwd = temporaryProject();
         const started = Promise.withResolvers<void>();

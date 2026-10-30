@@ -80,3 +80,17 @@ export default function () {
 `;
     fs.writeFileSync(path.join(extensionsDirectory, "counting.ts"), source);
 }
+
+/** Installs an extension whose factory throws, the way a broken extension fails to bind. */
+export function installThrowingFactoryExtension(
+    extensionsDirectory: string,
+    reason: string,
+): string {
+    fs.mkdirSync(extensionsDirectory, { recursive: true });
+    const extensionPath = path.join(extensionsDirectory, "broken-factory.ts");
+    fs.writeFileSync(
+        extensionPath,
+        `export default function () {\n    throw new Error(${JSON.stringify(reason)});\n}\n`,
+    );
+    return extensionPath;
+}

@@ -52,6 +52,8 @@ const REPORTED_ENV_PREFIX = "PICO_FAKE_";
 export interface LaunchReport {
     args: string[];
     env: Record<string, string>;
+    /** The working directory the server was spawned in. */
+    cwd: string;
 }
 
 function valuesOf(args: string[], flag: string): string[] {
@@ -77,7 +79,7 @@ function send(message: Record<string, unknown>): void {
 function callResult(args: string[], request: JsonRpcRequest): Record<string, unknown> {
     const name = request.params?.name;
     if (name === "launch_report") {
-        const report: LaunchReport = { args, env: reportedEnv() };
+        const report: LaunchReport = { args, env: reportedEnv(), cwd: process.cwd() };
         return { content: [{ type: "text", text: JSON.stringify(report) }] };
     }
     if (name === "echo") {

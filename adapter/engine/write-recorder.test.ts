@@ -26,19 +26,17 @@ async function hooksOf(recorder: WriteRecorder): Promise<Map<string, Hook>> {
 }
 
 /** The recorder reported that it could not read `file`, and said why. */
-function assertUnreadable(records: RecordedChange[], file: string): void {
+function assertNoDiff(records: RecordedChange[], file: string): void {
     assert.equal(records.length, 1);
     const [record] = records;
     assert.ok(
-        record && "unreadable" in record,
-        `expected an unreadable record, got ${JSON.stringify(records)}`,
+        record && "noDiff" in record,
+        `expected a no-diff record, got ${JSON.stringify(records)}`,
     );
     assert.equal(record.path, file);
-    assert.match(record.unreadable, /EACCES/);
-    assert.ok(
-        record.unreadable.includes(file),
-        `the cause does not name the file: ${record.unreadable}`,
-    );
+    assert.match(record.noDiff, /could not read it/);
+    assert.match(record.noDiff, /EACCES/);
+    assert.ok(record.noDiff.includes(file), `the cause does not name the file: ${record.noDiff}`);
 }
 
 describe("proposal.0001 recorded writes", () => {
@@ -98,7 +96,7 @@ describe("proposal.0001 recorded writes", () => {
         ]);
     });
 
-    test("a file that becomes unreadable after its snapshot is reported as unreadable", async t => {
+    test("a file that becomes unreadable after its snapshot is reported without a diff", async t => {
         const cwd = temporaryDirectory(t, "recorder");
         const file = path.join(cwd, "locked.txt");
         fs.writeFileSync(file, "before\n");
@@ -125,10 +123,10 @@ describe("proposal.0001 recorded writes", () => {
             content: [],
         });
 
-        assertUnreadable(recorder.take("write-1"), file);
+        assertNoDiff(recorder.take("write-1"), file);
     });
 
-    test("a file that was unreadable at its snapshot is reported as unreadable", async t => {
+    test("a file that was unreadable at its snapshot is reported without a diff", async t => {
         const cwd = temporaryDirectory(t, "recorder");
         const file = path.join(cwd, "opaque.txt");
         fs.writeFileSync(file, "before\n");
@@ -157,6 +155,37 @@ describe("proposal.0001 recorded writes", () => {
             content: [],
         });
 
-        assertUnreadable(recorder.take("write-1"), file);
+        assertNoDiff(recorder.take("write-1"), file);
+    });
+
+    test("a file larger than a mebibyte is reported without a diff", async t => {
+        const cwd = temporaryDirectory(t, "recorder");
+        const file = path.join(cwd, "huge.txt");
+        const recorder = new WriteRecorder(cwd);
+        const hooks = await hooksOf(recorder);
+        const toolCall = hooks.get("tool_call");
+        const toolResult = hooks.get("tool_result");
+        assert.ok(toolCall && toolResult, "the recorder registered no tool hooks");
+
+        await toolCall({
+            type: "tool_call",
+            toolName: "write",
+            toolCallId: "write-1",
+            input: { path: "huge.txt", content: "" },
+        });
+
+        fs.writeFileSync(file, "x".repeat(1024 * 1024 + 1));
+        await toolResult({
+            type: "tool_result",
+            toolName: "write",
+            toolCallId: "write-1",
+            isError: false,
+            input: {},
+            content: [],
+        });
+
+        assert.deepEqual(recorder.take("write-1"), [
+            { path: file, noDiff: "it is larger than 1 MiB" },
+        ]);
     });
 });

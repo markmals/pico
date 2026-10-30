@@ -268,6 +268,47 @@ describe("proposal.0001 config option updates", () => {
         expect(option(update.configOptions, "thinking").currentValue).toBe("low");
         expect(option(update.configOptions, "model").currentValue).toBe("pico-test/beta");
     });
+
+    test("a change the engine makes while a model choice is refused still reaches the client", async () => {
+        const session = await startModelSession();
+        await session.set("model", "pico-test/beta");
+        await session.set("thinking", "high");
+        const registry = session.session.engine.modelRegistry;
+        const checking = Promise.withResolvers<void>();
+        const refuse = Promise.withResolvers<void>();
+        registry.getApiKey = async () => {
+            checking.resolve();
+            await refuse.promise;
+            throw new Error("credential command failed");
+        };
+
+        const refused = requestError(session.set("model", "pico-test/alpha"));
+        await checking.promise;
+        session.session.engine.setThinkingLevel(parseConfiguredThinkingLevel("low"), false);
+        refuse.resolve();
+        await refused;
+        const update = await session.client.waitForUpdate(
+            session.sessionId,
+            candidate => candidate.sessionUpdate === "config_option_update",
+        );
+
+        if (update.sessionUpdate !== "config_option_update") throw new Error("unreachable");
+        expect(option(update.configOptions, "thinking").currentValue).toBe("low");
+        expect(option(update.configOptions, "model").currentValue).toBe("pico-test/beta");
+    });
+
+    test("a model choice refused for its credentials reports the cause and keeps the model", async () => {
+        const session = await startModelSession();
+        session.session.engine.modelRegistry.getApiKey = async () => {
+            throw new Error("credential command failed");
+        };
+
+        const error = await requestError(session.set("model", "pico-test/beta"));
+
+        expect(error.message).toContain("pico-test/beta");
+        expect(error.message).toContain("credential command failed");
+        expect(session.session.engine.model?.id).toBe("alpha");
+    });
 });
 
 describe("proposal.0001 rejected config changes", () => {
@@ -278,14 +319,17 @@ describe("proposal.0001 rejected config changes", () => {
         ["model", true, "model"],
     ] as const)("%s = %p is rejected with invalid params", async (configId, value, named) => {
         const session = await startModelSession();
+        const alphaCallsBefore = session.models.alpha.calls.length;
 
         const error = await requestError(session.set(configId, value));
+        await session.prompt("hello");
 
         expect(error.code).toBe(INVALID_PARAMS);
         expect(error.message).toContain(String(named));
-        expect(option(session.response.configOptions, "model").currentValue).toBe(
-            "pico-test/alpha",
-        );
+        expect(session.session.engine.model?.id).toBe("alpha");
+        expect(session.session.engine.configuredThinkingLevel()).toBeUndefined();
+        expect(session.models.alpha.calls.length).toBeGreaterThan(alphaCallsBefore);
+        expect(session.models.beta.calls).toEqual([]);
     });
 
     test("a change for an unknown session is rejected with invalid params", async () => {

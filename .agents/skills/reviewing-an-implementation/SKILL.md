@@ -1,11 +1,11 @@
 ---
 name: reviewing-an-implementation
-description: Use when an implemented proposal has fresh validation evidence and needs its Phase 3 comparison, independent refutational review, human-exercisable preview, and ready-for-review handoff.
+description: Use when an implemented proposal has fresh validation evidence and needs its self-check, independent refutational review, human-exercisable preview, and ready-for-review handoff.
 ---
 
 # Reviewing an Implementation
 
-**Phase 3 — Implementation.** Compare the independent representations before asking for review of the changed behavior. This procedure owns the confirmatory review, adversarial dispatch, preview, and readiness handoff. It does not by itself decide acceptance: acceptance is the human's, or the strategist's where a bounded build mandate delegates it ([`AGENTS.md`](../../../AGENTS.md#bounded-build-mandates)).
+**Phase 3 — Implementation.** Check the work against the proposal, have an agent without your context try to break it, then hand it over. This procedure does not by itself decide acceptance: acceptance is the human's.
 
 ## Inputs and order
 
@@ -18,71 +18,46 @@ Read these together before review. Add the current vision, policies, and decisio
 | Human-facing behavior | Affected guides  |
 | Concrete behavior     | Implementation   |
 
-Proceed in this order:
+Begin after applicable validation has fresh evidence under `.agents/rules/verification.md`. Proceed in this order:
 
-1. Cross-artifact review.
+1. Self-check.
 2. Dispatch `adversarial-review`; consume its report.
 3. Produce the preview.
 4. Post the readiness report and make the pull request ready together.
 
-Begin after applicable validation has fresh evidence under `.agents/rules/verification.md` and the strategist's excellence pass and ordered inline reviews have no open findings. A substantive fix re-enters those gates before cross-artifact review.
+## 1. Self-check
 
-## 1. Cross-artifact review
+Read the proposal, the changed tests, the affected guides, and the diff together. For each observable behavior in Detailed design — including boundary cases, errors, defaults, and side effects that could disagree — confirm that it is tested, described where a user would look when it is user-facing, and implemented. Then look the other way: anything implemented that the proposal and guides do not describe is scope creep or a gap in the proposal. Do not tick a behavior off because a source probably implies it.
 
-This is a comparison of representations, not a code-quality review. Build a behavior inventory before judging alignment.
+Then ask whether this is the implementation that should remain, with [`.agents/skills/simplifying-code/SKILL.md`](../simplifying-code/SKILL.md) as the lens. Does the structure fit the domain the proposal describes, or does it leak implementation conveniences into public behavior? Is there a simpler realization that expresses the proposal better, a false distinction the working system exposed, or complexity inherited from the baseline that no longer earns its place?
 
-### Build the behavior inventory
+Where the change asserts an invariant — a state that cannot be reached, a value that cannot be constructed invalid — route the claim to [`.agents/skills/verifying-invariants/SKILL.md`](../verifying-invariants/SKILL.md) for evidence instead of leaving it asserted.
 
-Use one row per observable behavior. The four evidence columns are proposal, tests, guides, and code. Tick a source only when it explicitly covers the behavior. Investigate every row that is not fully ticked.
-
-| Behavior                 | Proposal | Tests | Guides | Code |
-| ------------------------ | -------- | ----- | ------ | ---- |
-| Reject malformed records | ✓        | ✓     | ✓      | ✓    |
-| Preserve input order     | ✓        | ✓     | —      | ✓    |
-
-Keep boundary cases, errors, defaults, and observable side effects as separate rows when they can disagree. Do not tick a source because it probably implies the behavior.
-
-### Make all six checks
-
-For every inventory row, establish all of these:
-
-1. Tests cover what the proposal promises.
-2. Guides describe what the tests exercise.
-3. Code implements what the proposal and guides describe.
-4. No documented behavior is missing from the implementation.
-5. No implemented behavior is absent from the proposal and guides — this catches scope creep.
-6. Implementation details have not silently changed scope or intent.
-
-### Resolve every gap
-
-Each non-full row resolves in exactly one way.
+One pass, not a sequence of separate reviews. Resolve each disagreement in exactly one way, then rerun the affected gates:
 
 | Resolution | Use when | Action |
 | --- | --- | --- |
-| Fix the wrong artifact | Intent has not changed | Correct the tests, guides, or code, then recheck the row. |
-| Revise the proposal | Intent or scope changed | Discuss with the human first, unless a mandate delegates that decision and the revision stays inside its boundaries; record it either way. Then derive affected tests, guides, and code again. |
+| Fix the wrong artifact | Intent has not changed | Correct the tests, guides, or code, and rerun the affected gates. |
+| Revise the proposal | Intent or scope changed | Discuss it with the human first, and record it. Then derive affected tests, guides, and code again. |
 | Record the divergence | It remains deliberate for human review | Name the behavior, affected sources, impact, and reason in the readiness report. |
 
-You MAY edit tests, guides, and code to remove a disagreement. You MUST NOT revise a proposal without the human unless a mandate delegates that design decision and the revision stays inside its boundaries; that is a design change either way, so record the authority with it.
+You MAY edit tests, guides, and code to remove a disagreement. You MUST NOT revise a proposal without the human; that is a design change.
 
-Record the inventory, each gap, and its resolution. `ALIGNED` requires a fully ticked inventory. A record with deliberate gaps is `DIVERGENCES RECORDED`; a human design decision is `REVISION REQUIRED`.
+## 2. Dispatch and consume one adversarial review
 
-## 2. Dispatch and consume adversarial review
+Dispatch one subagent with fresh context for `adversarial-review`. Use the strongest available portability rung: different model family, then different model, then a fresh-context run. Give it the current proposal, the commit range, the affected tests and guides, and the commands that verify the work. Tell it to try to show the work is not done — behavior missing or wrong relative to the proposal, edge cases the tests miss, tests that would still pass with a broken implementation, security or data-loss risks — to confirm findings by running code, to ignore style, naming, and formatting, and to report without editing.
 
-Dispatch a separate subagent with fresh context for `adversarial-review`. Use the strongest available portability rung: different model family, then different model, then a fresh-context run. Supply the current proposal, tests, guides, and implementation. The adversary reports only; it never edits the artifacts.
-
-Do not replace this dispatch with your own review. The adversary attacks un-enumerated edges, test quality, interpretation, security surface, and proposal gaps from a refute-by-default stance.
-
-Consume its report before continuing:
+Do not replace this dispatch with your own review. Consume its report:
 
 | Report item | Response |
 | --- | --- |
-| Confirmed defect | Fix it, refresh affected evidence, and repeat the required review stages. |
+| Confirmed defect inside the proposal's scope | Fix it and refresh the affected evidence. Run the review once more only when the fix was substantial. |
 | Suspicion | Verify it or drop it; never fix it blind. |
-| Proposal gap | Surface it to the human, or settle it yourself only where a mandate delegates the decision, and record it. Never silently choose an interpretation. |
+| Proposal gap | Surface it to the human and record it. Never silently choose an interpretation. |
+| Finding outside the proposal's scope | Never widen the change to fix it. Decline it with reasoning, or file it through `tracking-work`. |
 | Declined finding | Preserve it with reasoning for the readiness report. |
 
-Repeat the adversarial stage after a defect fix. Continue until its verdict is `CONVERGED`. A disputed finding does not disappear because you decline it.
+There is no convergence loop: one review, one round of confirmed fixes, and a rerun only when a fix was substantial. A disputed finding does not disappear because you decline it.
 
 ## 3. Produce the preview
 
@@ -113,11 +88,11 @@ A site deployed to a subpath needs its base path set to that subpath at build ti
 
 Build from the pull-request revision. Give repository-accessible humans a stable link or installation location; they must not build the artifact themselves. The readiness report links it and states required setup, what to try, and the expected result. A bare URL is insufficient. Keep the preview's lifetime tied to the pull request.
 
-Previews are private by default. Do not publish one publicly unless the project deliberately opts in. A prerelease package published to a public registry is public forever; use a prerelease tag and state that public status in the readiness report. A mandate that delegates merging delegates nothing about publication: making a preview public needs the human's explicit authority for that act. Teardown belongs to Phase 5 cleanup through `completing-a-feature`.
+Previews are private by default. Do not publish one publicly unless the project deliberately opts in. A prerelease package published to a public registry is public forever; use a prerelease tag and state that public status in the readiness report. Making a preview public needs the human's explicit authority for that act. Teardown belongs to Phase 5 cleanup through `completing-a-feature`.
 
 ## 4. Report readiness and mark ready
 
-Compose the pull-request comment from `.agents/templates/READINESS_REPORT.md`. Fill every template section and add the cross-artifact inventory verdict, divergences, and resolutions.
+Compose the pull-request comment from `.agents/templates/READINESS_REPORT.md`. Fill every template section and add the self-check's recorded divergences and their resolutions.
 
 | Report section | Required content |
 | --- | --- |
@@ -152,25 +127,26 @@ At the end of Phase 3, these three actions form one transition and MUST NOT be s
 2. Post the readiness report.
 3. Flip the pull request from draft to ready with `gh pr ready <pr-number>`.
 
-Do not leave the proposal, report, and pull-request state disagreeing. Ready means the work is reviewable, not correct or accepted. `active-review` remains the readiness transition; under delegated acceptance it does not have to wait for the human to read it.
+Do not leave the proposal, report, and pull-request state disagreeing. Ready means the work is reviewable, not correct or accepted.
 
-Acceptance in Phase 4 is the human's. Where a mandate delegates it, the strategist — never an implementer accepting its own claim — may set `accepted` once the independent reviews of the latest relevant revision are clean, fresh checks and smoke of the integration candidate pass, and no real defect, unmet mandated outcome, or disputed material finding remains open. Record the authority relied on and the evidence. Phase 4 then starts Phase 5 completion.
+Acceptance in Phase 4 is the human's — never an agent accepting its own completion claim. Phase 4 then starts Phase 5 completion.
 
 ### Recover an already accepted draft pull request
 
-The coupled `active-review` transition above is the normal end of Phase 3, not a status to replay after the approval owner has accepted the work. If an accepted PR remains draft, preserve its `accepted` or `implemented` proposal status. In Phase 5, confirm the readiness report, preview, acceptance evidence, and latest integration checks; repair missing or stale review evidence before continuing. Set `implemented` in the original feature PR if not yet recorded, push it, and confirm the PR revision contains it before marking the PR ready. Do not roll the proposal back to `active-review` or treat readiness recovery as merge authority. If the record cannot be reconciled, ask the approval owner rather than merging.
+The coupled `active-review` transition above is the normal end of Phase 3, not a status to replay after the human has accepted the work. If an accepted PR remains draft, preserve its `accepted` or `implemented` proposal status. In Phase 5, confirm the readiness report, preview, acceptance evidence, and latest integration checks; repair missing or stale review evidence before continuing. Set `implemented` in the original feature PR if not yet recorded, push it, and confirm the PR revision contains it before marking the PR ready. Do not roll the proposal back to `active-review` or treat readiness recovery as merge authority. If the record cannot be reconciled, ask the human rather than merging.
 
 ## Red flags
 
-- You reviewed code quality instead of comparing representations.
-- A behavior-inventory row is not fully ticked and has no recorded resolution.
-- You changed proposal intent without the human and without delegated authority that covers it.
-- You skipped independent adversarial review or dropped a declined finding.
+- Your self-check reviewed style instead of comparing the proposal, tests, guides, and code.
+- A disagreement between them has no recorded resolution.
+- You widened the change to fix a finding outside the proposal.
+- You changed proposal intent without the human.
+- You skipped the independent adversarial review or dropped a declined finding.
 - The preview is fabricated, public by accident, detached from the pull request, or a bare URL.
 - The report claims a validation gate was not run.
 - You marked the pull request ready without the proposal status and report.
-- You set `accepted` on your own implementation claim, on stale or failing evidence, or with a disputed finding unresolved.
+- You set `accepted` on your own completion claim, on stale or failing evidence, or with a disputed finding unresolved.
 - You read a merge grant as permission to publish a preview, package, or release.
-- You stretched a mandate's boundaries instead of stopping the slice, recording the question, and waiting for the human.
+- You proceeded on an uncertain authority instead of stopping, recording the question, and waiting for the human.
 
 Correct the record before handoff.

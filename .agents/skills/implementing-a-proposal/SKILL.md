@@ -11,63 +11,19 @@ Phase 3 preserves proposal intent in independent tests, guides, and code.
 
 ## Preconditions
 
-- The proposal has `status: awaiting-implementation`, or the approval owner returned it for implementation with `status: returned-for-revisions`; neither has an unresolved clarification marker.
+- The proposal has `status: awaiting-implementation`, or the human returned it for implementation with `status: returned-for-revisions`; neither has an unresolved clarification marker.
 - Phase 1 — preparation — created the branch, pushed it to `origin`, and opened a draft pull request.
 - Read the proposal's **Detailed design**, relevant vision, policies, decisions, affected tests, guides, and project conventions.
 - Tests derive from **Detailed design**. Acceptance criteria are an occasional supplement, never the primary source.
-- Raise a conflict or ambiguity. Do not silently choose behavior or expand scope. Under a bounded build mandate ([`AGENTS.md`](../../../AGENTS.md#bounded-build-mandates)) the strategist settles conflicts that stay inside the mandate's boundaries and records them in the proposal; anything past those boundaries, or any doubt about which authority applies, stops the affected slice and goes to the human.
+- Raise a conflict or ambiguity. Do not silently choose behavior or expand scope; take it to the human.
 
-## Slice and dispatch
+## Who does the work
 
-Slice by atomic observable behavior. Keep shared state, an interface contract, or coupled behavior with one owner.
+Implement the proposal yourself by default. One agent holding the whole change makes fewer handoff errors than a controller briefing subagents, and delegation does not make the work smarter.
 
-| Slice shape | Dispatch boundary |
-| --- | --- |
-| Independent behavior | One implementer and a complete tests → guides → code cycle |
-| Shared interface or state | One implementer for the combined behavior |
-| Cross-cutting change | One owner for the shared boundary; split callers only after its contract is stable |
+Split the work only into slices that are independent, touch separate files, and save real time by running in parallel. Each brief carries the bounded behavior, the applicable Detailed design, the domain concepts, constraints, and quality bar needed to understand it, the relevant baseline, governing policies and decisions, explicit scope and non-goals, and the verification commands; [`.agents/skills/compiling-agent-goals/SKILL.md`](../compiling-agent-goals/SKILL.md) writes it when it is large or will be reused. Never dispatch two subagents onto the same files, and never split a coherent small change to manufacture concurrency. You integrate and commit the work; a subagent does not commit.
 
-Never parallel-dispatch implementers onto the same files. Do not split a coherent small change merely to create concurrency.
-
-For each slice, in the order that protects shared boundaries:
-
-1. Curate a brief with the applicable Detailed design, governing records, affected artifacts, nearby conventions, and the commands listed by `mise tasks`. Use [`.agents/skills/compiling-agent-goals/SKILL.md`](../compiling-agent-goals/SKILL.md) when the brief is large or will be reused.
-2. Make external behavior and scope explicit. Do not make the implementer infer omitted intent.
-3. Dispatch one implementer and instruct it not to commit.
-4. Require the ordered cycle below and clean quality gates before the next review gate.
-5. Resolve its reported status. Never silently retry an identical dispatch.
-6. After every slice is integrated and clean, the strategist runs the simplification and hardening passes below, then the proposal-wide inline reviews.
-
-Each implementation handoff contains:
-
-- the bounded behavior being implemented;
-- the applicable Detailed design;
-- the domain concepts necessary to understand that behavior;
-- relevant domain constraints and invariants;
-- the quality bar established during grounding;
-- the existing baseline when relevant;
-- applicable policies and decisions;
-- scope and non-goals;
-- verification commands.
-
-| Implementer status | Controller action |
-| --- | --- |
-| `DONE` | Continue only after the reported gates are clean. |
-| `DONE_WITH_CONCERNS` | Resolve correctness or scope concerns before review; retain observations for reviewers. |
-| `NEEDS_CONTEXT` | Supply the missing material and re-dispatch. Never ask it to guess intent. |
-| `NEEDS_STRATEGY` | Stop the affected slice. Verify the conflict with domain evidence; the strategist decides whether to revisit grounding, ontology, or the proposal, with the human unless a mandate delegates that decision and the resolution stays inside its boundaries. Use `reframing-a-problem` when repeated fixes stop explaining the evidence. Resume only after intent is settled and recorded. |
-| `BLOCKED` | Classify missing context, reasoning shortfall, oversized slice, or proposal conflict; supply context, escalate the model, re-slice, or stop and raise the conflict. |
-
-## Do inline only when trivial
-
-Skip dispatch only when the coordination cost exceeds the work:
-
-- Renaming a constant
-- Fixing a one-line typo
-- Adding one missing case to an existing test file
-- Updating a comment
-
-Do it inline. The required order still applies whenever production behavior changes.
+When a slice reports that the evidence contradicts the proposal's model, stop it and verify the conflict against domain evidence. Decide with the human whether to revisit grounding, ontology, or the proposal. Use [`.agents/skills/reframing-a-problem/SKILL.md`](../reframing-a-problem/SKILL.md) when repeated fixes stop explaining the evidence, and resume only after intent is settled and recorded.
 
 ## 1. Failing tests
 
@@ -145,8 +101,8 @@ Before any production code:
 1. Read the proposal-derived guide and failing tests side by side when both exist.
 2. List every behavior each artifact mentions.
 3. Treat anything in one list and not the other as a defect in one of them.
-4. Resolve every difference by correcting the guide, correcting the test, or revising the proposal — with the human, or under a mandate that delegates the revision inside its boundaries.
-5. Only then give the agreement to the implementer as the code contract. When one artifact is inapplicable, compare the remaining one directly with Detailed design.
+4. Resolve every difference by correcting the guide, correcting the test, or revising the proposal with the human.
+5. Only then treat the agreement as the contract the code must satisfy. When one artifact is inapplicable, compare the remaining one directly with Detailed design.
 
 This comparison is load-bearing. Without it, the guide is decorative and the tests are an unreviewed interpretation. If a guide was written or rewritten from implementation, discard the code-shaped prose, derive it again from the proposal, and repeat the comparison.
 
@@ -158,44 +114,12 @@ When a test is difficult to write, simplify the interface rather than compensate
 
 If an unknown failure appears, stop implementation and use [`.agents/skills/systematic-debugging/SKILL.md`](../systematic-debugging/SKILL.md) to establish root cause before changing code.
 
-## 4. Quality gates, simplification, hardening, and inline reviews
+## 4. Quality gates and commits
 
-Run `mise run check`, then any project-specific gates `mise tasks` lists that it does not already cover. Follow [`.agents/rules/verification.md`](../../rules/verification.md) for completion evidence.
+Run `mise run check`, then any project-specific gate `mise tasks` lists that it does not already cover, and read the output. Follow [`.agents/rules/verification.md`](../../rules/verification.md) for what counts as completion evidence. Never commit while red; commit at green boundaries and push.
 
-On the working implementation, before inline reviews:
+Passing the gates is necessary, never sufficient. Red gates stop the work: never skip a gate, a review, or honest failing evidence, and never widen the proposal's scope from inside implementation.
 
-1. [`.agents/skills/simplifying-code/SKILL.md`](../simplifying-code/SKILL.md) — ask whether this is the implementation that should remain: structure that fights the domain model, implementation conveniences leaking into public behavior, false distinctions the working system exposed, complexity inherited from the baseline.
-2. [`.agents/skills/hardening-changes/SKILL.md`](../hardening-changes/SKILL.md) — scoped independent review over the owned change, and the fixes it produces.
+## Then
 
-Where the change asserts an invariant — a state that cannot be reached, a value that cannot be constructed invalid — route the claim to [`.agents/skills/verifying-invariants/SKILL.md`](../verifying-invariants/SKILL.md) for evidence instead of leaving it asserted.
-
-Substantive implementation improvements return to the implementer; rerun validation and both passes. A finding that changes product intent goes back to the proposal before code changes — to the human, or to the strategist where a mandate delegates that decision and the revision stays inside its boundaries.
-
-Perform the inline reviews sequentially. A finding returns the affected behavior to tests, guides, or code; rerun its gates and repeat the review that found it. Self-review can catch clear mistakes but never substitutes for either review.
-
-| Gate | Reviewer examines | May start when |
-| --- | --- | --- |
-| Proposal compliance | Detailed design, tests, guides, code, scope, and every required behavior | All implementation slices, quality gates, simplification, and hardening are clean |
-| Code quality | Project conventions, names, duplication, boundaries, errors, complexity, and tests that assert observable behavior | Proposal-compliance is clean |
-
-The proposal-compliance reviewer returns approval or concrete gaps. The code-quality reviewer reports only concrete, important issues. Do not start code-quality review while proposal-compliance has open findings.
-
-## Handoff to review
-
-After both inline reviews are clean, set no proposal status.
-
-1. Hand off to [`.agents/skills/reviewing-an-implementation/SKILL.md`](../reviewing-an-implementation/SKILL.md). It owns every remaining Phase 3 review stage, dispatches `adversarial-review`, produces the preview, and performs the final coupled transition.
-
-The adversarial reviewer is fresh-context, report-only, and uses a model distinct from the implementer where possible. It never edits implementation. Declined findings remain visible for human review.
-
-## Dispatch constraints and model selection
-
-- Never let an implementer commit.
-- Never let self-review substitute for proposal-compliance, code-quality, cross-artifact, or adversarial review.
-- Never begin the Phase 3 cross-artifact review before both inline gates are clean.
-- Use the harness’s standard capable model for implementation and inline reviews.
-- Use the strongest available model distinct from the implementer for adversarial review; cognitive diversity is the point.
-- Escalate an implementer only for a reasoning shortfall, never for missing context.
-- Do not use a low-reasoning model with untrusted recovery behavior for implementation or review.
-- Never treat a mandate as permission to skip a gate, a review, or honest failing evidence; red gates stop the slice whatever the authority.
-- Never widen a mandate's outcome, scope, constraints, or grants from inside implementation. Only the human changes them.
+Continue with [`.agents/skills/reviewing-an-implementation/SKILL.md`](../reviewing-an-implementation/SKILL.md). It owns the self-check, the one independent review, the preview, and the handoff to the human. Set no proposal status before then.

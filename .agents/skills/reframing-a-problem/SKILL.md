@@ -1,6 +1,6 @@
 ---
 name: reframing-a-problem
-description: Use when repeated fixes produce contradictions, an implementation cannot satisfy grounded domain constraints, or an implementer returns NEEDS_STRATEGY because the problem formulation may be wrong.
+description: Use when repeated fixes produce contradictions, an implementation cannot satisfy grounded domain constraints, or a delegated slice reports that the evidence contradicts the proposal's model, because the problem formulation may be wrong.
 ---
 
 # Reframing a Problem
@@ -13,8 +13,8 @@ Typical signals:
 - the implementation seems to require violating grounded domain constraints;
 - several locally reasonable approaches fail for apparently unrelated reasons;
 - the current abstraction makes a simple domain concept unusually difficult;
-- the strategist or implementer can describe symptoms but no coherent causal model;
-- a `NEEDS_STRATEGY` result indicates the proposal's conceptual model may be wrong.
+- the agent can describe symptoms but no coherent causal model;
+- a delegated slice reports that the evidence contradicts the proposal's model.
 
 Approach the problem independently.
 
@@ -45,8 +45,8 @@ Return:
 
 Do not silently modify product intent. Do not default to writing code.
 
-The strategist checks the diagnosis against its evidence and determines whether to revisit grounding, ontology, architecture, or the proposal. A change to product intent requires human review of the revised proposal before implementation resumes, unless a bounded build mandate delegates that decision and the revision stays inside its outcome, scope, and constraints ([`AGENTS.md`](../../../AGENTS.md#bounded-build-mandates)); record the decision and its evidence in the proposal. A reframe that would widen the mandate is the human's to approve.
+The primary agent checks the diagnosis against its evidence and determines whether to revisit grounding, ontology, architecture, or the proposal. A change to product intent requires human review of the revised proposal before implementation resumes; record the decision and its evidence in the proposal.
 
 ## When the reframe does not land
 
-A reframe that produces no better formulation, or one whose better formulation is outside the authority available, is not a reason for another attempt. Write the decision up with [`.agents/skills/writing-escalation-briefs/`](../writing-escalation-briefs/) and give the human the choice: the diagnosis, the premises in question, the options with their costs, and what you recommend. Escalating early with evidence beats a third pass that adds activity and no understanding.
+A reframe that produces no better formulation, or one whose better formulation is the human's to choose, is not a reason for another attempt. Write the decision up with [`.agents/skills/writing-escalation-briefs/`](../writing-escalation-briefs/) and give the human the choice: the diagnosis, the premises in question, the options with their costs, and what you recommend. Escalating early with evidence beats a third pass that adds activity and no understanding.

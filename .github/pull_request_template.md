@@ -25,8 +25,7 @@
 - [ ] Tests written first
 - [ ] Guides written from the proposal
 - [ ] `mise run check` passes
-- [ ] Simplification and hardening passes complete
-- [ ] Cross-artifact review complete
+- [ ] Self-check against the proposal complete
 - [ ] Adversarial review complete
 - [ ] Readiness report posted
 - [ ] Changeset added (`mise run changeset`, `--empty` when there is no user-visible effect)

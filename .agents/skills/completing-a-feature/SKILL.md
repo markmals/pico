@@ -1,6 +1,6 @@
 ---
 name: completing-a-feature
-description: Use after a pull request has been reviewed and the change is accepted — by the human, or by the strategist under a bounded build mandate — and needs integration, release, and cleanup. Do not use before acceptance.
+description: Use after a pull request has been reviewed and the human has accepted the change, and it needs integration, release, and cleanup. Do not use before acceptance.
 ---
 
 # Completing a Feature
@@ -14,11 +14,11 @@ Read the human's PR comments and direct commits before acting. Classify each ite
 | Feedback changes | Action |
 | --- | --- |
 | The implementation | Fix it, then rerun the affected implementation loop and review evidence. |
-| Intended design | Update the proposal first — with the human, or under a mandate that delegates the revision inside its boundaries — then rerun tests → guides → code → quality gates → review against the revision. |
+| Intended design | Update the proposal first with the human, then rerun tests → guides → code → quality gates → review against the revision. |
 
 Never encode a design change in code, tests, or guides while leaving the proposal stale.
 
-While revisions are outstanding, the proposal is `returned-for-revisions`, set by the approval owner. Return to Phase 2 for a design revision or Phase 3 for implementation. If reworking the design reopens a question, record a clarification marker; `returned-for-revisions` permits markers so honest rework remains possible. At the end of Phase 3, hand off to `reviewing-an-implementation`, which owns the coupled status, readiness-report, and pull-request transition. Do not set proposal status merely when reposting.
+While revisions are outstanding, the proposal is `returned-for-revisions`, set by the human. Return to Phase 2 for a design revision or Phase 3 for implementation. If reworking the design reopens a question, record a clarification marker; `returned-for-revisions` permits markers so honest rework remains possible. At the end of Phase 3, hand off to `reviewing-an-implementation`, which owns the coupled status, readiness-report, and pull-request transition. Do not set proposal status merely when reposting.
 
 ## 2. Record policies and decisions
 
@@ -35,7 +35,7 @@ If it does not outlive this proposal, it belongs in the proposal and nowhere els
 
 Before recording either:
 
-1. Discuss it with the human. Neither is an agent-only conclusion, unless a mandate delegates in-scope records; even then it cannot change the mandate's own constraints or supersede a governing record outside the delegated authority.
+1. Discuss it with the human. Neither is an agent-only conclusion.
 2. Confirm the originating proposal id.
 3. Use the canonical template. Both records carry `established-by: proposal.<NNNN>`.
 
@@ -67,11 +67,11 @@ Add the changeset if the work does not already carry one: `mise run changeset`, 
 
 After acceptance is recorded and the vision update is complete, set the proposal to `implemented` in the original feature pull request. This status records accepted implementation, not a merged pull request or completed release. Record acceptance and any outstanding required delivery in the proposal or PR; commit and push the record, then obtain fresh checks on that integration candidate. Never open a follow-up PR solely to move this status.
 
-Confirm the status record is in the pull request revision before marking a draft PR ready or merging. A local file or unpushed commit is not proof. For an already merged pull request, inspect its merged revision whether the local proposal reads `accepted` or `implemented`; neither local status proves what merged. If the record is absent, ask the approval owner how to reconcile it while keeping required delivery visible; do not amend a merged PR or open a status-only PR.
+Confirm the status record is in the pull request revision before marking a draft PR ready or merging. A local file or unpushed commit is not proof. For an already merged pull request, inspect its merged revision whether the local proposal reads `accepted` or `implemented`; neither local status proves what merged. If the record is absent, ask the human how to reconcile it while keeping required delivery visible; do not amend a merged PR or open a status-only PR.
 
 ## 5. Merge
 
-Merge only after acceptance is recorded, and only into the stated merge target through the pull request. Never push directly to the default branch. The human accepts the work; where a bounded build mandate explicitly delegates acceptance and merge ([`AGENTS.md`](../../../AGENTS.md#bounded-build-mandates)), the strategist may accept and merge after clean independent reviews of the latest relevant revision and fresh passing checks and smoke of the integration candidate. Fix unresolved defects and unmet outcomes within scope, then repeat verification and review. Disputed material findings and changes beyond the mandate require the human; all of these block autonomous merge while unresolved.
+Merge only after the human's acceptance is recorded, and only into the stated merge target through the pull request. Never push directly to the default branch. Fix unresolved defects and unmet outcomes within scope, then repeat verification and review. Unresolved defects, stale checks, and disputed material findings block the merge.
 
 If the accepted PR remains draft, follow the Phase 5 recovery in `reviewing-an-implementation`: verify and repair its readiness report and review evidence without rolling `accepted` or `implemented` back to `active-review`. Confirm the implementation record in the PR, then mark it ready and verify the latest revision before merging. A draft PR is not permission to skip readiness or review.
 
@@ -79,9 +79,9 @@ Preserve the record of what was proposed, what was implemented, why decisions we
 
 ## 6. Release
 
-Merging accumulates changesets on the default branch. `mise run version` applies the pending changesets: `changeset version` bumps the version in the root `package.json` and writes `CHANGELOG.md`. This project has no publish target, no release workflow, and no deploy step, so merge-only delivery is the normal case and there is nothing further to skip. A project that acquires a published artifact adds its release path through a proposal; read `mise tasks` rather than assuming one exists.
+Merging accumulates changesets on the default branch. `mise run version` applies the pending changesets: `changeset version` bumps the version in the root `package.json` and writes `CHANGELOG.md`, and `mise run version:sync` carries it into `Config/Version.xcconfig`. This project has no publish target, no release workflow, and no deploy step, so merge-only delivery is the normal case and there is nothing further to skip. A project that acquires a published artifact adds its release path through a proposal; read `mise tasks` rather than assuming one exists.
 
-**Never publish without explicit human confirmation.** Approval to merge is not approval to release. A mandate that delegates merging delegates nothing about publication, deployment, credentials, access, or any other destructive or outward-facing act; each of those needs the human's explicit authority for that act.
+**Never publish without explicit human confirmation.** Approval to merge is not approval to release, and it says nothing about deployment, credentials, access, or any other destructive or outward-facing act; each of those needs the human's explicit authority for that act.
 
 `implemented` does not complete a required release. Keep that obligation visible in the proposal or PR until the authorized release actually happens; do not call the feature delivered before then.
 
@@ -101,7 +101,7 @@ Cleanup runs when confidence is highest. Treat it as a separate destructive oper
 
 - You fixed a design-change comment without revising the proposal.
 - You ignored a direct human commit.
-- You recorded a policy or decision without the human and without a mandate that delegates in-scope records.
+- You recorded a policy or decision without the human.
 - You wrote a prose policy before checking whether automation can enforce it.
 - You changed an old policy or decision's meaning in place.
 - You merged without preserving why the final state differs.
@@ -111,7 +111,7 @@ Cleanup runs when confidence is highest. Treat it as a separate destructive oper
 - A preview or prerelease artifact outlives its PR without a tracked, authorized teardown plan.
 - You deleted a branch, force-pushed, or tore down a published prerelease artifact without explicit human confirmation.
 - You merged with stale or failing checks, an unresolved defect, or a disputed review finding still open.
-- You acted past a mandate's boundaries, or widened or renewed one yourself, instead of stopping and asking.
+- You acted without the authority for a destructive or outward-facing action instead of stopping and asking.
 - You waited until after merge to set `implemented` and opened a bookkeeping-only PR.
 - You treated `implemented` as proof that a required release happened.
 

@@ -12,6 +12,7 @@ import {
     collectWrites,
     createMockModel,
     editAfterRead,
+    hashlineTag,
     mockAuthStorage,
     picoWorkspace,
     recordToolExecutions,
@@ -363,6 +364,64 @@ describe("proposal.0001 change attribution", () => {
         ]);
     });
 
+    test("a partly failed edit keeps the record of the file it did write", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const edited = path.join(cwd, "src", "a.txt");
+        const locked = path.join(cwd, "b.txt");
+        fs.mkdirSync(path.join(cwd, "src"));
+        fs.writeFileSync(edited, "before\n");
+        fs.writeFileSync(locked, "locked\n");
+        fs.chmodSync(locked, 0o400);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall("read", { path: "src/a.txt" }),
+                            toolCall("read", { path: "b.txt" }),
+                        ],
+                    },
+                    context => ({
+                        content: [
+                            toolCall(
+                                "edit",
+                                {
+                                    input:
+                                        `[a.txt#${hashlineTag(context, "src/a.txt")}]\nPUT 1.=1:\n+edited\n` +
+                                        `[b.txt#${hashlineTag(context, "b.txt")}]\nPUT 1.=1:\n+changed`,
+                                },
+                                "edit-1",
+                            ),
+                            toolCall("write", { path: "src/a.txt", content: "final\n" }, "write-1"),
+                        ],
+                    }),
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+        const byCall = new Map<string, RecordedChange[]>();
+        session.engine.subscribe(event => {
+            if (event.type !== "tool_execution_end") return;
+            byCall.set(event.toolCallId, session.takeChanges(event.toolCallId));
+        });
+
+        await session.engine.prompt("edit two files, then overwrite the first");
+
+        assert.equal(fs.readFileSync(edited, "utf8"), "final\n");
+        assert.equal(fs.readFileSync(locked, "utf8"), "locked\n");
+        assert.deepEqual(byCall.get("edit-1"), [
+            { path: edited, oldText: "before\n", newText: "edited\n" },
+        ]);
+        assert.deepEqual(byCall.get("write-1"), [
+            { path: edited, oldText: "edited\n", newText: "final\n" },
+        ]);
+    });
+
     test("an extension that rewrites a write's details does not strand its record", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "detailed.txt");
@@ -407,5 +466,28 @@ describe("proposal.0001 change attribution", () => {
         assert.deepEqual(byCall.get("write-2"), [
             { path: absolute, oldText: "one\n", newText: "two\n" },
         ]);
+    });
+});
+
+describe("proposal.0001 engine assumptions", () => {
+    test("Oh My Pi runs write and edit exclusively, which is what makes attribution by order sound", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        for (const name of ["write", "edit"]) {
+            const tool = session.engine.agent.state.tools.find(
+                candidate => candidate.name === name,
+            );
+            assert.ok(tool, `the session has no ${name} tool`);
+            assert.ok("concurrency" in tool, `${name} declares no concurrency`);
+            assert.equal(tool.concurrency, "exclusive", `${name} is no longer exclusive`);
+        }
     });
 });

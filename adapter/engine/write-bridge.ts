@@ -5,9 +5,6 @@ import type {
 } from "@oh-my-pi/pi-coding-agent/extensibility/extensions";
 import type { ClientBridge } from "@oh-my-pi/pi-coding-agent/session/client-bridge";
 
-import { resolvePath } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
-import { unwrapHashlineHeaderPath } from "@oh-my-pi/pi-coding-agent/tools/plan-mode-guard";
-import { getEditInputPaths } from "@oh-my-pi/pi-tui/tools/edit";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -110,62 +107,6 @@ function undiffableText(text: string): string | undefined {
     return undefined;
 }
 
-/** A string property of `value`, when it has one. */
-function stringField(value: unknown, field: string): string | undefined {
-    if (typeof value !== "object" || value === null || !(field in value)) return undefined;
-    const held: unknown = (value as Record<string, unknown>)[field];
-    return typeof held === "string" ? held : undefined;
-}
-
-/** Every path field `value` carries, appended to `into`. */
-function collectPaths(value: unknown, into: string[]): void {
-    for (const field of ["resolvedPath", "path", "sourcePath", "move"]) {
-        const held = stringField(value, field);
-        if (held !== undefined) into.push(held);
-    }
-}
-
-/** The paths OMP's own result names, which is where its path recovery shows up. */
-function resultPaths(event: ToolResultEvent): string[] {
-    const details: unknown = "details" in event ? event.details : undefined;
-    const named: string[] = [];
-    collectPaths(details, named);
-    if (typeof details === "object" && details !== null && "perFileResults" in details) {
-        const entries: unknown = details.perFileResults;
-        if (Array.isArray(entries)) for (const entry of entries) collectPaths(entry, named);
-    }
-    return named;
-}
-
-/** The paths the call's own effective input names. */
-function inputPaths(event: ToolResultEvent): string[] {
-    if (event.toolName === "write") {
-        const target = "path" in event.input ? event.input.path : undefined;
-        return typeof target === "string" ? [unwrapHashlineHeaderPath(target)] : [];
-    }
-    if (event.toolName !== "edit") return [];
-    const input = "input" in event.input ? event.input.input : undefined;
-    return typeof input === "string" ? [...getEditInputPaths(input)] : [];
-}
-
-/**
- * The files a finished `write` or `edit` really touched. OMP recovers a target
- * the input only half names — a hashline header carrying a bare basename — so
- * the paths its own result reports count as much as the ones the input names.
- */
-function targets(event: ToolResultEvent, cwd: string): string[] {
-    const resolved: string[] = [];
-    for (const target of [...resultPaths(event), ...inputPaths(event)]) {
-        try {
-            const file = resolvePath(target, cwd);
-            if (!resolved.includes(file)) resolved.push(file);
-        } catch {
-            // An internal URL is not a project file; OMP writes it itself.
-        }
-    }
-    return resolved;
-}
-
 /**
  * Captures what every `write` and `edit` replaced by performing the write itself.
  *
@@ -178,13 +119,8 @@ function targets(event: ToolResultEvent, cwd: string): string[] {
  * from result details a user extension is free to replace.
  */
 export class WriteBridge {
-    readonly #cwd: string;
-    readonly #writes = new Map<string, RecordedChange[]>();
+    readonly #pending: RecordedChange[] = [];
     readonly #byCall = new Map<string, RecordedChange[]>();
-
-    constructor(cwd: string) {
-        this.#cwd = cwd;
-    }
 
     readonly bridge: ClientBridge = {
         capabilities: { writeTextFile: true },
@@ -216,18 +152,23 @@ export class WriteBridge {
 
     /** Drops records nothing took, so a write cannot be reported against a later turn. */
     clear(): void {
-        this.#writes.clear();
+        this.#pending.length = 0;
         this.#byCall.clear();
     }
 
-    /** A hook may never throw: a failure here would fail the tool call it reports on. */
+    /**
+     * Every record the bridge produced since the previous `write` or `edit`
+     * finished belongs to this call: OMP declares both tools `concurrency:
+     * "exclusive"`, so nothing else can have written in between. Reading the
+     * call's paths instead would strand a record whose target OMP recovered or
+     * whose failure details name no file at all.
+     *
+     * A hook may never throw: a failure here would fail the call it reports on.
+     */
     #attribute(event: ToolResultEvent): void {
         try {
-            const records: RecordedChange[] = [];
-            for (const file of targets(event, this.#cwd)) {
-                const record = this.#writes.get(file)?.shift();
-                if (record) records.push(record);
-            }
+            if (event.toolName !== "write" && event.toolName !== "edit") return;
+            const records = this.#pending.splice(0, this.#pending.length);
             if (records.length > 0) this.#byCall.set(event.toolCallId, records);
         } catch {
             // Nothing to attribute is better than a failed tool call.
@@ -249,17 +190,15 @@ export class WriteBridge {
             typeof previous === "object" && "noDiff" in previous
                 ? previous.noDiff
                 : undiffableText(newText);
-        const record: RecordedChange =
+        this.#pending.push(
             noDiff === undefined
                 ? {
                       path: absolutePath,
                       oldText: previous === "missing" ? null : asText(previous),
                       newText,
                   }
-                : { path: absolutePath, noDiff };
-        const recorded = this.#writes.get(absolutePath);
-        if (recorded) recorded.push(record);
-        else this.#writes.set(absolutePath, [record]);
+                : { path: absolutePath, noDiff },
+        );
     }
 }
 

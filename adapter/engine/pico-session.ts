@@ -67,7 +67,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     let mcp: HostMcpServers | undefined;
     let engine: AgentSession | undefined;
-    const writes = new WriteBridge(cwd);
+    const writes = new WriteBridge();
     try {
         const settings = await loadPicoSettings({ cwd, agentDir });
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);

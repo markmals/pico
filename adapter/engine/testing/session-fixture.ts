@@ -69,7 +69,9 @@ export interface Cleanups {
 }
 
 export function temporaryDirectory(t: Cleanups, prefix: string): string {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), `pico-${prefix}-`));
+    // Realpathed: OMP resolves a read snapshot against the session cwd, and a
+    // symlinked temporary root (macOS `/var` → `/private/var`) defeats that match.
+    const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `pico-${prefix}-`)));
     t.after(() => {
         // The credential-store tests lock their agent directory; unlock it so the removal succeeds.
         fs.chmodSync(directory, 0o755);

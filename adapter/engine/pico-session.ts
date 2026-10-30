@@ -6,7 +6,7 @@ import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-
 import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 import type { HostMcpServers } from "./host-mcp-servers.ts";
-import type { RecordedChange } from "./write-recorder.ts";
+import type { RecordedChange } from "./write-bridge.ts";
 
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
 import { openCredentialStore } from "./credential-store.ts";
@@ -15,10 +15,10 @@ import { connectHostMcpServers } from "./host-mcp-servers.ts";
 import { loadPicoSettings } from "./pico-settings.ts";
 import { prepareDiscoveredExtensions, reportExtensionFailure } from "./session-extensions.ts";
 import { findUnexpectedTools, PICO_BUILTIN_TOOLS } from "./tool-roster.ts";
-import { WriteRecorder } from "./write-recorder.ts";
+import { WriteBridge } from "./write-bridge.ts";
 
 export { PicoSessionError } from "./errors.ts";
-export type { RecordedChange } from "./write-recorder.ts";
+export type { RecordedChange } from "./write-bridge.ts";
 
 export interface PicoSessionOptions {
     /** Absolute path to an existing directory; the only source of the working directory. */
@@ -50,8 +50,8 @@ export interface PicoSession {
      * and the outstanding step for as long as teardown hangs or after it fails.
      */
     readonly disposalPhase: DisposalPhase | undefined;
-    /** Consumes what the tool call with this id changed, one entry per affected file. */
-    takeRecordedChanges(toolCallId: string): RecordedChange[];
+    /** Consumes (FIFO per path) what the `write` tool replaced at `absolutePath`. */
+    takeWrite(absolutePath: string): RecordedChange | undefined;
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
@@ -67,7 +67,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     let mcp: HostMcpServers | undefined;
     let engine: AgentSession | undefined;
-    const writes = new WriteRecorder(cwd);
+    const writes = new WriteBridge();
     try {
         const settings = await loadPicoSettings({ cwd, agentDir });
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
@@ -85,10 +85,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             autoApprove: true,
             restrictToolNames: true,
             toolNames: [...PICO_BUILTIN_TOOLS, ...mcpToolNames],
-            preloadedPreparedExtensions: [
-                writes.extension(),
-                ...(await prepareDiscoveredExtensions(cwd, settings)),
-            ],
+            preloadedPreparedExtensions: await prepareDiscoveredExtensions(cwd, settings),
             appendSystemPrompt: PICO_GUIDANCE,
             systemPrompt: withoutSubagentUrl,
         });
@@ -130,6 +127,12 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
                 `Pico does not allow these tools, but the session activated them: ${unexpected.join(", ")}.`,
             );
         }
+
+        engine.setClientBridge(writes.bridge);
+        // A write whose tool call then failed must not be reported against a later turn.
+        engine.subscribe(event => {
+            if (event.type === "agent_end") writes.clear();
+        });
     } catch (error) {
         // Every owned resource is released even when an earlier release fails;
         // the startup failure is what the caller needs to see, not a teardown one.
@@ -152,7 +155,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         get disposalPhase() {
             return disposalPhase;
         },
-        takeRecordedChanges: toolCallId => writes.take(toolCallId),
+        takeWrite: absolutePath => writes.takeWrite(absolutePath),
         mcpToolIdentity: toolName => identities.get(toolName),
         dispose: async () => {
             if (disposed) return;

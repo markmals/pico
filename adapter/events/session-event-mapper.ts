@@ -4,21 +4,24 @@ import type { SessionUpdate, ToolCallContent } from "@agentclientprotocol/sdk";
 import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session-events";
 
 import type { PicoSession, RecordedChange } from "../engine/pico-session.ts";
+import type { EditedFiles } from "./tool-call-translation.ts";
 
 import {
-    editDiffs,
     editedFiles,
     resultDetails,
     resultText,
     startLocations,
+    stringProperty,
     textContent,
     toolKind,
     toolTitle,
 } from "./tool-call-translation.ts";
 
-type SessionView = Pick<PicoSession, "cwd" | "takeRecordedChanges" | "mcpToolIdentity">;
+type SessionView = Pick<PicoSession, "cwd" | "takeWrite" | "mcpToolIdentity">;
 
 type StreamDelta = Extract<AgentSessionEvent, { type: "message_update" }>["assistantMessageEvent"];
+
+const NOTHING_CHANGED: EditedFiles = { changes: [], locations: [] };
 
 /**
  * Translates one session's engine events into ACP updates.
@@ -136,12 +139,10 @@ export class SessionEventMapper {
         this.#running.delete(toolCallId);
 
         const details = resultDetails(result);
-        // Only `write` and `edit` are recorded, and the record is consumed even when
-        // the result is an error, so nothing the engine kept for this call outlives it.
-        const changed =
-            toolName === "write" || toolName === "edit"
-                ? this.#session.takeRecordedChanges(toolCallId)
-                : [];
+        // A write's record is consumed even when the call failed, so nothing the
+        // engine kept for this call outlives it.
+        const written = toolName === "write" ? this.#takeWrite(details) : undefined;
+        const changed = isError ? NOTHING_CHANGED : this.#changedFiles(toolName, details, written);
         const update: SessionUpdate = {
             sessionUpdate: "tool_call_update",
             toolCallId,
@@ -149,51 +150,51 @@ export class SessionEventMapper {
             rawOutput: details,
             content: isError
                 ? [textContent(resultText(result))]
-                : this.#successContent(toolName, result, details, changed),
+                : changeContent(changed.changes, result),
         };
-        if (!isError) {
-            const locations =
-                changed.length > 0
-                    ? changed.map(change => ({ path: change.path }))
-                    : toolName === "edit"
-                      ? editedFiles(details, this.#session.cwd)
-                      : [];
-            if (locations.length > 0) update.locations = locations;
-        }
+        if (changed.locations.length > 0) update.locations = changed.locations;
         return [update];
     }
 
-    #successContent(
-        toolName: string,
-        result: unknown,
-        details: unknown,
-        changed: readonly RecordedChange[],
-    ): ToolCallContent[] {
-        if (changed.length > 0) {
-            const diffs: ToolCallContent[] = [];
-            // A file the engine could not diff says why instead; the others still
-            // show their diffs.
-            const undiffable: ToolCallContent[] = [];
-            for (const change of changed) {
-                if ("newText" in change) {
-                    diffs.push({
-                        type: "diff",
-                        path: change.path,
-                        oldText: change.oldText,
-                        newText: change.newText,
-                    });
-                } else {
-                    undiffable.push(textContent(`No diff for ${change.path}: ${change.noDiff}`));
-                }
-            }
-            return diffs.length > 0
-                ? [...diffs, ...undiffable]
-                : [textContent(resultText(result)), ...undiffable];
-        }
-        if (toolName === "edit") {
-            const diffs = editDiffs(details, this.#session.cwd);
-            if (diffs.length > 0) return diffs;
-        }
-        return [textContent(resultText(result))];
+    /** The file a `write` replaced, as the engine recorded it when the tool ran. */
+    #takeWrite(details: unknown): RecordedChange | undefined {
+        const resolvedPath = stringProperty(details, "resolvedPath");
+        return resolvedPath ? this.#session.takeWrite(resolvedPath) : undefined;
     }
+
+    #changedFiles(
+        toolName: string,
+        details: unknown,
+        written: RecordedChange | undefined,
+    ): EditedFiles {
+        if (toolName === "write") {
+            return written
+                ? { changes: [written], locations: [{ path: written.path }] }
+                : NOTHING_CHANGED;
+        }
+        // An `edit` reports its own before and after text; nothing else is recorded.
+        return toolName === "edit" ? editedFiles(details, this.#session.cwd) : NOTHING_CHANGED;
+    }
+}
+
+function changeContent(changed: readonly RecordedChange[], result: unknown): ToolCallContent[] {
+    const diffs: ToolCallContent[] = [];
+    // A file the engine cannot show as a diff says why instead; the others still
+    // show theirs.
+    const undiffable: ToolCallContent[] = [];
+    for (const change of changed) {
+        if ("newText" in change) {
+            diffs.push({
+                type: "diff",
+                path: change.path,
+                oldText: change.oldText,
+                newText: change.newText,
+            });
+        } else {
+            undiffable.push(textContent(`No diff for ${change.path}: ${change.noDiff}`));
+        }
+    }
+    return diffs.length > 0
+        ? [...diffs, ...undiffable]
+        : [textContent(resultText(result)), ...undiffable];
 }

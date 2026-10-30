@@ -30,7 +30,7 @@ function startUpdate(
 ): ToolCall & { sessionUpdate: string } {
     const mapper = new SessionEventMapper({
         cwd,
-        takeRecordedChanges: () => [],
+        takeWrite: () => undefined,
         mcpToolIdentity: () => options.mcpTool,
     });
     const updates = mapper.map(

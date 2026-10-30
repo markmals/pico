@@ -38,7 +38,7 @@ describe("proposal.0001 shutdown", () => {
                     get disposalPhase() {
                         return session.disposalPhase;
                     },
-                    takeRecordedChanges: toolCallId => session.takeRecordedChanges(toolCallId),
+                    takeWrite: path => session.takeWrite(path),
                     mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
                     dispose: async () => {
                         disposed.push(session.cwd);

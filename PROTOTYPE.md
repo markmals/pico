@@ -8,7 +8,7 @@ This repository contains the prototype brief, development tooling, and native ma
 
 This preparation work covers the brief, development tooling, native app project configuration, and local commits. It does not authorize publishing a package, pushing commits, registering or changing the user's active Sesh agent, or modifying user-global credentials. A later implementation session should use this brief as its starting context and keep its implementation evidence separate from this preparation evidence.
 
-The template's Workbench development process and Beads work tracker remain in place. Adapting the application stack does not authorize removing or redesigning that workflow. This document is an implementation brief, not an approved Workbench proposal or a build mandate; use it as input to the normal proposal and approval process before implementing the adapter.
+The template's Workbench development process and Beads work tracker remain in place. Adapting the application stack does not authorize removing or redesigning that workflow. This document is an implementation brief, not an approved Workbench proposal; use it as input to the normal proposal and approval process before implementing the adapter.
 
 ## Problem
 

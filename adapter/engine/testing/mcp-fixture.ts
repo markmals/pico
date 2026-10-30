@@ -27,8 +27,16 @@ export function fakeMcpServer(name: string, options: FakeMcpServerOptions = {}):
 }
 
 /** An ACP stdio entry whose executable does not exist, so the server can never start. */
-export function unstartableMcpServer(name: string): McpServerStdio {
-    return { name, command: "/nonexistent/pico-no-such-mcp-server", args: [], env: [] };
+export function unstartableMcpServer(
+    name: string,
+    env: Record<string, string> = {},
+): McpServerStdio {
+    return {
+        name,
+        command: "/nonexistent/pico-no-such-mcp-server",
+        args: [],
+        env: Object.entries(env).map(([variable, value]) => ({ name: variable, value })),
+    };
 }
 
 /** Writes an OMP `mcp.json` naming `server`, the way a user or project configures their own MCP servers. */

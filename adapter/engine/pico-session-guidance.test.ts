@@ -10,6 +10,7 @@ import {
     mockAuthStorage,
     picoWorkspace,
     systemPromptOf,
+    temporaryDirectory,
     toolCall,
 } from "./testing/session-fixture.ts";
 
@@ -98,5 +99,45 @@ describe("proposal.0001 the user's OMP configuration", () => {
 
         assert.equal(fs.readFileSync(path.join(agentDir, "config.yml"), "utf8"), AGENT_CONFIG);
         assert.ok(!fs.existsSync(path.join(agentDir, "sessions")), "Pico created session files");
+    });
+});
+
+describe("proposal.0001 project context", () => {
+    test("the worktree's AGENTS.md reaches the model and the main checkout's does not", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const mainCheckout = temporaryDirectory(t, "sesh-root");
+        fs.writeFileSync(path.join(cwd, "AGENTS.md"), "# House rules\n\nPICO-WORKTREE-MARKER\n");
+        fs.writeFileSync(
+            path.join(mainCheckout, "AGENTS.md"),
+            "# House rules\n\nPICO-CHECKOUT-MARKER\n",
+        );
+        const previous = process.env.SESH_ROOT_PATH;
+        process.env.SESH_ROOT_PATH = mainCheckout;
+        t.after(() => {
+            if (previous === undefined) delete process.env.SESH_ROOT_PATH;
+            else process.env.SESH_ROOT_PATH = previous;
+        });
+
+        const model = createMockModel({ responses: [{ content: ["ok"] }] });
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model,
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("hello");
+
+        const received = JSON.stringify(model.calls[0]?.context);
+        assert.ok(
+            received.includes("PICO-WORKTREE-MARKER"),
+            "the worktree's AGENTS.md never reached the model",
+        );
+        assert.ok(
+            !received.includes("PICO-CHECKOUT-MARKER"),
+            "the main checkout's AGENTS.md reached the model",
+        );
     });
 });

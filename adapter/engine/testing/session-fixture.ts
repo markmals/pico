@@ -1,19 +1,35 @@
 /** Shared fixtures for the Pico engine tests: temporary workspaces, credentials, a deterministic model, and engine observation. */
 
-import type { AuthStorage, Context } from "@oh-my-pi/pi-ai";
-import type { MockHandler, MockModel } from "@oh-my-pi/pi-ai/providers/mock";
+import type { Api, AuthStorage, Context, Model } from "@oh-my-pi/pi-ai";
+import type { MockHandler, MockModel, MockModelOptions } from "@oh-my-pi/pi-ai/providers/mock";
 import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent";
 
-import { registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
+import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
+export { createMockModel };
 
 registerMockApi();
+
+// `Effort` is a const enum, so its members cannot be written as literals here.
+const THINKING_LADDER = { efforts: ["low", "medium", "high"] } as unknown as NonNullable<
+    Model<Api>["thinking"]
+>;
+
+/**
+ * A mock model that advertises a thinking ladder. Oh My Pi clamps every thinking
+ * level against the selected model's ladder, so a model without one resolves to
+ * no level at all.
+ */
+export function createReasoningMockModel(options: MockModelOptions = {}): Model<Api> {
+    return Object.assign(createMockModel({ ...options, reasoning: true }), {
+        thinking: THINKING_LADDER,
+    });
+}
 
 /** The built-in tools proposal.0001 puts in every Pico session. */
 export const PICO_ROSTER = ["read", "grep", "glob", "edit", "write", "bash", "web_search"];

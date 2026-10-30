@@ -15,6 +15,7 @@ import {
     agentText,
     collectToolCalls,
     commandCallProblem,
+    commandExitCodeProblem,
     commandOutputProblem,
     editCallProblem,
     readCallProblem,
@@ -24,7 +25,8 @@ import { acpMessageProblem, inspectLines } from "./wire.ts";
 const SMOKE_FILE = "pico-smoke.txt";
 const SMOKE_TEXT = "hello from pico";
 const CAT_COMMAND = `cat ${SMOKE_FILE}`;
-const FAILING_COMMAND = "exit 3";
+const FAILING_EXIT_CODE = 3;
+const FAILING_COMMAND = `exit ${FAILING_EXIT_CODE}`;
 // An external binary with a distinctive duration, not a bare `sleep`: Oh My Pi's embedded
 // shell runs some commands in-process, and a cancellation that only interrupts a builtin
 // would not show that a running subprocess is killed.
@@ -170,9 +172,19 @@ async function checkWriteReadRun(turns: Turns, smoke: Smoke): Promise<void> {
 
 async function checkFailingCommand(turns: Turns, checklist: Checklist): Promise<void> {
     let turn = await turns.run(FAILING_COMMAND_PROMPT, 300);
+    let calls = collectToolCalls(turn.updates);
+
     checklist.record(
         `\`${FAILING_COMMAND}\` is a failed execute tool call`,
-        commandCallProblem(collectToolCalls(turn.updates), FAILING_COMMAND, "failed"),
+        commandCallProblem(calls, FAILING_COMMAND, "failed"),
+    );
+    checklist.record(
+        `\`${FAILING_COMMAND}\` reports its exit code in rawOutput`,
+        commandExitCodeProblem(calls, FAILING_COMMAND, FAILING_EXIT_CODE),
+    );
+    checklist.record(
+        `\`${FAILING_COMMAND}\` names its exit code in the tool call's text`,
+        commandOutputProblem(calls, FAILING_COMMAND, `code ${FAILING_EXIT_CODE}`),
     );
 }
 

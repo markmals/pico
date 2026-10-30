@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 
 import { createPicoSession } from "./pico-session.ts";
 import {
+    installCountingExtension,
     installExitingExtension,
     installRecordingExtension,
     recordedExtensionEvents,
@@ -128,5 +129,26 @@ describe("proposal.0001 extension hooks", () => {
             recordedExtensionEvents(log).includes("agent_start"),
             "the surviving extension's hooks never ran",
         );
+    });
+});
+
+describe("proposal.0001 extension loading", () => {
+    test("a discovered extension's module and factory each run once", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const log = path.join(cwd, "loads.log");
+        installCountingExtension(path.join(cwd, ".omp", "extensions"), log);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("hello");
+
+        const loads = recordedExtensionEvents(log);
+        assert.deepEqual(loads, ["module", "factory"]);
     });
 });

@@ -11,6 +11,7 @@ import {
     writeOmpMcpConfig,
 } from "./testing/mcp-fixture.ts";
 import {
+    captureStderr,
     createMockModel,
     mockAuthStorage,
     PICO_ROSTER,
@@ -333,5 +334,51 @@ describe("proposal.0001 host MCP servers", () => {
         assert.deepEqual([...session.engine.getActiveToolNames()].sort(), [...PICO_ROSTER].sort());
         assert.ok(!fs.existsSync(projectPid), "the project's own MCP server was spawned");
         assert.ok(!fs.existsSync(userPid), "the user's own MCP server was spawned");
+    });
+});
+
+describe("proposal.0001 MCP secrets", () => {
+    const SECRET = "pico-secret-XYZ";
+
+    test("a failed server's environment reaches neither the error nor the log", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const stderr = captureStderr(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [unstartableMcpServer("leaky", { SESH_MCP_TOKEN: SECRET })],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.ok(
+                    !error.message.includes(SECRET),
+                    `the error leaks the token: ${error.message}`,
+                );
+                return true;
+            },
+        );
+
+        assert.ok(!stderr().includes(SECRET), "stderr leaks the token");
+    });
+
+    test("a connected server's environment never reaches the log", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const stderr = captureStderr(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("fake", { env: { SESH_MCP_TOKEN: SECRET } })],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("hello");
+
+        assert.ok(!stderr().includes(SECRET), "stderr leaks the token");
     });
 });

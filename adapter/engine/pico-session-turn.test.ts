@@ -153,3 +153,40 @@ describe("proposal.0001 shutdown", () => {
         assert.equal(session.disposalPhase, undefined);
     });
 });
+
+describe("proposal.0001 no language server", () => {
+    test("an edit that breaks the types reports no diagnostics and rewrites nothing", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "typed.ts");
+        fs.writeFileSync(absolute, "export const count: number = 1;\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    { content: [toolCall("read", { path: "typed.ts" })] },
+                    editAfterRead("typed.ts", 'PUT 1.=1:\n+export const count: number = "oops";'),
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("break the types in typed.ts");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), 'export const count: number = "oops";\n');
+        assert.deepEqual(
+            executions.map(execution => [execution.name, execution.isError]),
+            [
+                ["read", false],
+                ["edit", false],
+            ],
+        );
+        const editResult = executions[1]?.text ?? "";
+        assert.doesNotMatch(editResult, /diagnostic/i);
+        assert.doesNotMatch(editResult, /TS\d{4}/);
+    });
+});

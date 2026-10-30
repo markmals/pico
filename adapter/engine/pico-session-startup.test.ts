@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -7,6 +8,7 @@ import { createPicoSession, PicoSessionError } from "./pico-session.ts";
 import { exited, fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
     createMockModel,
+    createReasoningMockModel,
     lockCredentialStore,
     mockAuthStorage,
     picoWorkspace,
@@ -179,5 +181,72 @@ describe("proposal.0001 model selection", () => {
         );
         const pid = Number(fs.readFileSync(pidFile, "utf8"));
         assert.ok(await exited(pid), `the MCP server (pid ${pid}) outlived the failed session`);
+    });
+});
+
+describe("proposal.0001 thinking level", () => {
+    test("the session uses the thinking level the configuration selects", async t => {
+        const { cwd, agentDir } = picoWorkspace(t, "defaultThinkingLevel: low\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        assert.equal(session.engine.thinkingLevel, "low");
+    });
+});
+
+describe("proposal.0001 stored credentials", () => {
+    const STORED_PROVIDER = "pico-untouched-provider";
+
+    function credentialRows(agentDir: string): unknown[] {
+        const database = new Database(path.join(agentDir, "agent.db"), { readonly: true });
+        try {
+            return database
+                .query("SELECT provider, credential_type, data FROM auth_credentials")
+                .all();
+        } finally {
+            database.close();
+        }
+    }
+
+    function credentialFiles(agentDir: string): string[] {
+        return fs
+            .readdirSync(agentDir)
+            .filter(
+                name =>
+                    name.startsWith("agent.db") && !name.endsWith("-wal") && !name.endsWith("-shm"),
+            )
+            .sort();
+    }
+
+    test("a session neither copies nor removes the user's stored credentials", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        writeMockProviderKey(agentDir);
+        (await unauthenticatedAuthStorage(agentDir)).close();
+        const seed = new Database(path.join(agentDir, "agent.db"));
+        seed.run(
+            "INSERT INTO auth_credentials (provider, credential_type, data) VALUES (?, ?, ?)",
+            [STORED_PROVIDER, "api_key", '{"key":"stored"}'],
+        );
+        seed.close();
+        const before = { files: credentialFiles(agentDir), rows: credentialRows(agentDir) };
+        assert.equal(before.rows.length, 1);
+
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        await session.engine.prompt("hello");
+        await session.dispose();
+
+        assert.deepEqual(credentialFiles(agentDir), before.files);
+        assert.deepEqual(credentialRows(agentDir), before.rows);
     });
 });

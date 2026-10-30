@@ -20,13 +20,12 @@ const CLOSED_AFTER_FAILED_CANCELLATION =
 type AbortOutcome = "stopped" | "rejected" | "expired";
 
 interface Turn {
-    cancelled: boolean;
     failure?: unknown;
     /** The engine's answer to this turn; assigned as soon as the turn starts. */
     enginePrompt?: Promise<void>;
     /** The bounded `abort()` a cancellation issued; shutdown waits for this alone. */
     aborted?: Promise<AbortOutcome>;
-    /** The cancellation in flight. The turn stays reserved until it settles. */
+    /** Set the moment a cancel is accepted: the turn is cancelled and stays reserved until this settles. */
     cancellation?: Promise<void>;
     /** Resolves when Pico stops waiting for the engine, because the session was closed. */
     readonly abandoned: PromiseWithResolvers<void>;
@@ -54,7 +53,7 @@ export class SessionRuntime {
             );
         }
 
-        const turn: Turn = { cancelled: false, abandoned: Promise.withResolvers<void>() };
+        const turn: Turn = { abandoned: Promise.withResolvers<void>() };
         this.#turn = turn;
 
         const mapper = new SessionEventMapper(this.#session);
@@ -93,7 +92,7 @@ export class SessionRuntime {
             this.#turn = undefined;
         }
 
-        if (turn.cancelled) return "cancelled";
+        if (turn.cancellation) return "cancelled";
         if (turn.failure !== undefined) {
             throw RequestError.internalError(undefined, describe(turn.failure));
         }
@@ -104,7 +103,6 @@ export class SessionRuntime {
     cancel(): void {
         const turn = this.#turn;
         if (!turn || turn.cancellation) return;
-        turn.cancelled = true;
         const aborted = abortOutcome(
             this.#session.engine.abort({ reason: USER_INTERRUPT_LABEL }),
             ABORT_GRACE_MS,

@@ -52,20 +52,20 @@ function writeTarget(event: ToolCallEvent, cwd: string): string | undefined {
     }
 }
 
-/** One file's post-change content, when the value really describes one. */
-function fileChange(value: unknown): { path: string; newText: string } | undefined {
+/** One file an edit touched, with the content it left behind when the result still carries it. */
+function fileChange(value: unknown): { path: string; newText?: string } | undefined {
     if (typeof value !== "object" || value === null) return undefined;
-    if (!("path" in value) || !("newText" in value)) return undefined;
-    const { path, newText } = value;
-    if (typeof path !== "string" || typeof newText !== "string") return undefined;
+    if (!("path" in value) || typeof value.path !== "string") return undefined;
     if ("isError" in value && value.isError === true) return undefined;
-    return { path, newText };
+    const newText =
+        "newText" in value && typeof value.newText === "string" ? value.newText : undefined;
+    return { path: value.path, newText };
 }
 
-/** Every file a successful `edit` rewrote, with the content it left behind. */
-function editedFiles(details: unknown): Array<{ path: string; newText: string }> {
+/** Every file a successful `edit` rewrote. `newText` is absent when OMP pruned an oversized snapshot. */
+function editedFiles(details: unknown): Array<{ path: string; newText?: string }> {
     if (typeof details !== "object" || details === null) return [];
-    const edited: Array<{ path: string; newText: string }> = [];
+    const edited: Array<{ path: string; newText?: string }> = [];
     if ("perFileResults" in details && Array.isArray(details.perFileResults)) {
         for (const result of details.perFileResults) {
             const changed = fileChange(result);
@@ -132,15 +132,19 @@ export class WriteRecorder {
 
     async #observe(event: ToolResultEvent): Promise<void> {
         if (event.toolName === "edit") {
-            if (!event.isError && "details" in event) this.#noteEdit(event.details);
+            if (!event.isError && "details" in event) await this.#noteEdit(event.details);
             return;
         }
-        await this.#record(event);
+        if (event.toolName === "write") await this.#record(event);
     }
 
-    #noteEdit(details: unknown): void {
+    async #noteEdit(details: unknown): Promise<void> {
         for (const { path, newText } of editedFiles(details)) {
-            this.#changed.set(path, { newText, at: (this.#clock += 1) });
+            // An oversized multi-file edit arrives without its snapshot, so read what it left on disk.
+            const content = newText ?? (await readText(path));
+            if (content === null) continue;
+            this.#changed.set(path, { newText: content, at: (this.#clock += 1) });
+            this.#forgetUnwatched(path);
         }
     }
 

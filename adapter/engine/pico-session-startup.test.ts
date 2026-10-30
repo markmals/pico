@@ -4,9 +4,11 @@ import path from "node:path";
 import { describe, test } from "node:test";
 
 import { createPicoSession, PicoSessionError } from "./pico-session.ts";
+import { exited, fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
     createMockModel,
     lockCredentialStore,
+    mockAuthStorage,
     picoWorkspace,
     withoutProviderCredentials,
 } from "./testing/session-fixture.ts";
@@ -63,6 +65,37 @@ describe("proposal.0001 credential store", () => {
             },
         );
     });
+
+    test("the store Pico opened is closed when the session is disposed", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        const store = session.engine.modelRegistry.authStorage;
+
+        await session.dispose();
+
+        await assert.rejects(store.credentials.reload(), "Pico left its own credential store open");
+    });
+
+    test("a store the caller injected outlives the session", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const authStorage = await mockAuthStorage(agentDir);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage,
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+
+        await session.dispose();
+
+        await authStorage.credentials.reload();
+    });
 });
 
 describe("proposal.0001 model selection", () => {
@@ -82,5 +115,27 @@ describe("proposal.0001 model selection", () => {
                 return true;
             },
         );
+    });
+
+    test("a failure after the engine exists still terminates the MCP servers", async t => {
+        withoutProviderCredentials(t);
+        const { cwd, agentDir } = picoWorkspace(t);
+        const pidFile = path.join(cwd, "fake.pid");
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [fakeMcpServer("fake", { flags: ["--pid-file", pidFile] })],
+            }),
+            PicoSessionError,
+        );
+
+        assert.ok(
+            fs.existsSync(pidFile),
+            "the MCP server never started, so nothing was left to terminate",
+        );
+        const pid = Number(fs.readFileSync(pidFile, "utf8"));
+        assert.ok(await exited(pid), `the MCP server (pid ${pid}) outlived the failed session`);
     });
 });

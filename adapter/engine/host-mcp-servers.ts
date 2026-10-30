@@ -14,11 +14,18 @@ export interface HostMcpServers {
 }
 
 function toConfig(server: McpServerStdio): MCPServerConfig {
+    // Null prototype: a `__proto__` environment key must become an own property.
+    const env: Record<string, string> = Object.create(null);
+    for (const variable of server.env) env[variable.name] = variable.value;
     return {
         type: "stdio",
         command: server.command,
         args: server.args,
-        env: Object.fromEntries(server.env.map(variable => [variable.name, variable.value])),
+        env,
+        // The client's values are opaque: without this OMP runs a `!command`
+        // value through a shell, replaces a value that names a host variable
+        // with that variable's value, and drops empty values.
+        envPolicy: "literal",
     };
 }
 
@@ -40,14 +47,22 @@ export async function connectHostMcpServers(
     if (servers.length === 0) return { manager, tools: [] };
 
     manager.setAuthStorage(authStorage);
-    const configs: Record<string, MCPServerConfig> = {};
-    const sources: Record<string, SourceMeta> = {};
+    // Null prototype again: `__proto__` is a legal, if hostile, server name.
+    const configs: Record<string, MCPServerConfig> = Object.create(null);
+    const sources: Record<string, SourceMeta> = Object.create(null);
     for (const server of servers) {
+        if (server.name in configs) {
+            throw new PicoSessionError(
+                `The MCP server "${server.name}" was sent more than once; server names must be unique.`,
+            );
+        }
         configs[server.name] = toConfig(server);
         sources[server.name] = toSource(server.name);
     }
 
-    const result = await manager.connectServers(configs, sources);
+    // Startup timeout 0: wait for every server instead of dropping whatever has
+    // not answered within OMP's 250 ms discovery window.
+    const result = await manager.connectServers(configs, sources, undefined, 0);
     if (result.errors.size > 0) {
         await manager.disconnectAll();
         const failures = [...result.errors]

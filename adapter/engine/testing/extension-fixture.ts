@@ -49,3 +49,18 @@ export function recordedExtensionEvents(logPath: string): string[] {
         .split("\n")
         .filter(line => line.length > 0);
 }
+
+/**
+ * Installs an extension that calls `process.exit` while its module is being
+ * imported, the way a misbehaving extension takes its host down. Returns the
+ * file an error message has to name.
+ */
+export function installExitingExtension(extensionsDirectory: string, exitCode = 7): string {
+    fs.mkdirSync(extensionsDirectory, { recursive: true });
+    const extensionPath = path.join(extensionsDirectory, "exiting.ts");
+    fs.writeFileSync(
+        extensionPath,
+        `process.exit(${exitCode});\n\nexport default function () {}\n`,
+    );
+    return extensionPath;
+}

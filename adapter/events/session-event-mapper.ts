@@ -11,7 +11,6 @@ import {
     resultDetails,
     resultText,
     startLocations,
-    stringProperty,
     textContent,
     toolKind,
     toolTitle,
@@ -135,12 +134,17 @@ export class SessionEventMapper {
         this.#running.delete(toolCallId);
 
         const details = resultDetails(result);
+        // The record is consumed even when the result is an error, so nothing the
+        // engine kept for this call outlives it.
+        const written = toolName === "write" ? this.#writtenFile(toolCallId) : undefined;
         const update: SessionUpdate = {
             sessionUpdate: "tool_call_update",
             toolCallId,
             status: isError ? "failed" : "completed",
             rawOutput: details,
-            content: this.#resultContent(toolName, result, details, isError),
+            content: isError
+                ? [textContent(resultText(result))]
+                : this.#successContent(toolName, result, details, written),
         };
         if (!isError && toolName === "edit") {
             const locations = editedFiles(details, this.#session.cwd);
@@ -149,32 +153,26 @@ export class SessionEventMapper {
         return [update];
     }
 
-    #resultContent(
+    #successContent(
         toolName: string,
         result: unknown,
         details: unknown,
-        isError: boolean,
+        written: ToolCallContent | undefined,
     ): ToolCallContent[] {
-        if (isError) return [textContent(resultText(result))];
         if (toolName === "edit") {
             const diffs = editDiffs(details, this.#session.cwd);
             if (diffs.length > 0) return diffs;
         }
-        if (toolName === "write") {
-            const diff = this.#writeDiff(details);
-            if (diff) return [diff];
-        }
+        if (written) return [written];
         return [textContent(resultText(result))];
     }
 
-    #writeDiff(details: unknown): ToolCallContent | undefined {
-        const resolvedPath = stringProperty(details, "resolvedPath");
-        if (!resolvedPath) return undefined;
-        const recorded = this.#session.takeRecordedWrite(resolvedPath);
+    #writtenFile(toolCallId: string): ToolCallContent | undefined {
+        const recorded = this.#session.takeRecordedWrite(toolCallId);
         if (!recorded) return undefined;
         return {
             type: "diff",
-            path: resolvedPath,
+            path: recorded.path,
             oldText: recorded.oldText,
             newText: recorded.newText,
         };

@@ -2,15 +2,14 @@
 
 import type { ToolCallContent, ToolCallLocation, ToolKind } from "@agentclientprotocol/sdk";
 
+import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
 import {
+    expandPath,
     resolveToCwd,
     splitPathAndSelPreferringLiteralSync,
 } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
 
 const MCP_PREFIX = "mcp__";
-
-/** Scheme-qualified subjects (`xd://`, `https://`, …) are not files; resolving them fabricates paths. */
-const SCHEME_QUALIFIED = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 /** Selectors that name the first line the read window starts at: `50`, `50-80`, `50-`, `50+30`. */
 const STARTING_LINE = /^(\d+)(?:-\d*|\+\d+)?$/;
@@ -55,20 +54,18 @@ export function toolTitle(toolName: string, args: unknown, intent: string | unde
 /** Locations a call announces before it runs; `edit` names its files only in its patch text. */
 export function startLocations(toolName: string, args: unknown, cwd: string): ToolCallLocation[] {
     const rawPath = stringProperty(args, "path");
-    if (!rawPath || SCHEME_QUALIFIED.test(rawPath)) return [];
-    if (toolName === "read") return [readLocation(rawPath, cwd)];
-    if (toolName === "write" || toolName === "grep" || toolName === "glob") {
-        return [{ path: resolveToCwd(rawPath, cwd) }];
-    }
-    return [];
+    if (!rawPath) return [];
+    const location =
+        toolName === "read" ? readLocation(rawPath, cwd) : fileLocation(toolName, rawPath, cwd);
+    return location ? [location] : [];
 }
 
 /** The files an `edit` result reports changing, in result order. */
 export function editedFiles(details: unknown, cwd: string): ToolCallLocation[] {
     const locations: ToolCallLocation[] = [];
     for (const entry of editEntries(details)) {
-        const path = stringProperty(entry, "path");
-        if (path) locations.push({ path: resolveToCwd(path, cwd) });
+        const path = resolveLocationPath(stringProperty(entry, "path"), cwd);
+        if (path) locations.push({ path });
     }
     return locations;
 }
@@ -76,16 +73,11 @@ export function editedFiles(details: unknown, cwd: string): ToolCallLocation[] {
 export function editDiffs(details: unknown, cwd: string): ToolCallContent[] {
     const diffs: ToolCallContent[] = [];
     for (const entry of editEntries(details)) {
-        const path = stringProperty(entry, "path");
+        const path = resolveLocationPath(stringProperty(entry, "path"), cwd);
         const oldText = stringProperty(entry, "oldText");
         const newText = stringProperty(entry, "newText");
         if (!path || (oldText === undefined && newText === undefined)) continue;
-        diffs.push({
-            type: "diff",
-            path: resolveToCwd(path, cwd),
-            oldText: oldText ?? null,
-            newText: newText ?? "",
-        });
+        diffs.push({ type: "diff", path, oldText: oldText ?? null, newText: newText ?? "" });
     }
     return diffs;
 }
@@ -105,21 +97,59 @@ export function resultDetails(result: unknown): unknown {
     return property(result, "details");
 }
 
-export function property(value: unknown, key: string): unknown {
+function property(value: unknown, key: string): unknown {
     if (typeof value !== "object" || value === null || !(key in value)) return undefined;
     return (value as Record<string, unknown>)[key];
 }
 
-export function stringProperty(value: unknown, key: string): string | undefined {
+function stringProperty(value: unknown, key: string): string | undefined {
     const candidate = property(value, key);
     return typeof candidate === "string" && candidate.length > 0 ? candidate : undefined;
 }
 
-function readLocation(rawPath: string, cwd: string): ToolCallLocation {
-    const { path, sel } = splitPathAndSelPreferringLiteralSync(rawPath, cwd);
-    const resolved = resolveToCwd(path, cwd);
+/**
+ * The file a path argument names, or nothing.
+ *
+ * A location is a navigation target an editor opens, so anything Pico cannot
+ * turn into a real path — an internal URL (`xd://`, `local:/x.md`), a web
+ * address, a spelling OMP rejects — is published as no location at all.
+ * Throwing here would be worse than silence: the engine swallows a subscriber's
+ * exception, and the whole tool call would go unreported.
+ */
+function resolveLocationPath(rawPath: string | undefined, cwd: string): string | undefined {
+    if (!rawPath) return undefined;
+    try {
+        if (InternalUrlRouter.instance().canHandle(expandPath(rawPath))) return undefined;
+        return resolveToCwd(rawPath, cwd);
+    } catch {
+        return undefined;
+    }
+}
+
+function fileLocation(
+    toolName: string,
+    rawPath: string,
+    cwd: string,
+): ToolCallLocation | undefined {
+    if (toolName !== "write" && toolName !== "grep" && toolName !== "glob") return undefined;
+    const path = resolveLocationPath(rawPath, cwd);
+    return path ? { path } : undefined;
+}
+
+function readLocation(rawPath: string, cwd: string): ToolCallLocation | undefined {
+    const { path: filePath, sel } = splitSelector(rawPath, cwd);
+    const path = resolveLocationPath(filePath, cwd);
+    if (!path) return undefined;
     const startingLine = sel === undefined ? null : STARTING_LINE.exec(sel);
-    return startingLine ? { path: resolved, line: Number(startingLine[1]) } : { path: resolved };
+    return startingLine ? { path, line: Number(startingLine[1]) } : { path };
+}
+
+function splitSelector(rawPath: string, cwd: string): { path: string; sel?: string } {
+    try {
+        return splitPathAndSelPreferringLiteralSync(rawPath, cwd);
+    } catch {
+        return { path: rawPath };
+    }
 }
 
 /** A single-file edit reports on `details` itself; a multi-file edit reports `perFileResults`. */

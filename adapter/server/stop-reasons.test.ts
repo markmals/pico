@@ -41,6 +41,17 @@ describe("proposal.0001 stop reasons", () => {
 
         expect(response.stopReason).toBe("refusal");
     });
+
+    test("a turn the engine aborted without a cancellation fails the prompt", async () => {
+        const session = await startPicoSession([
+            { stopReason: "aborted", errorMessage: "the engine stopped the turn" },
+        ]);
+
+        const error = await requestError(session.prompt("hello"));
+
+        expect(error.code).toBe(INTERNAL_ERROR);
+        expect(error.message).toContain("the engine stopped the turn");
+    });
 });
 
 describe("proposal.0001 provider failures", () => {

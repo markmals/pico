@@ -17,10 +17,14 @@ const ABORT_GRACE_MS = 5_000;
 const CLOSED_AFTER_FAILED_CANCELLATION =
     "This session was closed after a cancellation could not stop it. Start a new session.";
 
+type AbortOutcome = "stopped" | "rejected" | "expired";
+
 interface Turn {
     cancelled: boolean;
-    cancelling: boolean;
     failure?: unknown;
+    /** The cancellation in flight. The turn stays reserved until it settles. */
+    cancellation?: Promise<void>;
+    /** Resolves when Pico stops waiting for the engine, because the session was closed. */
     readonly abandoned: PromiseWithResolvers<void>;
 }
 
@@ -45,11 +49,7 @@ export class SessionRuntime {
             );
         }
 
-        const turn: Turn = {
-            cancelled: false,
-            cancelling: false,
-            abandoned: Promise.withResolvers<void>(),
-        };
+        const turn: Turn = { cancelled: false, abandoned: Promise.withResolvers<void>() };
         this.#turn = turn;
 
         const mapper = new SessionEventMapper(this.#session);
@@ -69,43 +69,54 @@ export class SessionRuntime {
                 turn.abandoned.promise,
             ]);
         } finally {
+            // The engine can answer the prompt while an abort is still unwinding:
+            // holding the turn until the cancellation settles keeps the next prompt
+            // off a session this one may yet close, and keeps the updates the
+            // unwinding produces on the stream.
+            await turn.cancellation;
             unsubscribe();
             for (const update of mapper.closeOpenToolCalls()) this.#queue.push(update);
-            this.#turn = undefined;
             await this.#queue.drained();
+            this.#turn = undefined;
         }
 
         if (turn.cancelled) return "cancelled";
-        if (turn.failure !== undefined)
+        if (turn.failure !== undefined) {
             throw RequestError.internalError(undefined, describe(turn.failure));
+        }
         return stopReasonOf(lastAssistantMessage);
     }
 
     /** Ignored unless a turn is running and this is the first cancel of that turn. */
     cancel(): void {
         const turn = this.#turn;
-        if (!turn || turn.cancelling) return;
-        turn.cancelling = true;
+        if (!turn || turn.cancellation) return;
         turn.cancelled = true;
-        void this.#abort(turn);
+        turn.cancellation = this.#abort(turn).catch((error: unknown) => {
+            console.error(
+                `pico: closing the session after a failed cancellation failed: ${describe(error)}`,
+            );
+        });
     }
 
+    /** Stops a running turn before the engine session and its MCP servers go away. */
     async dispose(): Promise<void> {
+        this.cancel();
+        await this.#turn?.cancellation;
         await this.#session.dispose();
     }
 
     async #abort(turn: Turn): Promise<void> {
-        if (
-            await settlesWithin(
-                this.#session.engine.abort({ reason: USER_INTERRUPT_LABEL }),
-                ABORT_GRACE_MS,
-            )
-        ) {
-            return;
-        }
+        const outcome = await abortOutcome(
+            this.#session.engine.abort({ reason: USER_INTERRUPT_LABEL }),
+            ABORT_GRACE_MS,
+        );
+        if (outcome === "stopped") return;
         this.#closedReason = CLOSED_AFTER_FAILED_CANCELLATION;
         console.error(
-            `pico: abort did not settle within ${ABORT_GRACE_MS}ms; disposing the session`,
+            outcome === "rejected"
+                ? "pico: the engine rejected the abort; disposing the session"
+                : `pico: abort did not settle within ${ABORT_GRACE_MS}ms; disposing the session`,
         );
         turn.abandoned.resolve();
         await this.#session.dispose();
@@ -114,27 +125,39 @@ export class SessionRuntime {
 
 function stopReasonOf(message: AssistantMessage | undefined): StopReason {
     if (!message) return "end_turn";
-    if (message.stopReason === "length") return "max_tokens";
-    if (message.stopReason !== "error") return "end_turn";
-    if (message.stopDetails?.type === "refusal") return "refusal";
-    throw RequestError.internalError(
-        undefined,
-        message.errorMessage ?? "the engine ended the turn with an error",
-    );
+    switch (message.stopReason) {
+        case "length":
+            return "max_tokens";
+        case "error":
+            if (message.stopDetails?.type === "refusal") return "refusal";
+            throw RequestError.internalError(
+                undefined,
+                message.errorMessage ?? "the engine ended the turn with an error",
+            );
+        case "aborted":
+            // Pico's own cancellation never reaches here; this is the engine
+            // stopping a turn nobody asked it to stop.
+            throw RequestError.internalError(
+                undefined,
+                message.errorMessage ?? "the engine aborted the turn",
+            );
+        default:
+            return "end_turn";
+    }
 }
 
 function describe(failure: unknown): string {
     return failure instanceof Error ? failure.message : String(failure);
 }
 
-async function settlesWithin(work: Promise<unknown>, ms: number): Promise<boolean> {
-    const expiry = Promise.withResolvers<false>();
-    const timer = setTimeout(() => expiry.resolve(false), ms);
+async function abortOutcome(work: Promise<unknown>, ms: number): Promise<AbortOutcome> {
+    const expiry = Promise.withResolvers<AbortOutcome>();
+    const timer = setTimeout(() => expiry.resolve("expired"), ms);
     try {
         return await Promise.race([
             work.then(
-                () => true,
-                () => true,
+                (): AbortOutcome => "stopped",
+                (): AbortOutcome => "rejected",
             ),
             expiry.promise,
         ]);

@@ -42,14 +42,21 @@ export function picoAgentShutdown(app: AgentApp): Promise<void> {
 export function createPicoAgent(options: PicoAgentOptions): AgentApp {
     const sessions = new Map<string, SessionRuntime>();
     let client: AgentContext | undefined;
+    let closed = false;
 
     const app = agent({ name: "pico" });
 
     app.onConnect(connection => {
         client = connection.client;
+        // The signal aborts as the connection tears down, before `closed` settles:
+        // a `session/new` still inside its factory has to see that straight away.
+        connection.signal.addEventListener("abort", () => {
+            closed = true;
+        });
         shutdowns.set(
             app,
             connection.closed.then(async () => {
+                closed = true;
                 await Promise.all([...sessions.values()].map(runtime => runtime.dispose()));
                 sessions.clear();
             }),
@@ -67,10 +74,19 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
         agentInfo: { name: "pico", title: "Pico", version: options.version },
     }));
 
-    app.onRequest("session/new", async ({ params }): Promise<NewSessionResponse> => {
+    app.onRequest("session/new", async ({ params, signal }): Promise<NewSessionResponse> => {
         requireExistingDirectory(params.cwd);
         const mcpServers = params.mcpServers.map(requireStdioTransport);
         const session = await createSession(options.createSession, params.cwd, mcpServers);
+        if (closed || signal.aborted) {
+            // Shutdown already walked the registry: registering now would leave this
+            // session, and the MCP servers it started, running with nobody to stop them.
+            await session.dispose();
+            throw RequestError.internalError(
+                undefined,
+                "the connection closed while the session was starting",
+            );
+        }
         const sessionId = randomUUID();
         sessions.set(sessionId, new SessionRuntime(sessionId, session, requireClient(client)));
         return { sessionId };

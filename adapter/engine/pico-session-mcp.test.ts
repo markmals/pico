@@ -16,6 +16,7 @@ import {
     PICO_ROSTER,
     picoWorkspace,
     recordToolExecutions,
+    systemPromptOf,
     toolCall,
     useAsProcessAgentDir,
 } from "./testing/session-fixture.ts";
@@ -49,7 +50,115 @@ describe("proposal.0001 host MCP servers", () => {
         );
         assert.equal(executions[0]?.isError, false);
         const report: unknown = JSON.parse(executions[0]?.text ?? "null");
-        assert.deepEqual(report, { args: ["--flavor", "alpha"], token: "launch-token" });
+        assert.deepEqual(report, {
+            args: ["--flavor", "alpha"],
+            env: { PICO_FAKE_MCP_TOKEN: "launch-token" },
+        });
+    });
+
+    test("stdio environment values reach the server exactly as the client sent them", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const env = {
+            PICO_FAKE_COMMAND: "!echo injected",
+            PICO_FAKE_HOST_VARIABLE: "HOME",
+            PICO_FAKE_BLANK: "",
+        };
+        const model = createMockModel({
+            responses: [{ content: [toolCall("mcp__fake_launch_report")] }, { content: ["done"] }],
+        });
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("fake", { env })],
+            authStorage: await mockAuthStorage(agentDir),
+            model,
+        });
+        t.after(() => session.dispose());
+
+        const executions = recordToolExecutions(session.engine);
+        await session.engine.prompt("report how you were launched");
+
+        const report = JSON.parse(executions[0]?.text ?? "null") as { env: Record<string, string> };
+        assert.deepEqual(report.env, env);
+    });
+
+    test("the server's instructions reach the model", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const instructions = "House rules from the fake server: PICO-MCP-INSTRUCTIONS.";
+        const model = createMockModel({ responses: [{ content: ["ok"] }] });
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("fake", { flags: ["--instructions", instructions] })],
+            authStorage: await mockAuthStorage(agentDir),
+            model,
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("hello");
+
+        assert.ok(
+            systemPromptOf(model).includes(instructions),
+            "the model never received the server's instructions",
+        );
+    });
+
+    test("a server slower than the discovery window still contributes its tools", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("slow", { flags: ["--delay-tools-list", "600"] })],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        assert.ok(
+            session.engine.getActiveToolNames().includes("mcp__slow_echo"),
+            `the slow server's tools are missing: ${session.engine.getActiveToolNames().join(", ")}`,
+        );
+    });
+
+    test("a server named __proto__ is connected like any other", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [fakeMcpServer("__proto__")],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: [{ content: ["ok"] }] }),
+        });
+        t.after(() => session.dispose());
+
+        const mcpTools = session.engine
+            .getActiveToolNames()
+            .filter(name => name.startsWith("mcp__"));
+        assert.equal(
+            mcpTools.length,
+            2,
+            `expected the server's two tools, got ${mcpTools.join(", ")}`,
+        );
+    });
+
+    test("two servers sharing a name are rejected by name", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+
+        await assert.rejects(
+            createPicoSession({
+                cwd,
+                agentDir,
+                mcpServers: [fakeMcpServer("twin"), fakeMcpServer("twin")],
+                authStorage: await mockAuthStorage(agentDir),
+                model: createMockModel({ responses: [{ content: ["ok"] }] }),
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof PicoSessionError);
+                assert.match(error.message, /twin/);
+                assert.match(error.message, /more than once|duplicate/i);
+                return true;
+            },
+        );
     });
 
     test("a server that cannot start fails creation, naming the server and the cause", async t => {

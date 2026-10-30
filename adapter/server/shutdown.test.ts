@@ -1,3 +1,5 @@
+import type { NewSessionResponse } from "@agentclientprotocol/sdk";
+
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -6,6 +8,7 @@ import type { PicoSession } from "../engine/pico-session.ts";
 
 import { connectPicoAgent } from "./agent-harness.ts";
 import { mockEngine, removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
+import { fakeSession, neverSettles } from "./fake-session.ts";
 import { closeOpenConnections, settle, startPicoSession } from "./session-fixture.ts";
 
 const STUB_MCP_SERVER = join(import.meta.dir, "stub-mcp-server.fixture.ts");
@@ -34,7 +37,7 @@ describe("proposal.0001 shutdown", () => {
                 return {
                     engine: session.engine,
                     cwd: session.cwd,
-                    takeRecordedWrite: path => session.takeRecordedWrite(path),
+                    takeRecordedWrite: toolCallId => session.takeRecordedWrite(toolCallId),
                     dispose: async () => {
                         disposed.push(session.cwd);
                         await session.dispose();
@@ -76,4 +79,61 @@ describe("proposal.0001 shutdown", () => {
 
         expect(isRunning(pid)).toBe(false);
     }, 20_000);
+
+    test("a session that finishes being created after the connection closed is disposed", async () => {
+        const cwd = temporaryProject();
+        const creating = Promise.withResolvers<void>();
+        const creation = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd);
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: async () => {
+                creating.resolve();
+                await creation.promise;
+                return fake.session;
+            },
+        });
+        await client.initialize();
+
+        const pending = client.agent.request("session/new", { cwd, mcpServers: [] });
+        await creating.promise;
+        await client.close();
+        creation.resolve();
+        await pending.catch(() => undefined);
+        await settle();
+
+        expect(fake.disposals).toBe(1);
+    });
+
+    test("a running turn is stopped before its session's MCP servers are disconnected", async () => {
+        const cwd = temporaryProject();
+        const started = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd, {
+            prompt: () => {
+                started.resolve();
+                return neverSettles<boolean>();
+            },
+            abort: () => Promise.resolve(),
+        });
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: () => Promise.resolve(fake.session),
+        });
+        await client.initialize();
+        const created = (await client.agent.request("session/new", {
+            cwd,
+            mcpServers: [],
+        })) as NewSessionResponse;
+
+        const running = client.agent.request("session/prompt", {
+            sessionId: created.sessionId,
+            prompt: [{ type: "text", text: "hang" }],
+        });
+        await started.promise;
+        await client.close();
+        await settle();
+        await running.catch(() => undefined);
+
+        expect(fake.calls).toEqual(["prompt", "abort", "dispose"]);
+    });
 });

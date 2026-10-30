@@ -114,10 +114,12 @@ async function withDeadline(
     }
     if (outcome !== DEADLINE) return outcome;
 
-    const connected = new Set(manager.getConnectedServers());
-    const stalled = names.filter(name => !connected.has(name));
+    // A server that answered `initialize` but never listed its tools is still a
+    // live connection, so connection state alone would name nobody.
+    const stalled = names.filter(name => manager.getConnection(name)?.tools === undefined);
+    const unfinished = stalled.length > 0 ? stalled : names;
     await manager.disconnectAll();
     throw new PicoSessionError(
-        `MCP server ${quoted(stalled)} did not finish starting within ${MCP_STARTUP_DEADLINE_MS / 1000} s.`,
+        `MCP server ${quoted(unfinished)} did not finish starting within ${MCP_STARTUP_DEADLINE_MS / 1000} s.`,
     );
 }

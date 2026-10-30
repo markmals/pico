@@ -3,6 +3,8 @@ import type { SessionUpdate, ToolCallContent, ToolCallUpdate } from "@agentclien
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
+import type { RecordedChange } from "../engine/pico-session.ts";
+
 import {
     toolExecutionEnd,
     toolExecutionStart,
@@ -13,12 +15,6 @@ import { SessionEventMapper } from "./session-event-mapper.ts";
 
 const cwd = "/workspace";
 
-interface RecordedChangeFixture {
-    path: string;
-    oldText: string | null;
-    newText: string;
-}
-
 interface RecordingMapper {
     readonly mapper: SessionEventMapper;
     /** The tool call ids the mapper asked the session about, in order. */
@@ -26,7 +22,7 @@ interface RecordingMapper {
 }
 
 /** What the engine recorded for each call, consumed when that call ends. */
-function recordingMapper(changes: Record<string, RecordedChangeFixture[]> = {}): RecordingMapper {
+function recordingMapper(changes: Record<string, RecordedChange[]> = {}): RecordingMapper {
     const pending = new Map(Object.entries(changes));
     const taken: string[] = [];
     const mapper = new SessionEventMapper({
@@ -141,7 +137,7 @@ describe("proposal.0001 tool call results", () => {
         args?: unknown;
         result: unknown;
         isError?: boolean;
-        changes?: Record<string, RecordedChangeFixture[]>;
+        changes?: Record<string, RecordedChange[]>;
     }): ToolCallUpdate & { taken: string[] } {
         const { mapper, taken } = recordingMapper(options.changes);
         mapper.map(
@@ -368,5 +364,63 @@ describe("proposal.0001 tool call results", () => {
         expect(update.content).toEqual([
             textContent("Successfully wrote 3 bytes to local://notes.md"),
         ]);
+    });
+
+    test("a write Pico could not read back says so instead of showing a diff", () => {
+        const path = join(cwd, "secret.txt");
+        const update = endUpdate({
+            toolName: "write",
+            args: { path: "secret.txt", content: "hi\n" },
+            result: toolResult("Successfully wrote 3 bytes to secret.txt", { resolvedPath: path }),
+            changes: {
+                "call-1": [{ path, unreadable: `EACCES: permission denied, open '${path}'` }],
+            },
+        });
+
+        expect(update.status).toBe("completed");
+        expect(update.locations).toEqual([{ path }]);
+        expect(update.content).toEqual([
+            textContent("Successfully wrote 3 bytes to secret.txt"),
+            textContent(
+                `Could not show the change to ${path}: EACCES: permission denied, open '${path}'`,
+            ),
+        ]);
+    });
+
+    test("an edit diffs the files it could read and explains the one it could not", () => {
+        const readable = join(cwd, "a.txt");
+        const unreadable = join(cwd, "b.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("edited 2 files", {}),
+            changes: {
+                "call-1": [
+                    { path: readable, oldText: "a\n", newText: "A\n" },
+                    { path: unreadable, unreadable: "EISDIR: illegal operation on a directory" },
+                ],
+            },
+        });
+
+        expect(update.locations).toEqual([{ path: readable }, { path: unreadable }]);
+        expect(update.content).toEqual([
+            { type: "diff", path: readable, oldText: "a\n", newText: "A\n" },
+            textContent(
+                `Could not show the change to ${unreadable}: EISDIR: illegal operation on a directory`,
+            ),
+        ]);
+    });
+
+    test("a failed edit still only reports the error text", () => {
+        const path = join(cwd, "b.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: "…" },
+            result: toolResult("Edit rejected: stale tag", { path }),
+            isError: true,
+            changes: { "call-1": [{ path, unreadable: "EACCES: permission denied" }] },
+        });
+
+        expect(update.content).toEqual([textContent("Edit rejected: stale tag")]);
     });
 });

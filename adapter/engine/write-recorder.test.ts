@@ -5,6 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
+import type { RecordedChange } from "./write-recorder.ts";
+
 import { temporaryDirectory } from "./testing/session-fixture.ts";
 import { WriteRecorder } from "./write-recorder.ts";
 
@@ -21,6 +23,22 @@ async function hooksOf(recorder: WriteRecorder): Promise<Map<string, Hook>> {
     } as unknown as ExtensionAPI;
     await recorder.extension().factory?.(api);
     return hooks;
+}
+
+/** The recorder reported that it could not read `file`, and said why. */
+function assertUnreadable(records: RecordedChange[], file: string): void {
+    assert.equal(records.length, 1);
+    const [record] = records;
+    assert.ok(
+        record && "unreadable" in record,
+        `expected an unreadable record, got ${JSON.stringify(records)}`,
+    );
+    assert.equal(record.path, file);
+    assert.match(record.unreadable, /EACCES/);
+    assert.ok(
+        record.unreadable.includes(file),
+        `the cause does not name the file: ${record.unreadable}`,
+    );
 }
 
 describe("proposal.0001 recorded writes", () => {
@@ -80,7 +98,7 @@ describe("proposal.0001 recorded writes", () => {
         ]);
     });
 
-    test("a file that becomes unreadable after its snapshot is not reported as deleted", async t => {
+    test("a file that becomes unreadable after its snapshot is reported as unreadable", async t => {
         const cwd = temporaryDirectory(t, "recorder");
         const file = path.join(cwd, "locked.txt");
         fs.writeFileSync(file, "before\n");
@@ -107,10 +125,10 @@ describe("proposal.0001 recorded writes", () => {
             content: [],
         });
 
-        assert.deepEqual(recorder.take("write-1"), []);
+        assertUnreadable(recorder.take("write-1"), file);
     });
 
-    test("a file that was unreadable at its snapshot is not reported as created", async t => {
+    test("a file that was unreadable at its snapshot is reported as unreadable", async t => {
         const cwd = temporaryDirectory(t, "recorder");
         const file = path.join(cwd, "opaque.txt");
         fs.writeFileSync(file, "before\n");
@@ -139,6 +157,6 @@ describe("proposal.0001 recorded writes", () => {
             content: [],
         });
 
-        assert.deepEqual(recorder.take("write-1"), []);
+        assertUnreadable(recorder.take("write-1"), file);
     });
 });

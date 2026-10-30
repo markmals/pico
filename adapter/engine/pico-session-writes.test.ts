@@ -412,7 +412,7 @@ describe("proposal.0001 recorded writes", () => {
         ]);
     });
 
-    test("a file the recorder cannot read yields no record, and the write still runs", async t => {
+    test("a file the recorder cannot read is reported as unreadable, and the write still runs", async t => {
         const { cwd, agentDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "unreadable.txt");
         fs.writeFileSync(absolute, "secret\n");
@@ -446,6 +446,14 @@ describe("proposal.0001 recorded writes", () => {
             executions.map(execution => [execution.name, execution.isError]),
             [["write", false]],
         );
-        assert.deepEqual(session.takeRecordedChanges("write-1"), []);
+        const records = session.takeRecordedChanges("write-1");
+        assert.equal(records.length, 1);
+        const [record] = records;
+        assert.ok(
+            record && "unreadable" in record,
+            `expected an unreadable record, got ${JSON.stringify(records)}`,
+        );
+        assert.equal(record.path, absolute);
+        assert.match(record.unreadable, /EACCES/);
     });
 });

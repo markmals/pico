@@ -70,7 +70,7 @@ describe("proposal.0001 recorded writes", () => {
             toolName: "edit",
             toolCallId: "edit-1",
             isError: false,
-            input: {},
+            input: { input: "[pruned.txt#ABCD]\nPUT 1.=1:\n+edited" },
             content: [],
             details: {
                 diff: "",
@@ -84,7 +84,7 @@ describe("proposal.0001 recorded writes", () => {
             toolName: "write",
             toolCallId: "write-1",
             isError: false,
-            input: {},
+            input: { path: "pruned.txt" },
             content: [],
         });
 
@@ -119,7 +119,7 @@ describe("proposal.0001 recorded writes", () => {
             toolName: "write",
             toolCallId: "write-1",
             isError: false,
-            input: {},
+            input: { path: "locked.txt" },
             content: [],
         });
 
@@ -151,7 +151,7 @@ describe("proposal.0001 recorded writes", () => {
             toolName: "write",
             toolCallId: "write-1",
             isError: false,
-            input: {},
+            input: { path: "opaque.txt" },
             content: [],
         });
 
@@ -180,7 +180,7 @@ describe("proposal.0001 recorded writes", () => {
             toolName: "write",
             toolCallId: "write-1",
             isError: false,
-            input: {},
+            input: { path: "huge.txt" },
             content: [],
         });
 

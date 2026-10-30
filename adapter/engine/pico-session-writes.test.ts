@@ -660,3 +660,76 @@ describe("proposal.0001 batch corrections", () => {
         ]);
     });
 });
+
+describe("proposal.0001 file identity", () => {
+    test("a file created in new nested directories is recorded as a creation", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const absolute = path.join(cwd, "new", "sub", "file.txt");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "new/sub/file.txt", content: "created\n" },
+                                "write-1",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("create a nested file");
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "created\n");
+        assert.deepEqual(session.takeRecordedChanges("write-1"), [
+            { path: absolute, oldText: null, newText: "created\n" },
+        ]);
+    });
+
+    test("a write through a dangling directory symlink sees what the batch created", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        fs.symlinkSync("targetdir", path.join(cwd, "aliasdir"));
+        const alias = path.join(cwd, "aliasdir", "file.txt");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "targetdir/file.txt", content: "first\n" },
+                                "write-1",
+                            ),
+                            toolCall(
+                                "write",
+                                { path: "aliasdir/file.txt", content: "second\n" },
+                                "write-2",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("write through the directory and its link");
+
+        assert.deepEqual(session.takeRecordedChanges("write-2"), [
+            { path: alias, oldText: "first\n", newText: "second\n" },
+        ]);
+    });
+});

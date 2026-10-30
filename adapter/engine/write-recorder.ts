@@ -50,6 +50,16 @@ interface Change {
  */
 type FileState = { readonly text: string } | "missing" | { readonly noDiff: string };
 
+/** What Pico knows about one tool call while it runs. */
+interface PendingCall {
+    /** The path argument as the call carried it, for detecting a redirect. */
+    argument: string | undefined;
+    snapshots: Snapshot[];
+}
+
+/** Why a redirected call has no diff. */
+const REDIRECTED = "an extension changed which file the call wrote";
+
 /** One file as it stood before a tool call that may change it. */
 interface Snapshot {
     /** The path the call named, which is what the user is shown. */
@@ -97,30 +107,47 @@ function undiffable(state: FileState): state is { readonly noDiff: string } {
 const MAX_SYMLINK_HOPS = 32;
 
 /**
- * The file a path really names, so a symlink and its target are one file. A
- * dangling link is followed too: `fs.realpath` fails on one, yet a call in the
- * same batch may be about to create its target.
+ * The file a path really names, resolved one component at a time so the answer
+ * is the same before and after the file exists. `fs.realpath` cannot do this: it
+ * fails on a path whose last components are not there yet, and the fallback of
+ * resolving only the parent misses a symlinked directory further up — so a file
+ * created under new directories, or reached through a dangling directory link,
+ * would key differently once it exists.
  */
 async function realPath(absolutePath: string): Promise<string> {
-    let current = absolutePath;
-    for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop += 1) {
-        let link: string;
-        try {
-            link = await fs.readlink(current);
-        } catch {
-            break;
+    const { root } = path.parse(absolutePath);
+    let resolved = root;
+    let remaining = absolutePath.slice(root.length).split(path.sep).filter(Boolean);
+    let hops = 0;
+    while (remaining.length > 0) {
+        const segment = remaining.shift();
+        if (segment === undefined || segment === ".") continue;
+        if (segment === "..") {
+            resolved = path.dirname(resolved);
+            continue;
         }
-        current = path.resolve(path.dirname(current), link);
+        const candidate = path.join(resolved, segment);
+        const link = hops < MAX_SYMLINK_HOPS ? await readLink(candidate) : undefined;
+        if (link === undefined) {
+            resolved = candidate;
+            continue;
+        }
+        hops += 1;
+        // Re-walk from the link's target: its own components may be links too.
+        const target = path.isAbsolute(link) ? link : path.join(resolved, link);
+        remaining = [...target.slice(root.length).split(path.sep).filter(Boolean), ...remaining];
+        resolved = root;
     }
+    return resolved;
+}
+
+/** Where a path points when it is a symlink, or `undefined` when it is anything else. */
+async function readLink(candidate: string): Promise<string | undefined> {
     try {
-        return await fs.realpath(current);
+        if (!(await fs.lstat(candidate)).isSymbolicLink()) return undefined;
+        return await fs.readlink(candidate);
     } catch {
-        // A file that does not exist yet still has a real directory.
-    }
-    try {
-        return path.join(await fs.realpath(path.dirname(current)), path.basename(current));
-    } catch {
-        return current;
+        return undefined;
     }
 }
 
@@ -130,6 +157,24 @@ function absolute(target: string, cwd: string): string | undefined {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * The path argument the call carries, as the user's model wrote it. Comparing
+ * it before and after execution is how a redirect by an extension is detected:
+ * canonical paths cannot be compared, because a path only becomes resolvable
+ * once the call has created it.
+ */
+function pathArgument(event: ToolCallEvent | ToolResultEvent): string | undefined {
+    if (event.toolName === "write") {
+        if (!("path" in event.input)) return undefined;
+        const target = event.input.path;
+        return typeof target === "string" ? unwrapHashlineHeaderPath(target) : undefined;
+    }
+    if (event.toolName !== "edit") return undefined;
+    if (!("input" in event.input)) return undefined;
+    const input = event.input.input;
+    return typeof input === "string" ? input : undefined;
 }
 
 /**
@@ -168,7 +213,7 @@ function targets(event: ToolCallEvent | ToolResultEvent, cwd: string): string[] 
  */
 export class WriteRecorder {
     readonly #cwd: string;
-    readonly #snapshots = new Map<string, Snapshot[]>();
+    readonly #calls = new Map<string, PendingCall>();
     readonly #changed = new Map<string, Change>();
     readonly #records = new Map<string, RecordedChange[]>();
     #clock = 0;
@@ -199,10 +244,9 @@ export class WriteRecorder {
     }
 
     async #snapshot(event: ToolCallEvent): Promise<void> {
-        const files = targets(event, this.#cwd);
-        if (files.length === 0) return;
+        if (event.toolName !== "write" && event.toolName !== "edit") return;
         const snapshots: Snapshot[] = [];
-        for (const file of files) {
+        for (const file of targets(event, this.#cwd)) {
             snapshots.push({
                 path: file,
                 key: await realPath(file),
@@ -210,49 +254,47 @@ export class WriteRecorder {
                 at: (this.#clock += 1),
             });
         }
-        this.#snapshots.set(event.toolCallId, snapshots);
+        // Kept even with no targets: a call that named an internal URL may still
+        // be redirected onto a project file, and that has to be reported.
+        this.#calls.set(event.toolCallId, { argument: pathArgument(event), snapshots });
     }
 
     async #record(event: ToolResultEvent): Promise<void> {
-        const snapshots = this.#snapshots.get(event.toolCallId);
-        if (snapshots === undefined) return;
-        this.#snapshots.delete(event.toolCallId);
+        const call = this.#calls.get(event.toolCallId);
+        if (call === undefined) return;
+        this.#calls.delete(event.toolCallId);
         // An extension's `tool_call` hook may have redirected the call. Oh My Pi
         // hands every hook the same original input and only aggregates the
-        // revisions afterwards, so the effective target is first visible here.
-        const effective = await this.#effectiveTargets(event, snapshots);
+        // revisions afterwards, so the rewritten argument is first visible here.
+        const redirected = pathArgument(event) !== call.argument;
         const records: RecordedChange[] = [];
         if (!event.isError) {
-            for (const target of effective) {
-                const change = await this.#changeOf(target);
-                if (change) records.push(change);
+            if (redirected) records.push(...(await this.#redirected(event)));
+            else {
+                for (const snapshot of call.snapshots) {
+                    const change = await this.#changeOf(snapshot);
+                    if (change) records.push(change);
+                }
             }
         }
-        for (const snapshot of snapshots) this.#forgetUnwatched(snapshot.key);
-        for (const target of effective) this.#forgetUnwatched(target.key);
+        for (const snapshot of call.snapshots) this.#forgetUnwatched(snapshot.key);
         if (records.length > 0) this.#records.set(event.toolCallId, records);
     }
 
-    /** The files the call really touched, each paired with the state Pico saw before it ran. */
-    async #effectiveTargets(event: ToolResultEvent, snapshots: Snapshot[]): Promise<Snapshot[]> {
-        const files = targets(event, this.#cwd);
-        if (files.length === 0) return snapshots;
-        const seen = new Map(snapshots.map(snapshot => [snapshot.key, snapshot]));
-        const effective: Snapshot[] = [];
-        for (const file of files) {
+    /**
+     * A call an extension pointed at another file: Pico never saw that file
+     * before it ran, so it names the file and says why there is no diff. An
+     * internal URL is not a project file and gets no record at all.
+     */
+    async #redirected(event: ToolResultEvent): Promise<RecordedChange[]> {
+        const records: RecordedChange[] = [];
+        for (const file of targets(event, this.#cwd)) {
             const key = await realPath(file);
-            const snapshot = seen.get(key);
-            effective.push(
-                snapshot ?? {
-                    path: file,
-                    key,
-                    // Pico never saw this file before the call, so it has no old text.
-                    before: { noDiff: "an extension changed which file the call wrote" },
-                    at: this.#clock,
-                },
-            );
+            this.#changed.set(key, { after: await readState(file), at: (this.#clock += 1) });
+            this.#forgetUnwatched(key);
+            records.push({ path: file, noDiff: REDIRECTED });
         }
-        return effective;
+        return records;
     }
 
     /** What the call did to one of its targets, or why Pico cannot tell. */
@@ -288,15 +330,15 @@ export class WriteRecorder {
 
     /** Prior content is only worth keeping while a call that might have been overtaken is still pending. */
     #forgetUnwatched(key: string): void {
-        for (const snapshots of this.#snapshots.values()) {
-            if (snapshots.some(snapshot => snapshot.key === key)) return;
+        for (const call of this.#calls.values()) {
+            if (call.snapshots.some(snapshot => snapshot.key === key)) return;
         }
         this.#changed.delete(key);
     }
 
     /** A call that never produced a result cannot be matched any more once the turn is over. */
     #endTurn(): void {
-        this.#snapshots.clear();
+        this.#calls.clear();
         this.#changed.clear();
     }
 }

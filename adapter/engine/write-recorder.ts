@@ -7,23 +7,31 @@ import type {
 
 import { resolvePath } from "@oh-my-pi/pi-coding-agent/extensibility/utils";
 import { unwrapHashlineHeaderPath } from "@oh-my-pi/pi-coding-agent/tools/plan-mode-guard";
+import { getEditInputPaths } from "@oh-my-pi/pi-tui/tools/edit";
 import fs from "node:fs/promises";
 
-export interface RecordedWrite {
-    /** Absolute path of the file the write replaced. */
+export interface RecordedChange {
+    /** Absolute path of the file the tool call changed. */
     path: string;
     /** `null` when the file did not exist. */
     oldText: string | null;
-    /** The file's content once the write finished, byte for byte. */
+    /** The file's content once the tool call finished, byte for byte. */
     newText: string;
 }
 
 /** The synthetic source Pico's own extension reports; it loads no file. */
 const PICO_WRITE_RECORDER = "<pico:write-recorder>";
 
-/** One file's content after a tool changed it, and when that change landed. */
+/** One file as a tool left it, and when that change landed. */
 interface Change {
     newText: string;
+    at: number;
+}
+
+/** One file as it stood before a tool call that may change it. */
+interface Snapshot {
+    path: string;
+    oldText: string | null;
     at: number;
 }
 
@@ -35,62 +43,53 @@ async function readText(absolutePath: string): Promise<string | null> {
     }
 }
 
-/**
- * The file a `write` targets, or `undefined` when the target is not a
- * filesystem path (`local://…`). The hashline wrapper is unwrapped exactly as
- * the write tool unwraps it, so a model that pastes a `read` header as the
- * `path` argument is recorded against the file it actually wrote.
- */
-function writeTarget(event: ToolCallEvent, cwd: string): string | undefined {
-    if (!("path" in event.input)) return undefined;
-    const target = event.input.path;
-    if (typeof target !== "string") return undefined;
+function absolute(target: string, cwd: string): string | undefined {
     try {
-        return resolvePath(unwrapHashlineHeaderPath(target), cwd);
+        return resolvePath(target, cwd);
     } catch {
         return undefined;
     }
 }
 
-/** One file an edit touched, with the content it left behind when the result still carries it. */
-function fileChange(value: unknown): { path: string; newText?: string } | undefined {
-    if (typeof value !== "object" || value === null) return undefined;
-    if (!("path" in value) || typeof value.path !== "string") return undefined;
-    if ("isError" in value && value.isError === true) return undefined;
-    const newText =
-        "newText" in value && typeof value.newText === "string" ? value.newText : undefined;
-    return { path: value.path, newText };
-}
-
-/** Every file a successful `edit` rewrote. `newText` is absent when OMP pruned an oversized snapshot. */
-function editedFiles(details: unknown): Array<{ path: string; newText?: string }> {
-    if (typeof details !== "object" || details === null) return [];
-    const edited: Array<{ path: string; newText?: string }> = [];
-    if ("perFileResults" in details && Array.isArray(details.perFileResults)) {
-        for (const result of details.perFileResults) {
-            const changed = fileChange(result);
-            if (changed) edited.push(changed);
-        }
+/**
+ * The files a tool call is about to change: a `write`'s target — unwrapped from
+ * a pasted hashline header exactly as the write tool unwraps it — or every file
+ * named in an `edit`'s input. Targets that are not filesystem paths (`local://…`)
+ * are left out.
+ */
+function targets(event: ToolCallEvent, cwd: string): string[] {
+    if (event.toolName === "write") {
+        if (!("path" in event.input)) return [];
+        const target = event.input.path;
+        if (typeof target !== "string") return [];
+        const resolved = absolute(unwrapHashlineHeaderPath(target), cwd);
+        return resolved === undefined ? [] : [resolved];
     }
-    if (edited.length === 0) {
-        const changed = fileChange(details);
-        if (changed) edited.push(changed);
+    if (event.toolName !== "edit") return [];
+    if (!("input" in event.input)) return [];
+    const input = event.input.input;
+    if (typeof input !== "string") return [];
+    const resolved: string[] = [];
+    for (const target of getEditInputPaths(input)) {
+        const file = absolute(target, cwd);
+        if (file !== undefined && !resolved.includes(file)) resolved.push(file);
     }
-    return edited;
+    return resolved;
 }
 
 /**
- * Records what each `write` replaced, through a Pico-owned extension rather
- * than a client bridge: a bridged write skips OMP's own write path, which is
- * what keeps a replaced file's CRLF line endings and byte order mark. The
+ * Records what each `write` and `edit` replaced, through a Pico-owned extension
+ * rather than a client bridge: a bridged write skips OMP's own write path, which
+ * is what keeps a replaced file's CRLF line endings and byte order mark. The
  * `tool_call` hook runs before the tool, so it sees the old content; the
- * `tool_result` hook runs after it, so it sees the bytes on disk.
+ * `tool_result` hook runs after it, so it sees the bytes on disk — which also
+ * covers the oversized edits whose snapshots OMP prunes out of its result.
  */
 export class WriteRecorder {
     readonly #cwd: string;
-    readonly #snapshots = new Map<string, { path: string; oldText: string | null; at: number }>();
+    readonly #snapshots = new Map<string, Snapshot[]>();
     readonly #changed = new Map<string, Change>();
-    readonly #records = new Map<string, RecordedWrite>();
+    readonly #records = new Map<string, RecordedChange[]>();
     #clock = 0;
 
     constructor(cwd: string) {
@@ -105,75 +104,57 @@ export class WriteRecorder {
             error: null,
             factory: (pi: ExtensionAPI) => {
                 pi.on("tool_call", event => this.#snapshot(event));
-                pi.on("tool_result", event => this.#observe(event));
+                pi.on("tool_result", event => this.#record(event));
                 pi.on("agent_end", () => this.#endTurn());
             },
         };
     }
 
-    /** Consumes what the `write` with this tool call id replaced. */
-    take(toolCallId: string): RecordedWrite | undefined {
-        const record = this.#records.get(toolCallId);
+    /** Consumes what the tool call with this id changed, one entry per file. */
+    take(toolCallId: string): RecordedChange[] {
+        const records = this.#records.get(toolCallId) ?? [];
         this.#records.delete(toolCallId);
-        return record;
+        return records;
     }
 
     async #snapshot(event: ToolCallEvent): Promise<void> {
-        if (event.toolName !== "write") return;
-        const target = writeTarget(event, this.#cwd);
-        if (target === undefined) return;
-        const at = (this.#clock += 1);
-        this.#snapshots.set(event.toolCallId, {
-            path: target,
-            oldText: await readText(target),
-            at,
-        });
-    }
-
-    async #observe(event: ToolResultEvent): Promise<void> {
-        if (event.toolName === "edit") {
-            if (!event.isError && "details" in event) await this.#noteEdit(event.details);
-            return;
+        const files = targets(event, this.#cwd);
+        if (files.length === 0) return;
+        const snapshots: Snapshot[] = [];
+        for (const file of files) {
+            snapshots.push({ path: file, oldText: await readText(file), at: (this.#clock += 1) });
         }
-        if (event.toolName === "write") await this.#record(event);
-    }
-
-    async #noteEdit(details: unknown): Promise<void> {
-        for (const { path, newText } of editedFiles(details)) {
-            // An oversized multi-file edit arrives without its snapshot, so read what it left on disk.
-            const content = newText ?? (await readText(path));
-            if (content === null) continue;
-            this.#changed.set(path, { newText: content, at: (this.#clock += 1) });
-            this.#forgetUnwatched(path);
-        }
+        this.#snapshots.set(event.toolCallId, snapshots);
     }
 
     async #record(event: ToolResultEvent): Promise<void> {
-        const snapshot = this.#snapshots.get(event.toolCallId);
-        if (snapshot === undefined) return;
+        const snapshots = this.#snapshots.get(event.toolCallId);
+        if (snapshots === undefined) return;
         this.#snapshots.delete(event.toolCallId);
-        const newText = await readText(snapshot.path);
-        if (newText === null) {
+        const records: RecordedChange[] = [];
+        for (const snapshot of snapshots) {
+            const newText = event.isError ? null : await readText(snapshot.path);
+            if (newText !== null) {
+                // OMP prepares every tool call's arguments before it runs any of
+                // them, so calls in one batch snapshot the same content. A change
+                // that landed after this snapshot is what this call replaced. A
+                // file a `bash` command rewrote inside the same batch is invisible
+                // here: nothing reports it, so the snapshot stands.
+                const overtaken = this.#changed.get(snapshot.path);
+                const oldText =
+                    overtaken && overtaken.at > snapshot.at ? overtaken.newText : snapshot.oldText;
+                this.#changed.set(snapshot.path, { newText, at: (this.#clock += 1) });
+                records.push({ path: snapshot.path, oldText, newText });
+            }
             this.#forgetUnwatched(snapshot.path);
-            return;
         }
-        // OMP prepares every tool call's arguments before it runs any of them, so
-        // every write in a batch snapshots the same content. A write or edit that
-        // finished after this one's snapshot is what this one actually replaced.
-        // A file a `bash` command rewrote inside the same batch is invisible here:
-        // nothing reports it, so the snapshot stands.
-        const overtaken = this.#changed.get(snapshot.path);
-        const oldText =
-            overtaken && overtaken.at > snapshot.at ? overtaken.newText : snapshot.oldText;
-        this.#changed.set(snapshot.path, { newText, at: (this.#clock += 1) });
-        this.#records.set(event.toolCallId, { path: snapshot.path, oldText, newText });
-        this.#forgetUnwatched(snapshot.path);
+        if (records.length > 0) this.#records.set(event.toolCallId, records);
     }
 
-    /** Prior content is only worth keeping while a write that might have been overtaken is still pending. */
+    /** Prior content is only worth keeping while a call that might have been overtaken is still pending. */
     #forgetUnwatched(filePath: string): void {
-        for (const snapshot of this.#snapshots.values()) {
-            if (snapshot.path === filePath) return;
+        for (const snapshots of this.#snapshots.values()) {
+            if (snapshots.some(snapshot => snapshot.path === filePath)) return;
         }
         this.#changed.delete(filePath);
     }

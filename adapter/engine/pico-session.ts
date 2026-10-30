@@ -1,11 +1,12 @@
 import type { McpServerStdio } from "@agentclientprotocol/sdk";
 import type { Api, AuthStorage, Model } from "@oh-my-pi/pi-ai";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
+import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 
 import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 import type { HostMcpServers } from "./host-mcp-servers.ts";
-import type { RecordedWrite } from "./write-recorder.ts";
+import type { RecordedChange } from "./write-recorder.ts";
 
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
 import { openCredentialStore } from "./credential-store.ts";
@@ -17,7 +18,7 @@ import { findUnexpectedTools, PICO_BUILTIN_TOOLS } from "./tool-roster.ts";
 import { WriteRecorder } from "./write-recorder.ts";
 
 export { PicoSessionError } from "./errors.ts";
-export type { RecordedWrite } from "./write-recorder.ts";
+export type { RecordedChange } from "./write-recorder.ts";
 
 export interface PicoSessionOptions {
     /** Absolute path to an existing directory; the only source of the working directory. */
@@ -32,11 +33,19 @@ export interface PicoSessionOptions {
     model?: Model<Api>;
 }
 
+/** Which MCP server a mounted tool came from, and its name on that server. */
+export interface McpToolIdentity {
+    server: string;
+    tool: string;
+}
+
 export interface PicoSession {
     readonly engine: AgentSession;
     readonly cwd: string;
-    /** Consumes what the `write` with this tool call id replaced, and what the file holds now. */
-    takeRecordedWrite(toolCallId: string): RecordedWrite | undefined;
+    /** Consumes what the tool call with this id changed, one entry per affected file. */
+    takeRecordedChanges(toolCallId: string): RecordedChange[];
+    /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
+    mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
 }
@@ -77,13 +86,23 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         });
         engine = created.session;
 
-        if (!engine.model) {
+        const model = engine.model;
+        if (!model) {
             const reason = created.modelFallbackMessage ? ` ${created.modelFallbackMessage}` : "";
             throw new PicoSessionError(
                 `Oh My Pi has no model configured for ${cwd}, and Pico does not substitute one.${reason} ` +
                     "Configure a default model for this project in Oh My Pi, then start a new session.",
             );
         }
+        // A fallback message alongside a resolved model means Oh My Pi picked a
+        // different model than the configuration asked for.
+        if (options.model === undefined && created.modelFallbackMessage) {
+            throw new PicoSessionError(
+                `Oh My Pi did not use the model configured for ${cwd}: ${created.modelFallbackMessage}. ` +
+                    "Pico does not substitute another model; fix the configured model, then start a new session.",
+            );
+        }
+        await verifyCredentials(engine, model);
 
         const connected = mcp;
         engine.setMcpServerInstructionsSource(() => connected.manager.getServerInstructions());
@@ -109,11 +128,13 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     const liveEngine = engine;
     const liveMcp = mcp;
+    const identities = mcpToolIdentities(mcp.tools);
     let disposed = false;
     return {
         engine,
         cwd,
-        takeRecordedWrite: toolCallId => writes.take(toolCallId),
+        takeRecordedChanges: toolCallId => writes.take(toolCallId),
+        mcpToolIdentity: toolName => identities.get(toolName),
         dispose: async () => {
             if (disposed) return;
             disposed = true;
@@ -122,4 +143,43 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             ownedStore?.close();
         },
     };
+}
+
+/**
+ * The server and tool name each mounted MCP tool reports for itself. The minted
+ * `mcp__<server>_<tool>` name cannot be split back apart — both halves are
+ * sanitized and an overlong name is hashed — so the identity comes from the
+ * connection instead.
+ */
+function mcpToolIdentities(tools: readonly CustomTool[]): Map<string, McpToolIdentity> {
+    const identities = new Map<string, McpToolIdentity>();
+    for (const tool of tools) {
+        if (!("mcpServerName" in tool) || typeof tool.mcpServerName !== "string") continue;
+        if (!("mcpToolName" in tool) || typeof tool.mcpToolName !== "string") continue;
+        identities.set(tool.name, { server: tool.mcpServerName, tool: tool.mcpToolName });
+    }
+    return identities;
+}
+
+/**
+ * Resolves the selected model's real credential — running a command-backed key
+ * and refreshing OAuth in place, exactly as a request would — so a session only
+ * exists when its first prompt can reach the provider.
+ */
+async function verifyCredentials(engine: AgentSession, model: Model<Api>): Promise<void> {
+    const named = `${model.provider}/${model.id}`;
+    let credential: string | undefined;
+    try {
+        credential = await engine.modelRegistry.getApiKey(model);
+    } catch (error) {
+        throw new PicoSessionError(
+            `Pico could not use the credentials for ${named}: ${describeCause(error)}`,
+        );
+    }
+    if (credential === undefined) {
+        throw new PicoSessionError(
+            `Pico could not use the credentials for ${named}: Oh My Pi resolved no usable API key for ${model.provider}. ` +
+                "Sign in to that provider in Oh My Pi, then start a new session.",
+        );
+    }
 }

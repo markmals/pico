@@ -32,11 +32,23 @@ export interface PicoAgentOptions {
     version: string;
 }
 
-const shutdowns = new WeakMap<AgentApp, Promise<void>>();
+/**
+ * The teardown a closed connection started.
+ *
+ * `outstanding` names the steps that have not finished, so a caller that gives up
+ * on `completed` can say what it was still waiting for.
+ */
+export interface PicoAgentShutdown {
+    readonly completed: Promise<void>;
+    outstanding(): string[];
+}
 
-/** Resolves once every session the app's connection opened has been disposed. */
-export function picoAgentShutdown(app: AgentApp): Promise<void> {
-    return shutdowns.get(app) ?? Promise.resolve();
+const shutdowns = new WeakMap<AgentApp, PicoAgentShutdown>();
+
+const NOTHING_TO_DO: PicoAgentShutdown = { completed: Promise.resolve(), outstanding: () => [] };
+
+export function picoAgentShutdown(app: AgentApp): PicoAgentShutdown {
+    return shutdowns.get(app) ?? NOTHING_TO_DO;
 }
 
 /** One app serves one stdio connection: the client Sesh launches it for. */
@@ -56,15 +68,24 @@ export function createPicoAgent(options: PicoAgentOptions): AgentApp {
         connection.signal.addEventListener("abort", () => {
             closed = true;
         });
-        shutdowns.set(
-            app,
-            connection.closed.then(async () => {
+        shutdowns.set(app, {
+            completed: connection.closed.then(async () => {
                 closed = true;
                 await Promise.all(starting);
                 await Promise.all([...sessions.values()].map(runtime => runtime.dispose()));
                 sessions.clear();
             }),
-        );
+            outstanding: () => {
+                const steps =
+                    starting.size > 0
+                        ? ["waiting for sessions that have not finished starting"]
+                        : [];
+                for (const runtime of sessions.values()) {
+                    if (runtime.outstandingStep) steps.push(runtime.outstandingStep);
+                }
+                return steps;
+            },
+        });
     });
 
     app.onRequest("initialize", (): InitializeResponse => ({

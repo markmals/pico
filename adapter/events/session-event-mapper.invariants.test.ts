@@ -68,7 +68,8 @@ describe("proposal.0001 tool call reporting invariants", () => {
         for (let seed = 1; seed <= 200; seed++) {
             const mapper = new SessionEventMapper({
                 cwd: "/workspace",
-                takeRecordedWrite: () => undefined,
+                takeRecordedChanges: () => [],
+                mcpToolIdentity: () => undefined,
             });
             const events = randomSequence(seed);
             const updates = events.flatMap(event => mapper.map(event));
@@ -102,7 +103,8 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("closing open tool calls fails only the calls still running", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeRecordedWrite: () => undefined,
+            takeRecordedChanges: () => [],
+            mcpToolIdentity: () => undefined,
         });
         mapper.map(
             toolExecutionStart({ toolCallId: "done-1", toolName: "read", args: { path: "a.txt" } }),
@@ -133,7 +135,8 @@ describe("proposal.0001 tool call reporting invariants", () => {
     test("closing open tool calls twice reports nothing the second time", () => {
         const mapper = new SessionEventMapper({
             cwd: "/workspace",
-            takeRecordedWrite: () => undefined,
+            takeRecordedChanges: () => [],
+            mcpToolIdentity: () => undefined,
         });
         mapper.map(
             toolExecutionStart({

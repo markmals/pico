@@ -102,7 +102,11 @@ describe("proposal.0001 tool call translation is total", () => {
         for (let attempt = 0; attempt < 500; attempt++) {
             const toolName = ROSTER[next() % ROSTER.length] as string;
             const args = randomArgs(next);
-            const mapper = new SessionEventMapper({ cwd: CWD, takeRecordedWrite: () => undefined });
+            const mapper = new SessionEventMapper({
+                cwd: CWD,
+                takeRecordedChanges: () => [],
+                mcpToolIdentity: () => undefined,
+            });
 
             let updates: SessionUpdate[] = [];
             expect(
@@ -122,7 +126,11 @@ describe("proposal.0001 tool call translation is total", () => {
     test.each(PATH_SHAPES)(
         "a read of %s is reported with a location Pico can stand behind",
         path => {
-            const mapper = new SessionEventMapper({ cwd: CWD, takeRecordedWrite: () => undefined });
+            const mapper = new SessionEventMapper({
+                cwd: CWD,
+                takeRecordedChanges: () => [],
+                mcpToolIdentity: () => undefined,
+            });
 
             const updates = mapper.map(
                 toolExecutionStart({ toolCallId: "call-1", toolName: "read", args: { path } }),

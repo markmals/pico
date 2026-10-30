@@ -4,7 +4,11 @@ import { textDelta, thinkingDelta, toolCallStreamDeltas } from "./engine-event-f
 import { SessionEventMapper } from "./session-event-mapper.ts";
 
 function mapper(): SessionEventMapper {
-    return new SessionEventMapper({ cwd: "/workspace", takeRecordedWrite: () => undefined });
+    return new SessionEventMapper({
+        cwd: "/workspace",
+        takeRecordedChanges: () => [],
+        mcpToolIdentity: () => undefined,
+    });
 }
 
 describe("proposal.0001 assistant message streaming", () => {

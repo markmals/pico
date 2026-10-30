@@ -38,7 +38,8 @@ describe("proposal.0001 shutdown", () => {
                 return {
                     engine: session.engine,
                     cwd: session.cwd,
-                    takeRecordedWrite: toolCallId => session.takeRecordedWrite(toolCallId),
+                    takeRecordedChanges: toolCallId => session.takeRecordedChanges(toolCallId),
+                    mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
                     dispose: async () => {
                         disposed.push(session.cwd);
                         await session.dispose();
@@ -126,7 +127,7 @@ describe("proposal.0001 shutdown", () => {
         await client.close();
         const shutdown = picoAgentShutdown(client.app);
         creation.resolve();
-        await shutdown;
+        await shutdown.completed;
 
         expect(fake.disposals).toBe(1);
         await pending.catch(() => undefined);
@@ -162,5 +163,78 @@ describe("proposal.0001 shutdown", () => {
         await running.catch(() => undefined);
 
         expect(fake.calls).toEqual(["prompt", "abort", "dispose"]);
+    });
+
+    test("a stalled session teardown is named as outstanding", async () => {
+        const cwd = temporaryProject();
+        const fake = fakeSession(cwd, { dispose: () => neverSettles<void>() });
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: () => Promise.resolve(fake.session),
+        });
+        await client.initialize();
+        const created = (await client.agent.request("session/new", {
+            cwd,
+            mcpServers: [],
+        })) as NewSessionResponse;
+
+        await client.close();
+        const shutdown = picoAgentShutdown(client.app);
+        await settle();
+
+        expect(shutdown.outstanding()).toEqual([
+            `disposing session ${created.sessionId} and the MCP servers it started`,
+        ]);
+    });
+
+    test("a turn that will not stop is named as outstanding", async () => {
+        const cwd = temporaryProject();
+        const started = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd, {
+            prompt: () => {
+                started.resolve();
+                return neverSettles<boolean>();
+            },
+        });
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: () => Promise.resolve(fake.session),
+        });
+        await client.initialize();
+        const created = (await client.agent.request("session/new", {
+            cwd,
+            mcpServers: [],
+        })) as NewSessionResponse;
+        const running = client.agent.request("session/prompt", {
+            sessionId: created.sessionId,
+            prompt: [{ type: "text", text: "hang" }],
+        });
+
+        await started.promise;
+        await client.close();
+        const shutdown = picoAgentShutdown(client.app);
+        await settle();
+
+        expect(shutdown.outstanding()).toEqual([
+            `stopping the turn running in session ${created.sessionId}`,
+        ]);
+        await running.catch(() => undefined);
+    });
+
+    test("nothing is outstanding once shutdown has finished", async () => {
+        const cwd = temporaryProject();
+        const fake = fakeSession(cwd);
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: () => Promise.resolve(fake.session),
+        });
+        await client.initialize();
+        await client.agent.request("session/new", { cwd, mcpServers: [] });
+
+        await client.close();
+        const shutdown = picoAgentShutdown(client.app);
+        await shutdown.completed;
+
+        expect(shutdown.outstanding()).toEqual([]);
     });
 });

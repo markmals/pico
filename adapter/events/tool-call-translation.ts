@@ -9,7 +9,7 @@ import {
     splitPathAndSelPreferringLiteralSync,
 } from "@oh-my-pi/pi-coding-agent/tools/path-utils";
 
-const MCP_PREFIX = "mcp__";
+import type { McpToolIdentity } from "../engine/pico-session.ts";
 
 /** Selectors that name the first line the read window starts at: `50`, `50-80`, `50-`, `50+30`. */
 const STARTING_LINE = /^(\d+)(?:-\d*|\+\d+)?$/;
@@ -33,7 +33,12 @@ export function toolKind(toolName: string): ToolKind {
     }
 }
 
-export function toolTitle(toolName: string, args: unknown, intent: string | undefined): string {
+export function toolTitle(
+    toolName: string,
+    args: unknown,
+    intent: string | undefined,
+    mcpTool: McpToolIdentity | undefined,
+): string {
     if (toolName === "bash") {
         const command = stringProperty(args, "command");
         if (command) return command;
@@ -47,7 +52,9 @@ export function toolTitle(toolName: string, args: unknown, intent: string | unde
         stringProperty(args, "query");
     if (subject) return subject;
 
-    const mcpTool = splitMcpToolName(toolName);
+    // The server and tool come from the connection that mounted the tool. Splitting
+    // the minted `mcp__<server>_<tool>` name back apart guesses at a boundary the
+    // sanitizer already erased.
     return mcpTool ? `${mcpTool.server}: ${mcpTool.tool}` : toolName;
 }
 
@@ -156,12 +163,4 @@ function splitSelector(rawPath: string, cwd: string): { path: string; sel?: stri
 function editEntries(details: unknown): unknown[] {
     const perFileResults = property(details, "perFileResults");
     return Array.isArray(perFileResults) ? perFileResults : [details];
-}
-
-function splitMcpToolName(toolName: string): { server: string; tool: string } | undefined {
-    if (!toolName.startsWith(MCP_PREFIX)) return undefined;
-    const suffix = toolName.slice(MCP_PREFIX.length);
-    const boundary = suffix.indexOf("_");
-    if (boundary <= 0 || boundary === suffix.length - 1) return undefined;
-    return { server: suffix.slice(0, boundary), tool: suffix.slice(boundary + 1) };
 }

@@ -23,7 +23,11 @@ Direct human consent from Mark Malstrom on 2026-10-30, in the Sesh session that 
 - a private `markmals/pico` repository with this draft pull request;
 - **the core turn path** as proposal 0001, with model and reasoning selectors, session restore, and child-session delegation left to later proposals;
 - **porting OMP's ACP agent onto the official SDK**, over a fresh adapter or in-process reuse of `runAcpMode`;
-- **no approval prompts at all**: Pico auto-approves every tool call.
+- **no approval prompts at all**: Pico auto-approves every tool call;
+- **in-place OAuth refresh** in the user's OMP credential store is acceptable for now; a Pico-owned store may replace it later;
+- **Sesh Autonomous support** gets its own follow-up proposal built on a Pico-owned credential and state store, not this one;
+- **Sesh's MCP servers only** in 0001; connecting arbitrary MCP servers configured through the companion app comes later;
+- **`task` stays permanently excluded**, alongside eval and the built-in LSP. The other omitted tools are deferred, not excluded.
 
 ## Motivation
 
@@ -68,10 +72,14 @@ Grounding covered the ACP v1 specification and the installed `@agentclientprotoc
     - `task` requires `task.maxRecursionDepth` above the current depth, so `0` removes it (`src/tools/index.ts:805`, `src/task/types.ts:304`).
     - `agent()` and `workpool()` exist only inside eval cells (`src/eval/settings.ts:48-58`).
 - `Settings.loadReadOnly({cwd})` loads the user's effective configuration without writing anything. `.overlay(overrides)` creates a child whose overrides are never persisted or written back (`src/config/settings.ts:745-796`).
-- `enableMCP: false` skips on-disk MCP discovery. A private `MCPManager` (`./mcp` subpath) connects the given servers, and `AgentSession.refreshMCPTools()` (`src/session/agent-session.ts:7214`) mounts their tools as `mcp__<server>_<tool>` (`src/tools/builtin-names.ts:65-68`).
+- Restricted sessions force on-disk MCP discovery off: `enableMCP = !restrictToolNames && (options.enableMCP ?? true)` (`src/sdk.ts:2650`). A private `MCPManager` (`./mcp` subpath) connects the given servers, and `AgentSession.refreshMCPTools()` (`src/session/agent-session.ts:7214`) mounts their tools as `mcp__<server>_<tool>` (`src/tools/builtin-names.ts:65-68`). `refreshMCPTools()` does not check `enableMCP` (`src/session/session-tools.ts:2496-2523`).
+- The default system prompt wraps every tool-specific passage in a check for that tool: `{{#has tools "lsp"}}`, `"task"`, `"todo"`, `"ask"`, and `ast_grep`/`ast_edit` (`src/prompts/system/system-prompt.md:98-203`). `bash`'s description mentions eval only behind `{{#if hasEval}}` (`src/prompts/tools/bash.md:2`). The one subagent passage outside any check is the `agent://` line in the internal-URL list (`src/prompts/internal-urls/agent.md:1`, `src/internal-urls/agent-protocol.ts:152-154`).
+- `appendSystemPrompt` is additive and renders last, as user instructions. The function form of `systemPrompt` receives the fully rendered default blocks and returns the final prompt (`src/sdk.ts:650-656, 4253-4259`; `src/system-prompt.ts:462-471`).
+- The rendered prompt carries the OS and model. The working directory arrives in a per-turn reminder. There is no git branch or worktree information (`src/system-prompt.ts:237-242`, `src/prompts/system/date-cwd-reminder.md:1-3`).
+- In a restricted session with `toolNames` set to `read, grep, glob, find, edit, write, bash, web_search` and Pico's settings overlay, the effective roster on this machine was `read, grep, glob, edit, write, bash, web_search`; `find` was not admitted (spike, 2026-10-30).
 - `AgentSession.subscribe()` listeners are fire-and-forget: "`AgentSession.#emit()` does not await listeners" (`src/session/agent-session.ts:1224-1225`).
 - `abort()` (`:11127`) kills a running `bash` subprocess, with a 1 s grace period before `ToolAbortError` (`src/tools/bash.ts:1371-1507`).
-- `discoverAuthStorage()` opens the user's credential store at `<agentDir>/agent.db` and has no read-only mode (`src/sdk.ts:1042-1075`).
+- `discoverAuthStorage()` opens the user's credential store at `<agentDir>/agent.db` and has no read-only mode (`src/sdk.ts:1042-1075`). Opening it needs write access: under a sandbox that denies writes to `~/.omp`, both `discoverAuthStorage()` and `createAgentSession()` fail with `Database "/Users/orion/.omp/agent/agent.db": attempt to write a readonly database` (spike under `sandbox-exec`, 2026-10-30).
 - The package is MIT-licensed. Copyright holders: Mario Zechner, Can Bölük, Stencil Labs, Inc.
 
 **Sesh, observed**
@@ -81,6 +89,14 @@ Grounding covered the ACP v1 specification and the installed `@agentclientprotoc
 - Sesh's MCP server arrives as a stdio entry the agent spawns (`seshd mcp`). Its environment carries `SESH_MCP_URL` and the secret `SESH_MCP_TOKEN`; the agent's own environment does not.
 - OMP's `bash` tool still finds `~/.cargo/bin/intellisense` from that launchd environment, as this session's own tool calls showed.
 - Sesh renders ACP tool calls by kind, title, absolute locations, text content and status, and shows `failed` as failed (Sesh session `events.jsonl` records).
+- **Autonomous** sessions never ask the user ([approvals and Autonomous](https://sesh.codes/docs/approvals-and-autonomous/)).
+    - If the agent offers a permissive mode, Sesh selects it, as with Claude's `bypassPermissions` (`~/Library/Application Support/Sesh/agent-probes.json`). Otherwise Sesh answers the agent's permission requests itself.
+    - Sesh also runs the agent in a macOS sandbox. The rules embedded in `seshd` start from `(version 1) (allow default)`. Writes are allowed in the session folder, the project's git data and temporary folders, and in a fixed list of agent and cache folders: `.claude`, `.codex`, `.gemini`, `.cursor`, `.pi`, `.local/state`, `.npm`, `.cache`, `Library/Caches`, `.bun`, `.pnpm-store`, `.yarn`. The rules block reads of credential folders such as `.ssh`, `.aws`, `.gnupg`, `.config/gh` and `.netrc`. `.omp` is not on the writable list.
+    - Sesh sends the agent no Autonomous flag: no `_meta`, no environment variable and no session field.
+- **New Branch** (the default) runs the session in a git worktree at `~/Library/Application Support/Sesh/worktrees/<repo>-<hash>/<session-name>`, on branch `sesh/<session-name>` from the base branch ([branches and worktrees](https://sesh.codes/docs/branches-and-worktrees/)).
+    - `session/new.cwd` is that worktree. `SESH_ROOT_PATH` is the main checkout, and `SESH_WORKTREE_PATH` and `SESH_BRANCH` describe the worktree ([project setup](https://sesh.codes/docs/project-setup/); `session.json` `cwd` and `projectRoot`).
+    - Sesh copies `.env` files into the worktree and regenerates dependencies with the project's setup command.
+    - Pushing, opening pull requests and syncing are Sesh UI actions, not agent duties.
 
 ### Relevant constraints and principles
 
@@ -102,8 +118,7 @@ Grounding covered the ACP v1 specification and the installed `@agentclientprotoc
 - **Sesh's client capabilities.** What Sesh sends in `initialize` (`fs`, `terminal`) has not been captured; seshd persists no raw JSON-RPC. This design does not depend on it, because Pico executes locally.
 - **Prompts during a running turn.** Whether Sesh ever sends a second `session/prompt` while a turn is running is unknown. This design rejects one; the preview must confirm Sesh does not rely on it.
 - **MCP tools under `restrictToolNames`.** Whether tools mounted by `refreshMCPTools()` pass the restriction without being named in `toolNames` is unverified. The design names them explicitly either way.
-- **Sandboxing.** Whether Sesh's Autonomous sandbox applies to custom agents is undocumented. With approvals removed, it is the only containment Sesh can add.
-- **Token refresh.** Using the user's OMP credentials lets the SDK refresh OAuth tokens in place in `agent.db`, as terminal OMP does. See Open questions.
+- **Sesh's exact sandbox profile.** The list above comes from strings in the `seshd` binary, and the spike approximated the profile rather than reusing it. Pico's behavior in a real Autonomous session is checked in the preview.
 
 ## Existing baseline
 
@@ -135,15 +150,15 @@ Pico's adapter is a port of OMP 18.14.0's ACP mode onto `@agentclientprotocol/sd
 
 - `Settings.loadReadOnly` overlaid with Pico's settings;
 - an explicit tool allowlist under `restrictToolNames`;
-- `enableLsp: false` and `enableMCP: false`, with Sesh's servers connected through a private `MCPManager`;
+- `enableLsp: false`, and no on-disk MCP discovery: only the servers Sesh sends are connected, through a private `MCPManager`;
 - `autoApprove: true`;
 - an in-memory session manager.
 
-The ported event mapper keeps OMP's translation and gains MCP-aware titles and an explicit per-session notification queue. Capability claims and stop reasons are rewritten to report only what is true.
+The ported event mapper keeps OMP's translation of engine events into ACP updates, with two changes. MCP tool calls get readable titles. And every update for a session passes through one ordered queue, so no update can overtake an earlier one or the turn's final response. Capability claims and stop reasons are rewritten to report only what is true.
 
 ```text
 Sesh launches .build/pico-acp           → initialize: protocol 1, no optional capabilities
-Sesh creates a session (cwd, seshd mcp) → OMP session with read/grep/glob/find/edit/write/bash/web_search + mcp__sesh_*
+Sesh creates a session (cwd, seshd mcp) → OMP session with read/grep/glob/edit/write/bash/web_search + mcp__sesh_*
 "add a test and run it"                 → streamed text; tool_call write (diff), tool_call bash ($ bun test …, output, completed)
 user presses Stop during `sleep 60`     → bash killed, tool call failed, stopReason cancelled; next prompt runs
 model key revoked                       → session/prompt fails with the provider's error message
@@ -181,28 +196,38 @@ model key revoked                       → session/prompt fails with the provid
 - Each stdio entry in `mcpServers` is connected through a private `MCPManager` with the entry's `command`, `args` and `env`. An HTTP or SSE entry fails the request with an invalid-params error naming the server and stating that only stdio MCP servers are supported. If a stdio server fails to connect or list its tools, the request fails with an error naming the server and the cause; no session is created and no partial tool set is used.
 - Pico creates the OMP session with:
     - `settings`: `Settings.loadReadOnly({ cwd })` overlaid with `eval.py: false`, `eval.js: false`, `lsp.enabled: false` and `task.maxRecursionDepth: 0`;
-    - `enableLsp: false`, `enableMCP: false`, `hasUI: false`, `autoApprove: true`;
+    - `enableLsp: false`, `enableMCP: false` (restricted sessions force this anyway), `hasUI: false`, `autoApprove: true`;
     - `restrictToolNames: true`, and `toolNames` set to the built-in roster plus the name of every tool the connected MCP servers supplied (see Effective roster);
     - `sessionManager`: an in-memory session manager for `cwd`;
     - `authStorage`: the user's OMP credential store from `discoverAuthStorage()`;
-    - `appendSystemPrompt`: Pico's policy text (see Agent guidance).
+    - `appendSystemPrompt` and a `systemPrompt` function: Pico's guidance (see Agent guidance).
 
     The connected MCP tools are mounted with `refreshMCPTools()` before the response is sent.
 
 - The model and thinking level are whatever the user's OMP configuration resolves for `cwd`. If no model resolves, or the resolved model has no usable credentials, the request fails with an error that says so; Pico does not substitute another model.
+- If the credential store cannot be opened, the request fails with an error naming the store's path and the cause. When the cause is a read-only or permission-denied failure, the message also says that Sesh's Autonomous sandbox blocks writes to `~/.omp` and that Pico does not support Autonomous sessions yet.
 - The response is `{ sessionId }`, with no `modes` and no `configOptions`. `sessionId` is unique within the process.
 - OMP extension discovery runs normally, so user and project extension hooks keep working. Extension-contributed tools are not exposed (`restrictToolNames`).
 
+### Sesh worktrees
+
+- `session/new.cwd` is the only source of the working directory. When Sesh runs the session in a New Branch worktree, `cwd` is that worktree, and Pico reads project settings, extensions and AGENTS.md from there.
+- Pico ignores `SESH_ROOT_PATH`, which points at the main checkout. Pico does nothing else differently in a worktree; pushing, pull requests and syncing stay with Sesh.
+
 ### Effective roster
 
-- The built-in roster is exactly `read`, `grep`, `glob`, `find`, `edit`, `write`, `bash` and `web_search`. On top of that come the tools the session's host MCP servers supply, named `mcp__<server>_<tool>` (for Sesh: `mcp__sesh_ask_user`, `mcp__sesh_create_artifact`, `mcp__sesh_notify`, `mcp__sesh_start_session` and the rest Sesh offers).
-- The roster contains no `eval`, `lsp`, `task`, `ask`, `todo`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug` or memory tools. Extension tools and hidden tools are excluded too. The model never receives their schemas, and no `xd://` device routes exist for any tool.
+- The built-in roster is `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`. On top of that come the tools the session's host MCP servers supply, named `mcp__<server>_<tool>` (for Sesh: `mcp__sesh_ask_user`, `mcp__sesh_create_artifact`, `mcp__sesh_notify`, `mcp__sesh_start_session` and the rest Sesh offers).
+- **Permanently excluded:** `eval` (with the eval-only `agent()` and `workpool()` helpers), `lsp` and `task`. Pico's settings overlay disables each of them, as well as leaving them off the allowlist.
+- **Deferred, not excluded:** `find`, `ask`, `todo`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, the memory tools, and extension-contributed tools. Each comes back through its own change once it has a defined ACP representation. Until then the model never receives their schemas. Hidden tools are excluded, and no `xd://` device routes exist for any tool.
+- After MCP tools are mounted, Pico compares the session's active tools with the allowlist. If any tool outside the allowlist is active, `session/new` fails with an error naming it, and no session is created. An allowlisted built-in the engine does not admit (as with `find` in OMP 18.14.0) is simply absent.
 - If the model emits a call to a tool outside the roster, the engine emits `tool_execution_start` and then rejects the call as `Tool <name> not found` (`pi-agent-core/src/agent-loop.ts:3567-3601`). That attempted call is reported as a `failed` tool call like any other failed execution, and nothing runs.
 - LSP diagnostics, format-on-write and LSP startup never happen, because `enableLsp: false` and `lsp.enabled: false` disable the subsystem.
 
 ### Agent guidance
 
-`appendSystemPrompt` adds a short Pico-owned section. It states that eval, the built-in LSP and subagent tools are unavailable in this runtime; that code intelligence comes from running the `intellisense` CLI through `bash`; and that structured questions, artifacts and notifications go through the `mcp__sesh_*` tools. User-owned AGENTS.md files, rules and skills load unchanged; Pico never edits them.
+- `appendSystemPrompt` adds a short Pico-owned section with positive guidance only. Code intelligence comes from running the `intellisense` CLI through `bash`. Structured questions, artifacts and notifications go through the `mcp__sesh_*` tools. Sesh may run the session in its own git worktree and branch, and `mcp__sesh_session_info` reports which. The section names no excluded tool.
+- OMP's prompt already leaves out guidance for absent tools. The one exception is the `agent://` line in the internal-URL list, which describes subagent output. Pico's `systemPrompt` function returns the default blocks with that line removed and nothing else changed.
+- User-owned AGENTS.md files, rules and skills load unchanged; Pico never edits them.
 
 ### `session/prompt`
 
@@ -222,15 +247,17 @@ model key revoked                       → session/prompt fails with the provid
 ### Tool calls
 
 - When the engine emits `tool_execution_start`, Pico sends one `tool_call`. Its `toolCallId` is the engine's tool call ID, `status` is `in_progress`, `rawInput` is the arguments, and `title`, `kind` and `locations` are as below. Nothing else creates tool calls.
-- Kinds: `read` → `read`; `grep`, `glob` and `find` → `search`; `edit` and `write` → `edit`; `bash` → `execute`; `web_search` → `fetch`; any `mcp__*` tool → `other`.
-- Titles:
+- Kinds: `read` → `read`; `grep` and `glob` → `search`; `edit` and `write` → `edit`; `bash` → `execute`; `web_search` → `fetch`; any `mcp__*` tool → `other`.
+- Titles, in order of preference:
     - `bash` is titled with its command.
-    - An `mcp__<server>_<tool>` call is titled `<server>: <tool>`, such as `sesh: ask_user`.
-    - Any other tool is titled with its intent argument when present; otherwise with its first path, pattern or query argument; otherwise with its name.
+    - Otherwise, the call's intent when present.
+    - Otherwise, its first path, pattern or query argument.
+    - Otherwise, for `mcp__<server>_<tool>`, `<server>: <tool>` (such as `sesh: ask_user`).
+    - Otherwise, the tool's name.
 - `locations` holds absolute paths, resolved against the session `cwd`:
     - `read`: the file, with `line` set to the starting line when an offset is given;
     - `edit` and `write`: every affected file;
-    - `grep`, `glob` and `find`: the searched path when given.
+    - `grep` and `glob`: the searched path when given.
 - `tool_execution_update` with partial output becomes a `tool_call_update` whose `content` is the current output as text. For `bash`, that is the combined output so far.
 - `tool_execution_end` becomes a `tool_call_update` with:
     - `status`: `failed` when the result is an error, otherwise `completed`;
@@ -244,6 +271,7 @@ model key revoked                       → session/prompt fails with the provid
 
 - Pico never sends `session/request_permission`. Every admitted tool call runs without asking: OMP's session runs with `autoApprove: true`, and Pico installs no permission gate.
 - The approval mode in the user's OMP configuration has no effect inside Pico.
+- Pico offers Sesh no mode option, so Sesh has no permissive mode to select in an Autonomous session. That does not matter for approvals, since Pico never asks. Autonomous sessions fail at `session/new` for the credential-store reason above.
 
 ### `session/cancel`
 
@@ -293,15 +321,17 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
 - `THIRD-PARTY-NOTICES.md` with OMP's MIT notice.
 - The `acp:launcher`, `acp:smoke` and `acp:tck` mise tasks, the `.build/` ignore entry, and `./adapter` in `mise run test`.
 - Behavioral tests for the Detailed design, using OMP's `createMockModel` (`@oh-my-pi/pi-ai`) for deterministic turns.
-- A guide, `guides/running-pico-in-sesh.md`, written from this proposal: building the launcher, registering it in Sesh, what the roster contains and excludes, and what "no approvals" means.
+- A guide, `guides/running-pico-in-sesh.md`, written from this proposal: building the launcher, registering it in Sesh, what the roster contains and excludes, what "no approvals" means, New Branch sessions, and why Autonomous sessions do not work yet.
 
 ### Out of scope
 
 - **Model and reasoning selectors, and session load, list and resume.** These are the next proposal; they need config options and persistent session identity.
 - **Delegation workflow guidance and verification for Sesh child sessions.** This is proposal 0003. The `mcp__sesh_*` session tools are present in 0001 because Sesh supplies them, but the delegation workflow is not designed or verified here.
-- **Approval prompts, remembered decisions and Autonomous-mode handling.** Mark chose to auto-approve everything.
+- **Approval prompts and remembered decisions.** Mark chose to auto-approve everything.
+- **Sesh Autonomous sessions.** These need a Pico-owned credential and state store in a folder the sandbox allows, which is its own follow-up proposal. Until then, 0001 fails such sessions with an explanatory error.
+- **MCP servers beyond the ones Sesh sends.** Connecting arbitrary servers, configured through the companion app, comes later.
 - **Image, audio and embedded-resource prompts, and HTTP/SSE MCP.** These need an exercised path before they can be claimed.
-- **ACP plan updates for `todo`, slash commands, modes and the steering extension.** Each needs a defined, exercised ACP representation first.
+- **Returning the deferred tools, slash commands, modes and the steering extension.** Each needs a defined, exercised ACP representation first.
 - **Client `fs/*` and `terminal/*` bridging.** Sesh's support is unverified, and local execution keeps cancellation under Pico's control.
 - **The companion app, bundled runtime, compiled binary and GUI registration.** These belong to the app proposal. `bun build --compile` currently fails to embed OMP's native addon (spike, 2026-10-30).
 - **The comparison against the existing OMP/Sesh setup** (brief criterion 12). It needs the full adapter.
@@ -314,7 +344,9 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
     - trigger a failing command;
     - press Stop during a long-running command, then send another prompt;
     - ask the agent to use `intellisense`, ask them a structured question, create an artifact and send a notification;
-    - confirm that no eval, LSP or `task` tool appears and that nothing asks for approval.
+    - confirm that no eval, LSP or `task` tool appears and that nothing asks for approval;
+    - confirm the session worked in a New Branch worktree (Sesh's default);
+    - start one Autonomous session and confirm that it fails at creation with the credential-store error, not by hanging or partially working.
 - Reason: Pico is a CLI-shaped stdio executable, and the only realistic exercise is a real Sesh session driving it. No cheaper artifact shows Sesh's rendering.
 - Cleanup: remove "Pico (dev)" from Sesh's agents and delete `.build/`.
 
@@ -329,14 +361,16 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
     - **No silent fallback:** provider, MCP and model failures reach the client as errors.
     - **Visible execution:** every executed tool is a tool call.
     - **Excluded features:** no eval, LSP or native delegation, with roster verification.
-    - **User configuration:** Pico reads the user's OMP settings read-only and writes no configuration. The credential store question is under Open questions.
+    - **User configuration:** Pico reads the user's OMP settings read-only and writes no configuration. It uses the user's credential store in place, so an OAuth refresh updates it exactly as terminal OMP would; Mark accepted this on 2026-10-30.
     - **Sesh registration:** the human registers Pico through Sesh's GUI.
 
 ## Future directions
 
 - Config options for model and thinking level, plus session persistence in a Pico-owned directory, with `session/load` replay (the next proposal).
 - Delegation guidance and verification for Sesh child sessions that run Pico (proposal 0003).
-- Representing `todo` as ACP `plan` updates, and `ast_grep`/`ast_edit` in the roster, once their ACP representation is defined.
+- Returning the deferred tools (`find`, `ask`, `todo` as ACP `plan` updates, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, memory tools) once their ACP representation is defined.
+- A Pico-owned credential and state store in a folder Sesh's sandbox allows (such as `~/.local/state/pico`), which would make Autonomous sessions work and remove in-place refresh of the user's OMP credentials.
+- Arbitrary MCP servers configured through the companion app.
 - Client terminal bridging, if Sesh's `terminal/*` rendering proves better than text output.
 
 ## Alternatives considered
@@ -348,7 +382,7 @@ Two behaviors differ deliberately from the `omp acp` agent it sits beside:
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Using your existing OMP credentials means the SDK may refresh an expired OAuth token in place in `~/.omp/agent/agent.db`, exactly as terminal OMP does. There is no read-only credential store, and copying credentials into a Pico-owned store would split rotating refresh tokens between two stores, which can break terminal OMP. Is in-place refresh acceptable, or should Pico refuse providers whose tokens would need refreshing?]
+None.
 
 ## Acknowledgments
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import filesystem from "node:fs/promises";
 import path from "node:path";
 import { describe, test } from "node:test";
 
@@ -489,5 +490,116 @@ describe("proposal.0001 engine assumptions", () => {
             assert.ok("concurrency" in tool, `${name} declares no concurrency`);
             assert.equal(tool.concurrency, "exclusive", `${name} is no longer exclusive`);
         }
+    });
+});
+
+describe("proposal.0001 writes in flight", () => {
+    /** Holds the next real write to `target`, the way a slow filesystem would. */
+    function delayWriteTo(t: { after(cleanup: () => void): void }, target: string) {
+        const entered = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        const finished = Promise.withResolvers<void>();
+        const original = filesystem.writeFile;
+        let held = false;
+        filesystem.writeFile = async (file, ...rest) => {
+            if (file === target && !held) {
+                held = true;
+                entered.resolve();
+                await release.promise;
+            }
+            const result = await original(
+                file,
+                ...(rest as Parameters<typeof original> extends [unknown, ...infer R] ? R : never),
+            );
+            if (file === target) finished.resolve();
+            return result;
+        };
+        t.after(() => {
+            filesystem.writeFile = original;
+        });
+        return { entered: entered.promise, release, finished: finished.promise };
+    }
+
+    test("a session is not settled while a write is still in flight", async t => {
+        const { cwd, session } = await writingSession(t, [
+            { file: "slow.txt", content: "after\n" },
+        ]);
+        const absolute = path.join(cwd, "slow.txt");
+        const delayed = delayWriteTo(t, absolute);
+
+        const turn = session.engine.prompt("write slow.txt");
+        await delayed.entered;
+        let settled = false;
+        void session.writesSettled().then(() => {
+            settled = true;
+        });
+        // One microtask: a promise that was already resolved would have run by now.
+        await Promise.resolve();
+        assert.equal(settled, false, "the session reported itself settled with a write in flight");
+
+        delayed.release.resolve();
+        await delayed.finished;
+        await session.writesSettled();
+        await turn;
+
+        assert.equal(fs.readFileSync(absolute, "utf8"), "after\n");
+    });
+
+    test("a write that lands after its turn ended files no record", async t => {
+        const { cwd, agentDir } = picoWorkspace(t);
+        const cancelled = path.join(cwd, "cancelled.txt");
+        const next = path.join(cwd, "next.txt");
+        fs.writeFileSync(cancelled, "before\n");
+        fs.writeFileSync(next, "next before\n");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    { content: [toolCall("write", { path: "cancelled.txt", content: "late\n" })] },
+                    { content: ["done"] },
+                ],
+            }),
+        });
+        t.after(() => session.dispose());
+        const delayed = delayWriteTo(t, cancelled);
+        const byCall = new Map<string, RecordedChange[]>();
+        session.engine.subscribe(event => {
+            if (event.type !== "tool_execution_end") return;
+            byCall.set(event.toolCallId, session.takeChanges(event.toolCallId));
+        });
+
+        const turn = session.engine.prompt("write cancelled.txt");
+        await delayed.entered;
+        await session.engine.abort();
+        await turn;
+
+        delayed.release.resolve();
+        await delayed.finished;
+        await session.writesSettled();
+
+        await session.engine.setModel(
+            createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "write",
+                                { path: "next.txt", content: "next new\n" },
+                                "next-write",
+                            ),
+                        ],
+                    },
+                    { content: ["done"] },
+                ],
+            }),
+        );
+        await session.engine.prompt("write next.txt");
+
+        assert.deepEqual(byCall.get("next-write"), [
+            { path: next, oldText: "next before\n", newText: "next new\n" },
+        ]);
     });
 });

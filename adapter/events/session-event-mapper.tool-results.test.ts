@@ -410,6 +410,23 @@ describe("proposal.0001 edit results", () => {
         ]);
     });
 
+    // A file OMP cannot read as text — invalid UTF-8 — is deleted with no `oldText`
+    // and no prune marker (engine, 2026-10-30).
+    test("a removal the result carries no text for says so", () => {
+        const path = join(cwd, "a.txt");
+        const update = endUpdate({
+            toolName: "edit",
+            args: { input: `[a.txt#2543]\nREM` },
+            result: toolResult("Deleted a.txt", { diff: "", op: "delete", path }),
+        });
+
+        expect(update.locations).toEqual([{ path }]);
+        expect(update.content).toEqual([
+            textContent("Deleted a.txt"),
+            textContent(`No diff for ${path}: Oh My Pi did not report the file's text`),
+        ]);
+    });
+
     // `MV` renames: neither path reaches the bridge, and the result says nothing
     // about what the destination held before (engine, 2026-10-30).
     test("an edit that moves a file empties the source and names the destination", () => {

@@ -99,6 +99,12 @@ export class SessionRuntime {
             // off a session this one may yet close, and keeps the updates the
             // unwinding produces on the stream.
             await turn.cancellation;
+            // A write the engine started can outlive the answer: releasing the turn
+            // now would let it overwrite what the next turn writes to the same file.
+            // A cancellation bounds the same wait, and closing the session ends it.
+            if (!this.#closedReason) {
+                await Promise.race([this.#session.writesSettled(), turn.abandoned.promise]);
+            }
             unsubscribe();
             for (const update of mapper.closeOpenToolCalls()) this.#queue.push(update);
             // A cancel can still arrive while the last update is in flight, so the
@@ -162,9 +168,18 @@ export class SessionRuntime {
         // An accepted abort still has to end the turn; an engine stuck before its
         // next dispatch would otherwise leave the prompt unanswered forever.
         if (!(await settlesWithin(turn.enginePrompt, ABORT_GRACE_MS))) {
-            this.#close(
+            return this.#close(
                 turn,
                 `the turn did not end within ${ABORT_GRACE_MS}ms of an accepted abort`,
+            );
+        }
+        // A write the cancelled turn started can still be on its way to disk. The
+        // session cannot take another turn until it lands, or the next turn's file
+        // is overwritten by the one this turn was told to stop.
+        if (!(await settlesWithin(this.#session.writesSettled(), ABORT_GRACE_MS))) {
+            this.#close(
+                turn,
+                `the files the turn was writing did not settle within ${ABORT_GRACE_MS}ms`,
             );
         }
     }

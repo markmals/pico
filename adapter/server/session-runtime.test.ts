@@ -31,6 +31,11 @@ function heldClient(): HeldClient {
     return { client, sent, firstSend: firstSend.promise, release: () => delivery.resolve() };
 }
 
+/** A client that takes every notification without holding it. */
+function quietClient(): AgentContext {
+    return { notify: async () => {} } as unknown as AgentContext;
+}
+
 describe("proposal.0001 turn admission", () => {
     test("a second prompt is refused until the first turn's updates have been delivered", async () => {
         const held = heldClient();
@@ -78,5 +83,25 @@ describe("proposal.0001 turn admission", () => {
         expect(fake.calls.filter(call => call === "prompt")).toHaveLength(1);
 
         expect(await first).toBe("cancelled");
+    }, 15_000);
+
+    test("a turn is not released until the writes it started have settled", async () => {
+        const landed = Promise.withResolvers<void>();
+        const fake = fakeSession("/workspace", {
+            prompt: async () => true,
+            writesSettled: () => landed.promise,
+        });
+        const runtime = new SessionRuntime("session-1", fake.session, quietClient());
+
+        const first = runtime.prompt("write a file");
+        await settle(20);
+
+        // The engine has answered, but a write it started is still in flight: a
+        // second turn now would have its own write overwritten by the first's.
+        const refusal = await requestError(runtime.prompt("again"));
+        expect(refusal.message).toContain("already running");
+
+        landed.resolve();
+        expect(await first).toBe("end_turn");
     }, 15_000);
 });

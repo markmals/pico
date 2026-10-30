@@ -121,6 +121,9 @@ function undiffableText(text: string): string | undefined {
 export class WriteBridge {
     readonly #pending: RecordedChange[] = [];
     readonly #byCall = new Map<string, RecordedChange[]>();
+    #inFlight = 0;
+    #settled: PromiseWithResolvers<void> | undefined;
+    #generation = 0;
 
     readonly bridge: ClientBridge = {
         capabilities: { writeTextFile: true },
@@ -150,8 +153,18 @@ export class WriteBridge {
         return records;
     }
 
-    /** Drops records nothing took, so a write cannot be reported against a later turn. */
+    /** Resolves once no bridge write is in flight; immediately when none is. */
+    writesSettled(): Promise<void> {
+        return this.#settled?.promise ?? Promise.resolve();
+    }
+
+    /**
+     * Ends the generation records belong to. A write still in flight may land
+     * afterwards — a cancelled turn aborts before the filesystem answers — and
+     * its record would otherwise be claimed by the next turn's first call.
+     */
     clear(): void {
+        this.#generation += 1;
         this.#pending.length = 0;
         this.#byCall.clear();
     }
@@ -176,13 +189,30 @@ export class WriteBridge {
     }
 
     async #write(absolutePath: string, content: string): Promise<void> {
+        const generation = this.#generation;
+        if (this.#inFlight === 0) this.#settled = Promise.withResolvers<void>();
+        this.#inFlight += 1;
+        try {
+            await this.#writeNow(absolutePath, content, generation);
+        } finally {
+            this.#inFlight -= 1;
+            if (this.#inFlight === 0) {
+                const settled = this.#settled;
+                this.#settled = undefined;
+                settled?.resolve();
+            }
+        }
+    }
+
+    async #writeNow(absolutePath: string, content: string, generation: number): Promise<void> {
         const previous = await readPrevious(absolutePath);
         const convention = previous === "missing" ? undefined : previous.convention;
         const text = applyTextFileConvention(content, convention);
         // A failed write is reported by OMP as a failed tool call and records nothing.
         await fs.mkdir(path.dirname(absolutePath), { recursive: true });
         await fs.writeFile(absolutePath, text);
-        this.#record(absolutePath, previous, text);
+        // The turn that asked for this write is over; its record belongs to nobody.
+        if (generation === this.#generation) this.#record(absolutePath, previous, text);
     }
 
     #record(absolutePath: string, previous: Previous, newText: string): void {

@@ -53,4 +53,30 @@ describe("proposal.0001 turn admission", () => {
         held.release();
         expect(await first).toBe("end_turn");
     });
+
+    test("a cancel that lands while an update is in flight keeps the turn reserved", async () => {
+        const held = heldClient();
+        const fake = fakeSession("/workspace", {
+            prompt: async emit => {
+                emit(textDelta("hello"));
+                return true;
+            },
+        });
+        const runtime = new SessionRuntime("session-1", fake.session, held.client);
+
+        const first = runtime.prompt("say hello");
+        await held.firstSend;
+        // The engine has answered and the turn is parked on its last update. A cancel
+        // arriving now starts an abort the finished turn must still wait for.
+        await settle(20);
+        runtime.cancel();
+        held.release();
+        await settle(20);
+
+        const refusal = await requestError(runtime.prompt("again"));
+        expect(refusal.message).toContain("already running");
+        expect(fake.calls.filter(call => call === "prompt")).toHaveLength(1);
+
+        expect(await first).toBe("cancelled");
+    }, 15_000);
 });

@@ -1,6 +1,6 @@
 /** Shared fixtures for the Pico engine tests: temporary workspaces, credentials, a deterministic model, and engine observation. */
 
-import type { AuthStorage } from "@oh-my-pi/pi-ai";
+import type { AuthStorage, Context } from "@oh-my-pi/pi-ai";
 import type { MockHandler, MockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent";
 
@@ -145,19 +145,47 @@ export function toolCall(name: string, args: Record<string, unknown> = {}, id?: 
     };
 }
 
+/** The hashline tag the preceding tool result served for `file`. */
+function hashlineTag(context: Context, file: string): string {
+    const transcript = JSON.stringify(context.messages.at(-1));
+    const marker = `[${file}#`;
+    const at = transcript.indexOf(marker);
+    if (at === -1) throw new Error(`no hashline tag for ${file} in the preceding tool result`);
+    return transcript.slice(at + marker.length, at + marker.length + 4);
+}
+
 /**
  * An `edit` call built from the hashline tag the preceding `read` returned: the
  * edit tool rejects an input whose tag does not match the file it last served.
  */
 export function editAfterRead(file: string, hunk: string): MockHandler {
-    return context => {
-        const transcript = JSON.stringify(context.messages.at(-1));
-        const marker = `[${file}#`;
-        const at = transcript.indexOf(marker);
-        if (at === -1) throw new Error(`no hashline tag for ${file} in the preceding tool result`);
-        const tag = transcript.slice(at + marker.length, at + marker.length + 4);
-        return { content: [toolCall("edit", { input: `[${file}#${tag}]\n${hunk}` })] };
-    };
+    return context => ({
+        content: [toolCall("edit", { input: `[${file}#${hashlineTag(context, file)}]\n${hunk}` })],
+    });
+}
+
+/** A `write` whose `path` is the hashline header a `read` returned, as a model that pastes one sends it. */
+export function writeToHashlineHeader(file: string, content: string, id: string): MockHandler {
+    return context => ({
+        content: [
+            toolCall("write", { path: `[${file}#${hashlineTag(context, file)}]`, content }, id),
+        ],
+    });
+}
+
+/** One assistant message that edits `file` and then overwrites it, so both calls share a batch. */
+export function editThenWrite(
+    file: string,
+    hunk: string,
+    content: string,
+    writeId: string,
+): MockHandler {
+    return context => ({
+        content: [
+            toolCall("edit", { input: `[${file}#${hashlineTag(context, file)}]\n${hunk}` }),
+            toolCall("write", { path: file, content }, writeId),
+        ],
+    });
 }
 
 /** The system prompt the model received on `call`, as one string. */

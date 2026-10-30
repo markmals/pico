@@ -22,6 +22,10 @@ type AbortOutcome = "stopped" | "rejected" | "expired";
 interface Turn {
     cancelled: boolean;
     failure?: unknown;
+    /** The engine's answer to this turn; assigned as soon as the turn starts. */
+    enginePrompt?: Promise<void>;
+    /** The bounded `abort()` a cancellation issued; shutdown waits for this alone. */
+    aborted?: Promise<AbortOutcome>;
     /** The cancellation in flight. The turn stays reserved until it settles. */
     cancellation?: Promise<void>;
     /** Resolves when Pico stops waiting for the engine, because the session was closed. */
@@ -34,6 +38,7 @@ export class SessionRuntime {
     readonly #queue: UpdateQueue;
     #turn: Turn | undefined;
     #closedReason: string | undefined;
+    #disposal: Promise<void> | undefined;
 
     constructor(sessionId: string, session: PicoSession, client: AgentContext) {
         this.#session = session;
@@ -62,12 +67,13 @@ export class SessionRuntime {
         });
 
         try {
-            await Promise.race([
-                this.#session.engine.prompt(text).catch((error: unknown) => {
+            turn.enginePrompt = this.#session.engine.prompt(text).then(
+                () => undefined,
+                (error: unknown) => {
                     turn.failure = error;
-                }),
-                turn.abandoned.promise,
-            ]);
+                },
+            );
+            await Promise.race([turn.enginePrompt, turn.abandoned.promise]);
         } finally {
             // The engine can answer the prompt while an abort is still unwinding:
             // holding the turn until the cancellation settles keeps the next prompt
@@ -76,7 +82,14 @@ export class SessionRuntime {
             await turn.cancellation;
             unsubscribe();
             for (const update of mapper.closeOpenToolCalls()) this.#queue.push(update);
-            await this.#queue.drained();
+            // A cancel can still arrive while the last update is in flight, so the
+            // turn is only free once nothing is draining and none is pending.
+            let joined: Promise<void> | undefined;
+            do {
+                joined = turn.cancellation;
+                await joined;
+                await this.#queue.drained();
+            } while (joined !== turn.cancellation);
             this.#turn = undefined;
         }
 
@@ -92,34 +105,59 @@ export class SessionRuntime {
         const turn = this.#turn;
         if (!turn || turn.cancellation) return;
         turn.cancelled = true;
-        turn.cancellation = this.#abort(turn).catch((error: unknown) => {
-            console.error(
-                `pico: closing the session after a failed cancellation failed: ${describe(error)}`,
-            );
-        });
-    }
-
-    /** Stops a running turn before the engine session and its MCP servers go away. */
-    async dispose(): Promise<void> {
-        this.cancel();
-        await this.#turn?.cancellation;
-        await this.#session.dispose();
-    }
-
-    async #abort(turn: Turn): Promise<void> {
-        const outcome = await abortOutcome(
+        const aborted = abortOutcome(
             this.#session.engine.abort({ reason: USER_INTERRUPT_LABEL }),
             ABORT_GRACE_MS,
         );
-        if (outcome === "stopped") return;
+        turn.aborted = aborted;
+        turn.cancellation = this.#settleCancellation(turn, aborted).catch((error: unknown) => {
+            console.error(`pico: cancelling the turn failed: ${describe(error)}`);
+        });
+    }
+
+    /**
+     * Stops a running turn before the engine session and its MCP servers go away.
+     *
+     * Shutdown waits for the abort, not for the turn's own answer: the client that
+     * asked for it is already gone.
+     */
+    async dispose(): Promise<void> {
+        this.cancel();
+        await this.#turn?.aborted;
+        await this.#dispose();
+    }
+
+    async #settleCancellation(turn: Turn, aborted: Promise<AbortOutcome>): Promise<void> {
+        const outcome = await aborted;
+        if (outcome === "rejected") return this.#close(turn, "the engine rejected the abort");
+        if (outcome === "expired") {
+            return this.#close(turn, `the abort did not settle within ${ABORT_GRACE_MS}ms`);
+        }
+        // An accepted abort still has to end the turn; an engine stuck before its
+        // next dispatch would otherwise leave the prompt unanswered forever.
+        if (!(await settlesWithin(turn.enginePrompt, ABORT_GRACE_MS))) {
+            this.#close(
+                turn,
+                `the turn did not end within ${ABORT_GRACE_MS}ms of an accepted abort`,
+            );
+        }
+    }
+
+    #close(turn: Turn, cause: string): void {
         this.#closedReason = CLOSED_AFTER_FAILED_CANCELLATION;
-        console.error(
-            outcome === "rejected"
-                ? "pico: the engine rejected the abort; disposing the session"
-                : `pico: abort did not settle within ${ABORT_GRACE_MS}ms; disposing the session`,
-        );
+        console.error(`pico: ${cause}; closing the session`);
         turn.abandoned.resolve();
-        await this.#session.dispose();
+        // Disposal is off the cancelled response's path: a teardown that stalls must
+        // not hold the answer back. Connection shutdown still waits for it.
+        void this.#dispose().catch((error: unknown) => {
+            console.error(`pico: disposing the closed session failed: ${describe(error)}`);
+        });
+    }
+
+    /** The engine session is torn down once; every later caller awaits that work. */
+    #dispose(): Promise<void> {
+        this.#disposal ??= this.#session.dispose();
+        return this.#disposal;
     }
 }
 
@@ -161,6 +199,17 @@ async function abortOutcome(work: Promise<unknown>, ms: number): Promise<AbortOu
             ),
             expiry.promise,
         ]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function settlesWithin(work: Promise<unknown> | undefined, ms: number): Promise<boolean> {
+    if (!work) return true;
+    const expiry = Promise.withResolvers<false>();
+    const timer = setTimeout(() => expiry.resolve(false), ms);
+    try {
+        return await Promise.race([work.then(() => true), expiry.promise]);
     } finally {
         clearTimeout(timer);
     }

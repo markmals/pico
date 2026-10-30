@@ -1,4 +1,5 @@
 import type {
+    AgentApp,
     ClientContext,
     InitializeResponse,
     SessionNotification,
@@ -13,6 +14,8 @@ import { createPicoAgent } from "./pico-agent.ts";
 
 /** A client connected in process to a Pico agent, recording everything the agent sends it. */
 export interface ConnectedClient {
+    /** The agent under test, for `picoAgentShutdown`. */
+    readonly app: AgentApp;
     readonly agent: ClientContext;
     readonly notifications: SessionNotification[];
     /** Permission requests the agent sent; Pico must never send any. */
@@ -42,9 +45,11 @@ export function connectPicoAgent(options: PicoAgentOptions): ConnectedClient {
             throw new Error("Pico must not ask the client for permission");
         });
 
-    const connection = clientApp.connect(createPicoAgent(options));
+    const app = createPicoAgent(options);
+    const connection = clientApp.connect(app);
 
     return {
+        app,
         agent: connection.agent,
         notifications,
         permissionRequests,

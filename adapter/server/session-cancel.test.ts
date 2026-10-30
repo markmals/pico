@@ -226,4 +226,36 @@ describe("proposal.0001 a cancellation the engine does not answer", () => {
 
         await connected.client.close();
     }, 10_000);
+
+    test("an abort that stops nothing is a failed cancellation", async () => {
+        const cwd = temporaryProject();
+        // The engine accepts the abort but never ends the turn it was told to stop.
+        const fake = fakeSession(cwd, { abort: () => Promise.resolve() });
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("hang");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
+
+        expect((await running).stopReason).toBe("cancelled");
+        expect(fake.disposals).toBe(1);
+
+        const error = await requestError(connected.prompt("anyone there?"));
+        expect(error.message).toMatch(/closed/i);
+
+        await connected.client.close();
+    }, 20_000);
+
+    test("a disposal that stalls does not hold up the cancelled response", async () => {
+        const cwd = temporaryProject();
+        const fake = fakeSession(cwd, { dispose: () => neverSettles<void>() });
+        const connected = await connect(fake.session, cwd);
+
+        const running = connected.prompt("hang");
+        await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
+
+        expect((await running).stopReason).toBe("cancelled");
+        expect(fake.disposals).toBe(1);
+
+        await connected.client.close();
+    }, 20_000);
 });

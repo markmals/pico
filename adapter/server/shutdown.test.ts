@@ -9,6 +9,7 @@ import type { PicoSession } from "../engine/pico-session.ts";
 import { connectPicoAgent } from "./agent-harness.ts";
 import { mockEngine, removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
 import { fakeSession, neverSettles } from "./fake-session.ts";
+import { picoAgentShutdown } from "./pico-agent.ts";
 import { closeOpenConnections, settle, startPicoSession } from "./session-fixture.ts";
 
 const STUB_MCP_SERVER = join(import.meta.dir, "stub-mcp-server.fixture.ts");
@@ -103,6 +104,32 @@ describe("proposal.0001 shutdown", () => {
         await settle();
 
         expect(fake.disposals).toBe(1);
+    });
+
+    test("shutdown does not resolve while a session is still being created", async () => {
+        const cwd = temporaryProject();
+        const creating = Promise.withResolvers<void>();
+        const creation = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd);
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            createSession: async () => {
+                creating.resolve();
+                await creation.promise;
+                return fake.session;
+            },
+        });
+        await client.initialize();
+
+        const pending = client.agent.request("session/new", { cwd, mcpServers: [] });
+        await creating.promise;
+        await client.close();
+        const shutdown = picoAgentShutdown(client.app);
+        creation.resolve();
+        await shutdown;
+
+        expect(fake.disposals).toBe(1);
+        await pending.catch(() => undefined);
     });
 
     test("a running turn is stopped before its session's MCP servers are disconnected", async () => {

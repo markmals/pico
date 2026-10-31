@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, statSync } from "node:fs";
+import { chmodSync, closeSync, mkdirSync, openSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** A file or directory in Pico's data directory that Pico cannot create or write. */
@@ -32,5 +32,17 @@ function isDirectory(path: string): boolean {
         return statSync(path).isDirectory();
     } catch {
         return false;
+    }
+}
+
+/**
+ * Creates `path` empty when it is missing and proves it can be written, so a file Pico needs
+ * later, such as the model cache Oh My Pi opens lazily, fails the start instead of the session.
+ */
+export function ensureDataFile(path: string): void {
+    try {
+        closeSync(openSync(path, "a"));
+    } catch (error) {
+        throw new DataDirError(path, error);
     }
 }

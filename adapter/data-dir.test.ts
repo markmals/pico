@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+    chmodSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    realpathSync,
+    rmSync,
+    statSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DataDirError, ensureDataDir, picoDataDir } from "./data-dir.ts";
+import { DataDirError, ensureDataDir, ensureDataFile, picoDataDir } from "./data-dir.ts";
 
 const roots: string[] = [];
 
@@ -62,5 +71,29 @@ describe("proposal.0002 Pico's data directory", () => {
         expect((failure as DataDirError).message).toMatch(
             new RegExp(`^cannot use ${dataDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: .+`),
         );
+    });
+
+    test("a data file that is missing is created empty, and an existing one keeps its contents", () => {
+        const root = temporaryRoot();
+        const missing = join(root, "models.db");
+        const existing = join(root, "kept.db");
+        writeFileSync(existing, "cache");
+
+        ensureDataFile(missing);
+        ensureDataFile(existing);
+
+        expect(readFileSync(missing, "utf8")).toBe("");
+        expect(readFileSync(existing, "utf8")).toBe("cache");
+    });
+
+    test.each([
+        ["a directory", (path: string) => mkdirSync(path)],
+        ["a read-only file", (path: string) => writeFileSync(path, "", { mode: 0o444 })],
+    ])("a data file that is %s is reported with its path and cause", (_kind, occupy) => {
+        const path = join(temporaryRoot(), "models.db");
+        occupy(path);
+
+        expect(() => ensureDataFile(path)).toThrow(new RegExp(`^cannot use .*models\\.db: .+`));
+        expect(() => ensureDataFile(path)).toThrow(DataDirError);
     });
 });

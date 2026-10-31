@@ -1,7 +1,7 @@
 ---
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
-describes: [proposal.0001, proposal.0003]
+describes: [proposal.0001, proposal.0002, proposal.0003]
 ---
 
 # Running Pico in Sesh
@@ -19,6 +19,41 @@ Pico never asks for approval. Tool calls do not wait for a permission decision; 
 
 ## How to use it
 
+Pico runs on Apple silicon Macs with macOS 14 or later, and installs with Homebrew 6 or later.
+
+1. Install Pico:
+
+    ```sh
+    brew install markmals/tap/pico
+    ```
+
+    This puts the `pico` executable at `/opt/homebrew/bin/pico`. `pico --version` prints the installed version, for example `pico 0.1.0`.
+
+2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Name it "Pico" and choose `/opt/homebrew/bin/pico` as the executable.
+3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
+4. To choose a model, use Sesh's **Model** menu for the agent. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts.
+5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
+
+Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` yourself in a terminal prints `usage: pico [--version]` and a reminder that Sesh launches it, then exits; `pico` with any argument other than `--version` prints the usage line and exits with status 2.
+
+### Upgrading and uninstalling
+
+- `brew upgrade pico` installs the new version. New Sesh sessions use it straight away, through the same `/opt/homebrew/bin/pico` path, so the agent entry in Sesh needs no change. Sessions already running keep the version they started with until they end.
+- `brew uninstall pico` removes the executable. Pico's own files stay in `~/Library/Application Support/Pico` until you delete that folder. Remove the agent in Sesh's machine settings too.
+
+### Pico's own files
+
+Pico keeps the files it creates in `~/Library/Application Support/Pico`, which it creates with access for your user only:
+
+- `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs, and removes the folders of other versions.
+- `models.db`: the cache of OMP's model list.
+
+If Pico can't create or write that folder, `pico` stops before Sesh can talk to it, Sesh shows that the agent failed to start, and the error reads `pico: cannot use <path>: <reason>`.
+
+### Running Pico from a checkout
+
+For work on Pico itself, run it from the repository instead:
+
 1. In the Pico checkout, build the launcher:
 
     ```sh
@@ -27,10 +62,7 @@ Pico never asks for approval. Tool calls do not wait for a permission decision; 
 
     It writes an executable at `.build/pico-acp` that runs Pico with the Bun this repository pins. If that Bun isn't installed, or its path contains a space, the command fails and says why; run `mise install` and try again.
 
-2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Give it a name such as "Pico (dev)" and choose `.build/pico-acp` as the executable.
-3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
-4. To choose a model, use Sesh's **Model** menu for the agent. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts.
-5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
+2. Register `.build/pico-acp` in Sesh as a custom agent, for example "Pico (dev)", the same way as above.
 
 The launcher points at this checkout. If you move or delete the checkout, run `mise run acp:launcher` again in its new location and update the agent's executable in Sesh.
 
@@ -73,6 +105,15 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 - **Model:** a session starts on the model and thinking level your OMP configuration selects for the project, and you can switch both from Sesh's menus (see above). The session fails to start, with an error saying why, when no model is configured, when the configured model isn't available (Pico never starts on another model instead), or when its credentials can't be used. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model. The same happens if Sesh re-applies a model you used before that is no longer available: Sesh shows that Pico didn't accept it and stops applying it. Switching to a model that can't reason sets Thinking to Off.
 - **Provider errors during a turn** (an expired key, a rate limit, a network failure) end the turn with an error that carries the provider's message, not with a normal reply. What the agent had already shown stays in the conversation.
 - **Credentials:** Pico uses your OMP credential store at `~/.omp/agent/agent.db`. If an OAuth token has expired, OMP refreshes it there when the session starts or later, exactly as terminal OMP does. Pico never copies or deletes credentials.
+- **What Pico still writes in `~/.omp`:** OMP keeps these files there, and Pico has no way to move them:
+    - your credential store, `~/.omp/agent/agent.db` (created if you have none yet), for OAuth refresh;
+    - its skill-description cache, `~/.omp/agent/skill-descriptions.db`;
+    - its logs, in `~/.omp/logs`;
+    - with the Homebrew `pico`, a cache of the extensions it has loaded, `~/.omp/cache/legacy-pi-extension-cache.db`.
+
+    Everything else Pico creates is in `~/Library/Application Support/Pico`.
+
+- **macOS's own `pico` editor:** macOS ships a text editor at `/usr/bin/pico`. With Homebrew first on your `PATH`, typing `pico` in a terminal runs Pico instead. `nano`, or `/usr/bin/pico` by its full path, still opens the editor.
 - **Project files:** the session's working directory decides which project settings, extensions and `AGENTS.md` files OMP uses, exactly as in terminal OMP.
 - **New Branch sessions** (Sesh's default) work normally. The working directory is the session's worktree, so the agent works and reads project files there, and you push and open pull requests from Sesh.
 - **Autonomous sessions don't work yet.** Sesh's sandbox blocks writes to `~/.omp`, so OMP can't open your credential store. The session fails to start with an error that names `agent.db` and says Autonomous sessions aren't supported yet.
@@ -83,4 +124,4 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 - **One turn at a time:** a prompt sent while a turn is still running is rejected with an error; the running turn continues.
 - **No history after restart:** if Sesh restarts the agent, earlier conversations can't be resumed in Pico yet.
 - **A stuck cancellation:** if pressing Stop can't stop the agent, the turn ends as cancelled within at most 10 seconds and that session is closed. Later prompts in it fail with an error saying so; start a new session.
-- **Removing Pico:** remove the agent in Sesh's machine settings and delete `.build/`. Pico itself stores no history and never rewrites your OMP configuration; only what the agent did in your projects, and any OAuth refresh in `agent.db`, remain.
+- **Removing Pico:** run `brew uninstall pico`, delete `~/Library/Application Support/Pico`, and remove the agent in Sesh's machine settings. A checkout install is removed by deleting `.build/`. Pico stores no conversation history and never rewrites your OMP configuration; only what the agent did in your projects, and any OAuth refresh in `agent.db`, remain.

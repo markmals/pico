@@ -1,9 +1,10 @@
 // Derived from oh-my-pi 18.14.0 src/modes/acp/acp-mode.ts (MIT; see THIRD-PARTY-NOTICES.md).
 
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 import manifest from "../package.json" with { type: "json" };
-import { DataDirError, ensureDataDir, picoDataDir } from "./data-dir.ts";
+import { DataDirError, ensureDataDir, ensureDataFile, picoDataDir } from "./data-dir.ts";
 import { isolateStdout } from "./stdout-isolation.ts";
 
 // First statement of the program: everything imported below may print, and the
@@ -13,6 +14,8 @@ const protocolStdout = isolateStdout();
 const dataDir = picoDataDir(homedir());
 try {
     ensureDataDir(dataDir);
+    // Oh My Pi opens the cache only once a session starts, and ignores a failure there.
+    ensureDataFile(join(dataDir, "models.db"));
 } catch (error) {
     if (!(error instanceof DataDirError)) throw error;
     console.error(`pico: ${error.message}`);

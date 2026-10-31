@@ -125,4 +125,22 @@ describe("proposal.0001 the stdio entry point", () => {
         );
         chmodSync(join(home, "Library"), 0o755);
     }, 30_000);
+
+    test("proposal.0002 a model cache Pico cannot write stops the agent before any ACP message", async () => {
+        const home = scratchHome();
+        const cache = join(home, "Library", "Application Support", "Pico", "models.db");
+        mkdirSync(cache, { recursive: true });
+        const pico = spawnPico(home);
+        pico.stdin.end();
+
+        const [exitCode, stdout, stderr] = await Promise.all([
+            pico.exited,
+            new Response(pico.stdout).text(),
+            new Response(pico.stderr).text(),
+        ]);
+
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe("");
+        expect(stderr).toStartWith(`pico: cannot use ${cache}: `);
+    }, 30_000);
 });

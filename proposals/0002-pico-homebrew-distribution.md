@@ -173,7 +173,7 @@ brew upgrade pico                   → running sessions continue; new sessions 
     - Before OMP's native loader runs, `pico` sets `PI_NATIVES_DIR` to `<data dir>/natives`. The addon then extracts to `<data dir>/natives/<pi-natives version>/pi_natives.darwin-arm64.node`.
     - Before loading an existing extracted file, `pico` compares its SHA-256 with the embedded bytes. A missing or mismatched file is rewritten through a temporary file and an atomic rename.
     - Extraction never uses `$TMPDIR`.
-    - On start, `pico` removes sibling version directories under `<data dir>/natives`. A process still running an older version keeps its loaded copy, because a mapped file outlives deletion.
+    - On start, `pico` refreshes the modification time of its own version directory. It then removes a sibling version directory under `<data dir>/natives` only when that directory's modification time is more than 10 minutes old, as Oh My Pi's own loader does. A process of another version that is starting refreshes its directory the same way, so cleanup never deletes an addon about to be loaded; a process already running keeps its loaded copy, because a mapped file outlives deletion. Entries that are not version directories, such as Oh My Pi's `grammars/`, are left alone.
     - The development launcher keeps loading the addon from `node_modules` and does not extract it.
 - **Model cache.** Pico creates its session's `ModelRegistry` itself:
     - the user's credential store;

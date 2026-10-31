@@ -1,9 +1,9 @@
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
     chmodSync,
     mkdirSync,
     mkdtempSync,
-    readFileSync,
     realpathSync,
     rmSync,
     statSync,
@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DataDirError, ensureDataDir, ensureDataFile, picoDataDir } from "./data-dir.ts";
+import { DataDirError, ensureDataDir, ensureWritableDatabase, picoDataDir } from "./data-dir.ts";
 
 const roots: string[] = [];
 
@@ -73,27 +73,58 @@ describe("proposal.0002 Pico's data directory", () => {
         );
     });
 
-    test("a data file that is missing is created empty, and an existing one keeps its contents", () => {
+    test("a model cache that is missing is created, and an existing one keeps its rows", () => {
         const root = temporaryRoot();
         const missing = join(root, "models.db");
         const existing = join(root, "kept.db");
-        writeFileSync(existing, "cache");
+        const seeded = new Database(existing);
+        seeded.run("CREATE TABLE kept (value TEXT)");
+        seeded.run("INSERT INTO kept VALUES ('row')");
+        seeded.close();
 
-        ensureDataFile(missing);
-        ensureDataFile(existing);
+        ensureWritableDatabase(missing);
+        ensureWritableDatabase(existing);
 
-        expect(readFileSync(missing, "utf8")).toBe("");
-        expect(readFileSync(existing, "utf8")).toBe("cache");
+        expect(statSync(missing).isFile()).toBe(true);
+        const reopened = new Database(existing);
+        expect(reopened.query("SELECT value FROM kept").all()).toEqual([{ value: "row" }]);
+        reopened.close();
     });
 
     test.each([
-        ["a directory", (path: string) => mkdirSync(path)],
-        ["a read-only file", (path: string) => writeFileSync(path, "", { mode: 0o444 })],
-    ])("a data file that is %s is reported with its path and cause", (_kind, occupy) => {
-        const path = join(temporaryRoot(), "models.db");
-        occupy(path);
+        ["a directory", (_root: string, path: string) => mkdirSync(path)],
+        [
+            "a read-only file",
+            (_root: string, path: string) => writeFileSync(path, "", { mode: 0o444 }),
+        ],
+        [
+            "beside a directory where SQLite's write-ahead log goes",
+            (_root: string, path: string) => mkdirSync(`${path}-wal`),
+        ],
+        [
+            "in a folder SQLite cannot add its log files to",
+            (root: string, path: string) => {
+                const seeded = new Database(path);
+                seeded.run("CREATE TABLE kept (value TEXT)");
+                seeded.close();
+                chmodSync(root, 0o500);
+            },
+        ],
+    ])("a model cache %s is reported with its path and cause", (_kind, occupy) => {
+        const root = temporaryRoot();
+        const path = join(root, "models.db");
+        occupy(root, path);
 
-        expect(() => ensureDataFile(path)).toThrow(new RegExp(`^cannot use .*models\\.db: .+`));
-        expect(() => ensureDataFile(path)).toThrow(DataDirError);
+        let failure: unknown;
+        try {
+            ensureWritableDatabase(path);
+        } catch (error) {
+            failure = error;
+        } finally {
+            chmodSync(root, 0o755);
+        }
+
+        expect(failure).toBeInstanceOf(DataDirError);
+        expect((failure as DataDirError).message).toMatch(/^cannot use .*models\.db: .+/);
     });
 });

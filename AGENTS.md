@@ -108,7 +108,7 @@ mise run changeset   # add a changeset for this change
 
 ## Platform: Bun ACP adapter and Mac companion app
 
-Pico is two programs. One is a Bun/TypeScript [ACP](https://agentclientprotocol.com) agent that exposes an [OMP](https://omp.sh) SDK agent to Sesh. The other is a native macOS app that installs, configures and inspects it, so the user never opens a terminal. **Neither is written.** Nothing in this repository speaks ACP, loads the OMP SDK, runs an agent, or draws a window; the process above is how either gets written.
+Pico is two programs. One is a Bun/TypeScript [ACP](https://agentclientprotocol.com) agent that exposes an [OMP](https://omp.sh) SDK agent to Sesh. The other is a native macOS app that installs, configures and inspects it, so the user never opens a terminal. **The adapter's core turn path exists** ([proposal 0001](proposals/0001-acp-adapter-core.md), guide [`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). It speaks ACP over stdio, runs OMP SDK sessions with the curated tool roster, reports every tool call, cancels turns, and offers model and thinking-level selection. **The Mac app is not written**: nothing in this repository draws a window. Session restore, delegation through Sesh child sessions and Autonomous sessions are follow-up proposals tracked in Beads.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) is the implementation brief: the behavior to build, the acceptance criteria, and the evidence each claim requires. It is input to proposal development — the baseline and much of the grounding are already in it — not a substitute for the proposal. [`VISION.md`](VISION.md) carries the purpose and the deliberate exclusions.
 
@@ -131,7 +131,8 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | Path | What lives there |
 | --- | --- |
 | `PROTOTYPE.md` | the implementation brief for the adapter and the Mac app |
-| `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts and commit checkers |
+| `adapter/` | the ACP adapter: `main.ts` and stdout isolation, `server/` (ACP requests, sessions, config options), `events/` (engine events to ACP updates), `engine/` (OMP session construction, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run) |
+| `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts, commit checkers and the adapter launcher writer |
 | `.omp/extensions/` | harness lifecycle wiring: the gate on stop, formatting after an edit, `bd prime` |
 | `mise.toml` | the task graph — every routine command |
 | `hk.pkl` | every git hook |
@@ -142,7 +143,7 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | `Config/Version.xcconfig` | app version projection and build number; `version:sync` writes `MARKETING_VERSION` from package.json |
 | `.swift-format` | the Swift formatter's configuration |
 
-Neither program has a source directory. The proposal that introduces the adapter decides where its code lives; the proposal that introduces the app adds the app's sources and points the `Pico` target at them. Each adds the tasks that run its code, with the code.
+The adapter lives in `adapter/`, with tests beside the code; `mise run acp:launcher` writes `.build/pico-acp`, the executable Sesh launches. The app has no sources yet: the proposal that introduces it adds them, points the `Pico` target at them, and adds the tasks that run them, with the code.
 
 ### Commands
 
@@ -155,11 +156,14 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run fmt` | format with Oxfmt in place |
 | `mise run lint` | lint with Oxlint, applying safe fixes |
 | `mise run typecheck` | type-check with `tsc` in strict mode |
-| `mise run test` | run the tooling and skill-helper suites with Bun |
+| `mise run test` | run the tooling, skill-helper and adapter suites with Bun |
 | `mise run validate` | check record frontmatter, IDs, and cross-references |
 | `mise run status` | phase, next action, who acts |
 | `mise run changeset` | add a changeset for this change |
 | `mise run check` | the blocking gate — what CI and `pre-push` run |
+| `mise run acp:launcher` | write `.build/pico-acp`, the executable Sesh launches |
+| `mise run acp:smoke` | drive `.build/pico-acp` through a real ACP session with your own OMP credentials |
+| `mise run acp:tck` | check `.build/pico-acp` against the ACP compatibility kit |
 | `mise run macos:generate` | generate `Pico.xcodeproj` and `Pico.xcworkspace` from `Project.swift` |
 | `mise run macos:open` | generate the project and open it in Xcode |
 | `mise run macos:fmt` | format the Swift manifests in place |
@@ -170,11 +174,11 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 
 `mise run check` runs the Bun suites and `macos:check`, then `hk check --all` and `mise run validate`. The native check skips on non-macOS hosts, so Linux retains the workflow gate; CI also exercises native configuration in a dedicated macOS job.
 
-There is no `dev`, `build`, `start`, or `acp` task because there is no executable yet, and no `macos:build`, `macos:test` or launch task because the app has no sources to compile. There is no release or deploy task at all. Add the task with the thing it runs, not before.
+There is no `dev`, `build` or `start` task; the adapter runs from source through the launcher. There is no `macos:build`, `macos:test` or launch task because the app has no sources to compile, and no release or deploy task at all. Add the task with the thing it runs, not before.
 
 ### Runtime
 
-Bun is the only JavaScript/TypeScript runtime, package manager, and test runner required by this repository. It runs `tools/`, skill helpers, their tests, and the future ACP adapter. The Bun lockfile and exact dependency versions remain committed.
+Bun is the only JavaScript/TypeScript runtime, package manager, and test runner required by this repository. It runs `tools/`, skill helpers, the ACP adapter, and their tests. The Bun lockfile and exact dependency versions remain committed.
 
 Existing `node:*` imports, including `node:test`, use Bun's compatibility implementations and do not require an external Node executable. Preserve supported APIs rather than rewriting working filesystem or subprocess code for a naming change. Use Bun for helper subprocesses and force package CLI execution through Bun so installed `node` shebangs cannot select a system runtime.
 

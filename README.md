@@ -1,6 +1,6 @@
 # Pico
 
-Pico is the development starting point for two programs: an ACP adapter that will expose an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. Neither exists yet. Nothing in this repository speaks ACP, loads the OMP SDK, runs an agent, or draws a window.
+Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app does not exist yet; nothing in this repository draws a window.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) is the brief for the sessions that build them: the planned behavior, the evidence each claim needs, and the acceptance criteria. Its [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section is the Mac app's half. It is an implementation brief, not an approved proposal. [`VISION.md`](VISION.md) states the purpose and the deliberate exclusions. [`AGENTS.md`](AGENTS.md) is the working contract for an agent in this repository.
 
@@ -26,7 +26,7 @@ mise run status              # where the work stands: phase, next action, who ac
 
 ### Dependency status
 
-The project pins OMP SDK `18.14.0` and ACP SDK `2.1.0`. Both package imports were exercised under Bun `1.4.4` with external Node disabled; no provider prompt or adapter behavior was exercised.
+The project pins OMP SDK `18.14.0` and ACP SDK `2.1.0`, run under Bun `1.4.4`. The adapter has been exercised in real Sesh sessions with real provider credentials, and `mise run acp:smoke` and `mise run acp:tck` repeat that evidence on demand.
 
 Bun leaves lifecycle scripts for the transitive `onnxruntime-node` and `protobufjs` dependencies blocked. The imports work with those scripts blocked. Review any requirement for them when exercising the engine; optional native/runtime features have not been verified, and setup does not grant blanket script trust.
 
@@ -44,12 +44,15 @@ Bun supplies the `node:*` compatibility modules used by existing scripts and tes
 | `mise run changeset`      | add the changeset every pull request carries               |
 | `mise run macos:generate` | generate the Mac app's Xcode project from `Project.swift`  |
 | `mise run macos:check`    | macOS only: Swift format, generation, resolved settings    |
+| `mise run acp:launcher`   | write `.build/pico-acp`, the adapter Sesh launches         |
+| `mise run acp:smoke`      | drive the adapter through a real session, your credentials |
+| `mise run acp:tck`        | check the adapter against the ACP compatibility kit        |
 | `bd ready`                | the work graph: what is ready, what is blocked             |
 | `mise tasks`              | everything else, with descriptions                         |
 
 `mise run check` is what the pre-push hook and CI both run. If it is green, the change is ready to push.
 
-There is no `dev`, `build`, `start`, or `acp` task because there is no executable yet, and no task that builds or launches the Mac app because that target has no sources. The session that writes either one adds the task with it. There is no release or deploy task at all.
+There is no `dev`, `build` or `start` task; the adapter runs from source through the launcher. There is no task that builds or launches the Mac app because that target has no sources; the session that writes it adds the task with it. There is no release or deploy task at all.
 
 ## How this project is built
 
@@ -72,6 +75,7 @@ Beads (`bd`) is the work tracker, the ready-work queue, and durable agent memory
 In the repository today:
 
 - `mise.toml`, the only task graph. Every routine command is a mise task.
+- `adapter/`, the ACP adapter from [proposal 0001](proposals/0001-acp-adapter-core.md), with its tests beside the code, and `tools/write-launcher.ts`, which writes the `.build/pico-acp` launcher.
 - `tools/check-scoped-commit.ts` with its tests, enforcing commit subjects from `commit-msg`, and `tools/check-pr-commits.ts`, which applies the same rule to a pull request. They are the live example of the TypeScript and test conventions here.
 - the Workbench workflow scripts `tools/status.ts`, `tools/validate.ts` and `tools/require-changeset.ts`, with their tests.
 - `AGENTS.md`, `PROCESS.md`, `.agents/rules/`, `.agents/skills/` and `.agents/templates/`: the process, the binding rules, and the record templates.
@@ -82,11 +86,10 @@ In the repository today:
 
 Not in the repository, and not stubbed anywhere:
 
-- an ACP server, session handling, or any wiring to the OMP SDK.
-- Sesh MCP tool exposure, delegation to Sesh child sessions, or permission handling.
-- any claim that a prototype capability works. Working means exercised in Sesh, as [`PROTOTYPE.md`](PROTOTYPE.md) defines it.
-- the Mac app: no SwiftUI views, no provider sign-in, no model catalog, no bundled engine or runtime, and no task that builds or launches an app. The target has no sources, and a target with no sources is configuration, not an application.
+- session load, list and resume; delegation workflow guidance for Sesh child sessions; Autonomous sessions; MCP servers beyond the ones Sesh sends. Each is a follow-up proposal tracked in Beads.
+- approval prompts, by design: Pico auto-approves every tool call.
+- the Mac app: no SwiftUI views, no provider sign-in, no model catalog UI, no bundled engine or runtime, and no task that builds or launches an app. The target has no sources, and a target with no sources is configuration, not an application.
 
-`proposals/`, `decisions/`, `policies/` and `guides/` hold only their index READMEs. Empty record directories are the healthy starting state, not a gap to fill.
+`proposals/` holds proposal 0001 and `guides/` its guide; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 
 [`CHANGELOG.md`](CHANGELOG.md) records the initial template adaptation.

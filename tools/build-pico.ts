@@ -14,7 +14,6 @@ import {
     bundledPackageRoots,
     byNameThenVersion,
     collectPackageNotices,
-    NATIVE_ADDON_EXTRA_NOTICE,
     normalizeLicenseText,
     noticesDriftProblem,
     renderNotices,
@@ -164,15 +163,14 @@ export interface NoticesInputs {
 export async function noticesForBuild(inputs: NoticesInputs): Promise<string> {
     let roots = bundledPackageRoots(Object.keys(inputs.metafile.inputs), inputs.baseDir);
 
-    // The addon is embedded as a file, so it is an output of the build and not one of its JS
-    // inputs. Its own notices carry the Rust crates compiled into it.
+    // The addon is embedded as a file rather than imported as JavaScript, so it is listed here
+    // in its own right; its `THIRD-PARTY-NOTICES.txt` carries the Rust crates linked into it.
     let addonRoot = path.join(inputs.repoRoot, "node_modules", NATIVE_ADDON_PACKAGE);
     if (!roots.includes(addonRoot)) roots.push(addonRoot);
     roots.sort();
 
     let notices = await collectPackageNotices(
         roots,
-        { [addonRoot]: NATIVE_ADDON_EXTRA_NOTICE },
         LICENSE_OVERRIDES.map(override => ({
             ...override,
             file: path.join(import.meta.dirname, "licenses", override.file),

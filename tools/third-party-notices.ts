@@ -11,16 +11,15 @@ export interface PackageNotice {
     readonly licenseText: string;
     /** Where {@link licenseText} came from when the package ships no license file of its own. */
     readonly licenseTextSource?: string;
-    /** Further notices the package ships, reproduced after its license. */
-    readonly extraText?: string;
-    /** The sentence introducing {@link extraText}. */
-    readonly extraTextLead?: string;
+    /** Further notice files the package ships, reproduced after its license. */
+    readonly extraNotices?: readonly ExtraNotice[];
 }
 
-/** Further notices to reproduce for one package root. */
+/** One further notice file a package ships beside its license. */
 export interface ExtraNotice {
-    readonly extraTextFile: string;
-    readonly extraTextLead: string;
+    /** The file's name at the package root, named in the generated file. */
+    readonly file: string;
+    readonly text: string;
 }
 
 /**
@@ -43,17 +42,15 @@ export const NOTICES_PREAMBLE = `# Third-party notices
 
 Pico's ACP adapter modules under \`adapter/\` are derived from oh-my-pi 18.14.0 (\`@oh-my-pi/pi-coding-agent\`) \`src/modes/acp/*\`, and each derived file names its source file in its first line.
 
-\`tools/build-pico.ts\` generates this file from the \`pico\` build's metafile: every package below is compiled into the executable. Each license is reproduced from the package's own license file, with nothing changed but trailing whitespace, which this repository's formatter strips. Each one is kept in a code block, because the Markdown formatter reflows prose and would otherwise run its copyright lines together.
+\`tools/build-pico.ts\` generates this file from the \`pico\` build's metafile: every package below is compiled into the executable. Each license is reproduced from the package's own license file, with nothing changed but trailing whitespace, which this repository's formatter strips. A package that ships further notices — an Apache-2.0 \`NOTICE\`, a \`THIRD-PARTY-NOTICES\` or a \`LICENSE-3RD-PARTY\` file, which is where vendored and derived code is licensed — has each of those reproduced after its license. Every one is kept in a code block, because the Markdown formatter reflows prose and would otherwise run its copyright lines together.
 
 \`pico\` is a Bun single-file executable, so the Bun runtime is linked into it. Bun's section reproduces \`LICENSE.md\` from the \`bun-v<version>\` tag of <https://github.com/oven-sh/bun>, published as <https://bun.sh/docs/project/licensing>. It covers Bun's own MIT license, the statically linked LGPL-2 JavaScriptCore and WebKit, the other libraries Bun statically links, and the polyfills Bun embeds.
 `;
 
-/** `@oh-my-pi/pi-natives-darwin-arm64` lists the Rust crates linked into the addon here. */
-export const NATIVE_ADDON_EXTRA_NOTICE: ExtraNotice = {
-    extraTextFile: "THIRD-PARTY-NOTICES.txt",
-    extraTextLead:
-        "The addon is a compiled Rust library. The notices it ships for the code, data and fonts linked into it follow.",
-};
+// Where vendored, derived and bundled code is licensed when it is not in the license file:
+// axe-core's `LICENSE-3RD-PARTY.txt`, oh-my-pi's `THIRD-PARTY-NOTICES.txt`, an Apache-2.0
+// `NOTICE`. Each one carries terms, so each one is reproduced.
+const ADDITIONAL_NOTICE_FILE = /^(notice|third-party-notices|license-3rd-party)(\..*)?$/i;
 
 const LICENSE_FILE = /^(licen[cs]e|copying)([.-].*)?$/i;
 
@@ -92,20 +89,33 @@ export function normalizeLicenseText(text: string): string {
         .replace(/\s+$/, "");
 }
 
-async function findLicenseFile(packageRoot: string): Promise<string | null> {
-    let candidates: string[] = [];
+interface PackageLicenseFiles {
+    /** The package's own license file, or `null` when it publishes none. */
+    readonly license: string | null;
+    /** Further notice files at the package root, sorted by name. */
+    readonly additional: readonly string[];
+}
+
+async function findLicenseFiles(packageRoot: string): Promise<PackageLicenseFiles> {
+    let licenses: string[] = [];
+    let additional: string[] = [];
     for (let entry of await readdir(packageRoot, { withFileTypes: true })) {
-        if (entry.isFile() && LICENSE_FILE.test(entry.name)) candidates.push(entry.name);
+        if (!entry.isFile()) continue;
+        // `LICENSE-3RD-PARTY.txt` reads as a license file to the pattern below, and it is not
+        // one: it licenses what the package vendored, not the package.
+        if (ADDITIONAL_NOTICE_FILE.test(entry.name)) additional.push(entry.name);
+        else if (LICENSE_FILE.test(entry.name)) licenses.push(entry.name);
     }
-    if (candidates.length === 0) return null;
+    additional.sort();
+    if (licenses.length === 0) return { license: null, additional };
     // `LICENSE` beats `LICENSE-MIT` when a package ships both, and the rest is alphabetical so
     // that two builds of the same tree pick the same file.
-    candidates.sort((a, b) => {
+    licenses.sort((a, b) => {
         let plainA = /^(licen[cs]e|copying)(\.(md|markdown|txt))?$/i.test(a) ? 0 : 1;
         let plainB = /^(licen[cs]e|copying)(\.(md|markdown|txt))?$/i.test(b) ? 0 : 1;
         return plainA - plainB || (a < b ? -1 : a > b ? 1 : 0);
     });
-    return path.join(packageRoot, candidates[0] as string);
+    return { license: licenses[0] as string, additional };
 }
 
 /** Section order in the generated file, and the order the build merges new notices into. */
@@ -114,14 +124,14 @@ export const byNameThenVersion = (a: PackageNotice, b: PackageNotice): number =>
     (a.version < b.version ? -1 : a.version > b.version ? 1 : 0);
 
 /**
- * Read one notice per package root, sorted by name. A package that ships no license file is
- * never guessed at: the whole collection fails, naming every such package, unless `overrides`
- * carries a committed copy of that exact version's license. An override for a package that does
- * ship a license file fails too, so a stale one can never hide the real text.
+ * Read one notice per package root, sorted by name, with every further notice file the package
+ * ships. A package that ships no license file is never guessed at: the whole collection fails,
+ * naming every such package, unless `overrides` carries a committed copy of that exact
+ * version's license. An override for a package that does ship a license file fails too, so a
+ * stale one can never hide the real text.
  */
 export async function collectPackageNotices(
     packageRoots: readonly string[],
-    extras: Readonly<Record<string, ExtraNotice>> = {},
     overrides: readonly LicenseOverride[] = [],
 ): Promise<PackageNotice[]> {
     let notices: PackageNotice[] = [];
@@ -144,39 +154,36 @@ export async function collectPackageNotices(
         if (collected.has(`${name}@${version}`)) continue;
         collected.add(`${name}@${version}`);
 
-        let licenseFile = await findLicenseFile(packageRoot);
+        let files = await findLicenseFiles(packageRoot);
         let override = overrides.find(entry => entry.name === name && entry.version === version);
-        if (licenseFile !== null && override !== undefined) {
-            shadowed.push(`${name} ${version} (${licenseFile})`);
+        if (files.license !== null && override !== undefined) {
+            shadowed.push(`${name} ${version} (${files.license})`);
             continue;
         }
-        if (licenseFile === null && override === undefined) {
+        if (files.license === null && override === undefined) {
             unlicensed.push(`${name} ${version} (${packageRoot})`);
             continue;
         }
 
         let source = override === undefined ? undefined : override.sourceUrl;
-        let licenseText = normalizeLicenseText(
-            await readFile(
-                override === undefined ? (licenseFile as string) : override.file,
-                "utf8",
-            ),
-        );
-        let extra = extras[packageRoot];
+        let licenseFile =
+            override === undefined
+                ? path.join(packageRoot, files.license as string)
+                : override.file;
+        let extraNotices: ExtraNotice[] = [];
+        for (let file of files.additional) {
+            extraNotices.push({
+                file,
+                text: normalizeLicenseText(await readFile(path.join(packageRoot, file), "utf8")),
+            });
+        }
         notices.push({
             name,
             version,
             license,
-            licenseText,
+            licenseText: normalizeLicenseText(await readFile(licenseFile, "utf8")),
             ...(source === undefined ? {} : { licenseTextSource: source }),
-            ...(extra === undefined
-                ? {}
-                : {
-                      extraText: normalizeLicenseText(
-                          await readFile(path.join(packageRoot, extra.extraTextFile), "utf8"),
-                      ),
-                      extraTextLead: extra.extraTextLead,
-                  }),
+            ...(extraNotices.length === 0 ? {} : { extraNotices }),
         });
     }
 
@@ -216,8 +223,13 @@ export function renderNotices(notices: readonly PackageNotice[]): string {
             );
         }
         body.push("```text", notice.licenseText, "```\n");
-        if (notice.extraText !== undefined) {
-            body.push(`${notice.extraTextLead ?? ""}\n`, "```text", notice.extraText, "```\n");
+        for (let extra of notice.extraNotices ?? []) {
+            body.push(
+                `This package also ships \`${extra.file}\`, reproduced below.\n`,
+                "```text",
+                extra.text,
+                "```\n",
+            );
         }
         return body.join("\n");
     });

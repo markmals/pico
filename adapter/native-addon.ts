@@ -52,11 +52,12 @@ function writeAtomically(versionDir: string, target: string, content: Buffer): v
 
 /**
  * A process still running an older `pico` keeps the addon it loaded: the mapping outlives
- * the deleted file.
+ * the deleted file. Only version-named directories go; Oh My Pi keeps other caches here,
+ * such as `grammars/`.
  */
 function removeOtherVersions(nativesDir: string, version: string): void {
     for (const entry of readdirSync(nativesDir)) {
-        if (entry === version) continue;
+        if (entry === version || !/^\d+\.\d+\.\d+/.test(entry)) continue;
         const path = join(nativesDir, entry);
         try {
             rmSync(path, { recursive: true, force: true });

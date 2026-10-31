@@ -33,8 +33,14 @@ export function removeTemporaryDirectories(): void {
     }
 }
 
+/** A stand-in for `~/Library/Application Support/Pico`; removed by {@link removeTemporaryDirectories}. */
+export function temporaryDataDir(): string {
+    return temporaryDirectory("pico-data-dir-");
+}
+
 interface Credentials {
     readonly agentDir: string;
+    readonly dataDir: string;
     readonly authStorage: AuthStorage;
 }
 
@@ -46,7 +52,7 @@ function credentials(): Promise<Credentials> {
         const agentDir = temporaryDirectory("pico-agent-dir-");
         const authStorage = await discoverAuthStorage(agentDir);
         authStorage.keys.setRuntime("mock", "test");
-        return { agentDir, authStorage };
+        return { agentDir, dataDir: temporaryDataDir(), authStorage };
     })();
     return sharedCredentials;
 }
@@ -58,11 +64,11 @@ export interface MockEngine {
 }
 
 export async function mockEngine(responses: MockResponseSource): Promise<MockEngine> {
-    const { agentDir, authStorage } = await credentials();
+    const { agentDir, dataDir, authStorage } = await credentials();
     const model = createMockModel({ responses });
     return {
         model,
         createSession: (cwd, mcpServers) =>
-            createPicoSession({ cwd, mcpServers, agentDir, authStorage, model }),
+            createPicoSession({ cwd, mcpServers, agentDir, dataDir, authStorage, model }),
     };
 }

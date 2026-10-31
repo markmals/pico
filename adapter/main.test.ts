@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const ENTRY_POINT = join(import.meta.dir, "main.ts");
@@ -8,6 +9,22 @@ const manifest = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.js
     version: string;
 };
 const PACKAGE_VERSION = manifest.version;
+
+const homes: string[] = [];
+
+/** A scratch home, so nothing here touches the real `~/Library/Application Support/Pico`. */
+function scratchHome(): string {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "pico-home-")));
+    homes.push(home);
+    return home;
+}
+
+afterEach(() => {
+    for (const home of homes.splice(0)) {
+        chmodSync(home, 0o755);
+        rmSync(home, { recursive: true, force: true });
+    }
+});
 
 async function readLine(stream: ReadableStream<Uint8Array>): Promise<string> {
     const reader = stream.getReader();
@@ -28,8 +45,9 @@ async function readLine(stream: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 describe("proposal.0001 the stdio entry point", () => {
-    function spawnPico(): Bun.Subprocess<"pipe", "pipe", "pipe"> {
+    function spawnPico(home = scratchHome()): Bun.Subprocess<"pipe", "pipe", "pipe"> {
         return Bun.spawn([process.execPath, ENTRY_POINT], {
+            env: { ...process.env, HOME: home },
             stdin: "pipe",
             stdout: "pipe",
             stderr: "pipe",
@@ -85,5 +103,26 @@ describe("proposal.0001 the stdio entry point", () => {
         pico.stdin.end();
 
         expect(await pico.exited).toBe(0);
+    }, 30_000);
+
+    test("proposal.0002 a data directory that cannot be created stops the agent before any ACP message", async () => {
+        const home = scratchHome();
+        mkdirSync(join(home, "Library"));
+        chmodSync(join(home, "Library"), 0o555);
+        const pico = spawnPico(home);
+        pico.stdin.end();
+
+        const [exitCode, stdout, stderr] = await Promise.all([
+            pico.exited,
+            new Response(pico.stdout).text(),
+            new Response(pico.stderr).text(),
+        ]);
+
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe("");
+        expect(stderr).toStartWith(
+            `pico: cannot use ${join(home, "Library", "Application Support", "Pico")}: `,
+        );
+        chmodSync(join(home, "Library"), 0o755);
     }, 30_000);
 });

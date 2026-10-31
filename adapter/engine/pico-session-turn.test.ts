@@ -18,12 +18,13 @@ import {
 
 describe("proposal.0001 approvals", () => {
     test("bash and edit run to completion even when the user's settings ask for approval", async t => {
-        const { cwd, agentDir } = picoWorkspace(t, "tools:\n  approvalMode: always-ask\n");
+        const { cwd, agentDir, dataDir } = picoWorkspace(t, "tools:\n  approvalMode: always-ask\n");
         const target = path.join(cwd, "b.txt");
         fs.writeFileSync(target, "one\ntwo\n");
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
@@ -53,7 +54,7 @@ describe("proposal.0001 approvals", () => {
     });
 
     test("per-tool policies and restricted folders do not stop a tool call either", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         fs.writeFileSync(
             path.join(agentDir, "config.yml"),
             `tools:\n  approvalMode: always-ask\n  approval:\n    bash: deny\n    write: prompt\n  restrictedFolders:\n    - ${cwd}\n`,
@@ -61,6 +62,7 @@ describe("proposal.0001 approvals", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
@@ -89,7 +91,7 @@ describe("proposal.0001 approvals", () => {
 
 describe("proposal.0001 working directory", () => {
     test("files land in the session's cwd while SESH_ROOT_PATH points elsewhere", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const mainCheckout = temporaryDirectory(t, "sesh-root");
         const previous = process.env.SESH_ROOT_PATH;
         process.env.SESH_ROOT_PATH = mainCheckout;
@@ -101,6 +103,7 @@ describe("proposal.0001 working directory", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
@@ -134,10 +137,11 @@ describe("proposal.0001 working directory", () => {
 
 describe("proposal.0001 shutdown", () => {
     test("dispose names the teardown step that is running", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake")],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -154,12 +158,13 @@ describe("proposal.0001 shutdown", () => {
 
 describe("proposal.0001 no language server", () => {
     test("an edit that breaks the types reports no diagnostics and rewrites nothing", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "typed.ts");
         fs.writeFileSync(absolute, "export const count: number = 1;\n");
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({

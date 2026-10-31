@@ -17,11 +17,12 @@ import { installTestProvider, TEST_PROVIDER } from "./testing/test-provider.ts";
 
 async function sessionOnTestProvider(t: Cleanups) {
     withoutProviderCredentials(t);
-    const { cwd, agentDir } = picoWorkspace(t);
+    const { cwd, agentDir, dataDir } = picoWorkspace(t);
     const models = installTestProvider(cwd);
     const session = await createPicoSession({
         cwd,
         agentDir,
+        dataDir,
         mcpServers: [],
         authStorage: await unauthenticatedAuthStorage(agentDir),
     });

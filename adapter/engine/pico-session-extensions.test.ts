@@ -25,12 +25,13 @@ import {
 
 describe("proposal.0001 extension hooks", () => {
     test("a project extension's hooks run across a turn", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const log = path.join(cwd, "project-extension.log");
         installRecordingExtension(path.join(cwd, ".omp", "extensions"), log);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({
@@ -63,13 +64,14 @@ describe("proposal.0001 extension hooks", () => {
     });
 
     test("a user extension in the agent directory runs too", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const log = path.join(cwd, "user-extension.log");
         installRecordingExtension(path.join(agentDir, "extensions"), log);
         useAsProcessAgentDir(t, agentDir);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -85,12 +87,13 @@ describe("proposal.0001 extension hooks", () => {
     });
 
     test("an extension's own tool never joins the roster", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const log = path.join(cwd, "tool-extension.log");
         installRecordingExtension(path.join(cwd, ".omp", "extensions"), log);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -107,7 +110,7 @@ describe("proposal.0001 extension hooks", () => {
     });
 
     test("an extension that exits while loading is skipped and reported, and Pico survives", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const extensionsDirectory = path.join(cwd, ".omp", "extensions");
         const log = path.join(cwd, "surviving-extension.log");
         const hostile = installExitingExtension(extensionsDirectory);
@@ -117,6 +120,7 @@ describe("proposal.0001 extension hooks", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -138,12 +142,13 @@ describe("proposal.0001 extension hooks", () => {
 
 describe("proposal.0001 extension loading", () => {
     test("a discovered extension's module and factory each run once", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const log = path.join(cwd, "loads.log");
         installCountingExtension(path.join(cwd, ".omp", "extensions"), log);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -159,7 +164,7 @@ describe("proposal.0001 extension loading", () => {
 
 describe("proposal.0001 extension failures", () => {
     test("an extension whose factory throws is reported on stderr and the session still starts", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const broken = installThrowingFactoryExtension(
             path.join(cwd, ".omp", "extensions"),
             "PICO_FACTORY_FAILED",
@@ -169,6 +174,7 @@ describe("proposal.0001 extension failures", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -185,7 +191,7 @@ describe("proposal.0001 extension failures", () => {
 
 describe("proposal.0001 rewritten tool input", () => {
     test("a write an extension redirected is recorded against the file that changed", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const requested = path.join(cwd, "requested.txt");
         const actual = path.join(cwd, "actual.txt");
         fs.writeFileSync(requested, "untouched\n");
@@ -194,6 +200,7 @@ describe("proposal.0001 rewritten tool input", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({

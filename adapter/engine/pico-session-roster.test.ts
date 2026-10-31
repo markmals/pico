@@ -40,10 +40,11 @@ function generatedToolNames(seed: number, count: number): string[] {
 
 describe("proposal.0001 effective roster", () => {
     test("a session without MCP servers has exactly Pico's built-in roster", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -54,10 +55,11 @@ describe("proposal.0001 effective roster", () => {
     });
 
     test("the connected MCP server's tools join the roster", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake")],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -71,13 +73,14 @@ describe("proposal.0001 effective roster", () => {
     });
 
     test("eval, lsp and task stay out even when the user's settings enable them", async t => {
-        const { cwd, agentDir } = picoWorkspace(
+        const { cwd, agentDir, dataDir } = picoWorkspace(
             t,
             "eval:\n  py: true\n  js: true\nlsp:\n  enabled: true\ntask:\n  maxRecursionDepth: 5\n",
         );
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -89,10 +92,11 @@ describe("proposal.0001 effective roster", () => {
 
     test("for any MCP tool names, only Pico's roster and MCP tools are active", async t => {
         const advertised = generatedToolNames(0x5eed, 12);
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [
                 fakeMcpServer("fake", { flags: advertised.flatMap(name => ["--tool", name]) }),
             ],

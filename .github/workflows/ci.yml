@@ -27,16 +27,19 @@ jobs:
             - run: mise run deps:install
             - run: mise run check
 
-    # The same `macos:check` the gate above skips on Linux. It needs a runner with
-    # Xcode: Tuist generates the project, then xcodebuild reads the configuration
-    # back. Nothing is compiled — the native target has no sources yet.
+    # The macOS-only gates. `macos:check` needs Xcode: Tuist generates the project, then
+    # xcodebuild reads the configuration back; nothing is compiled, because the native
+    # target has no sources yet. `pico:verify` compiles the `pico` executable the Homebrew
+    # formula ships, which fails on stale third-party notices, and runs it offline.
     native:
-        name: Native project config
+        name: macOS
         runs-on: macos-latest
         steps:
             - uses: actions/checkout@v7
             - uses: jdx/mise-action@v5
             - run: mise run macos:check
+            - run: mise run deps:install
+            - run: mise run pico:verify
 
     # The commit-msg hook validates one message as it is written; this validates the
     # whole pull request range, which can carry commits the hook never saw.

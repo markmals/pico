@@ -2,9 +2,16 @@
 //
 // Oh My Pi generates this registry from its own monorepo, reading `packages/<dir>`. The
 // published packages carry neither that layout nor the generator's dependencies, so this is the
-// same derivation against `node_modules`. Keys, wildcard expansion and the lazy `import()`
-// values have to match oh-my-pi's, because `src/extensibility/plugins/legacy-pi-compat.ts`
-// serves every extension import out of exactly these keys inside a compiled binary.
+// same derivation against `node_modules`: the same keys, bindings and lazy `import()` values,
+// because `src/extensibility/plugins/legacy-pi-compat.ts` serves every extension import out of
+// exactly these keys inside a compiled binary.
+//
+// One rule differs on purpose. Oh My Pi keeps most packages' root `./*` catch-all out of the
+// registry, which is safe in its own binary and is not safe here: an extension that imports
+// `@oh-my-pi/pi-utils/dirs` resolves it from source through that very catch-all, so `pico` has
+// to serve it too. Every root `./*` is therefore expanded as Node resolves it, `*` matching
+// across `/`, with only the entry modules in {@link BundledPackage.excludedRootSubpaths} held
+// back.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,19 +21,16 @@ export const LEGACY_PI_MODULES_SPECIFIER = "omp-legacy-pi-modules";
 
 const VIRTUAL_NAMESPACE = "omp-legacy-pi-modules-build";
 
-/**
- * How much of a package's root `./*` catch-all export enters the registry.
- * `null` keeps it out (coding-agent exposes `cli.ts`/`main.ts` there, which
- * would pull the binary entry's graph into the registry); `"flat"` takes only
- * top-level files; `"nested"` mirrors Node, where `*` also matches across `/`.
- */
-type RootWildcard = "flat" | "nested" | null;
-
 interface BundledPackage {
     readonly name: string;
     readonly identifier: string;
     readonly rootShim: string | null;
-    readonly rootWildcard: RootWildcard;
+    /**
+     * Subpaths the package's root `./*` export serves that must stay out of the registry.
+     * Importing one of these runs oh-my-pi's own command line, and each drags the binary
+     * entry's module graph into the registry behind it.
+     */
+    readonly excludedRootSubpaths: readonly string[];
 }
 
 /** The package whose `src/extensibility/` holds oh-my-pi's legacy compat shims. */
@@ -37,31 +41,46 @@ const BUNDLED_PACKAGES: readonly BundledPackage[] = [
         name: "@oh-my-pi/pi-agent-core",
         identifier: "PiAgentCore",
         rootShim: null,
-        rootWildcard: null,
+        excludedRootSubpaths: [],
     },
     {
         name: "@oh-my-pi/pi-ai",
         identifier: "PiAi",
         rootShim: "legacy-pi-ai-shim.ts",
-        rootWildcard: null,
+        excludedRootSubpaths: [],
     },
-    { name: "@oh-my-pi/pi-catalog", identifier: "PiCatalog", rootShim: null, rootWildcard: "flat" },
+    {
+        name: "@oh-my-pi/pi-catalog",
+        identifier: "PiCatalog",
+        rootShim: null,
+        excludedRootSubpaths: [],
+    },
     {
         name: "@oh-my-pi/pi-coding-agent",
         identifier: "PiCodingAgent",
         rootShim: "legacy-pi-coding-agent-shim.ts",
-        rootWildcard: null,
+        excludedRootSubpaths: ["cli", "main"],
     },
-    { name: "@oh-my-pi/pi-natives", identifier: "PiNatives", rootShim: null, rootWildcard: null },
-    // pi-tui keeps stateful singletons (`TERMINAL`, theme, figure settings) in
-    // root-level and nested modules; extensions must share the host's records.
+    {
+        name: "@oh-my-pi/pi-natives",
+        identifier: "PiNatives",
+        rootShim: null,
+        excludedRootSubpaths: [],
+    },
+    // pi-tui keeps stateful singletons (`TERMINAL`, theme, figure settings) in root-level and
+    // nested modules; extensions must share the host's records.
     {
         name: "@oh-my-pi/pi-tui",
         identifier: "PiTui",
         rootShim: "legacy-pi-tui-shim.ts",
-        rootWildcard: "nested",
+        excludedRootSubpaths: [],
     },
-    { name: "@oh-my-pi/pi-utils", identifier: "PiUtils", rootShim: null, rootWildcard: null },
+    {
+        name: "@oh-my-pi/pi-utils",
+        identifier: "PiUtils",
+        rootShim: null,
+        excludedRootSubpaths: [],
+    },
 ];
 
 // TypeBox has no package of its own in this dependency tree: oh-my-pi serves the key from its
@@ -137,9 +156,10 @@ function isEnoent(error: unknown): boolean {
 }
 
 /**
- * Derive the bundled legacy Pi module surface from the installed packages' exports. Named
- * wildcard exports are expanded from source, including `x/index` spellings; root catch-alls
- * only per {@link BundledPackage.rootWildcard}.
+ * Derive the bundled legacy Pi module surface from the installed packages' exports. Wildcard
+ * exports are expanded from source, including `x/index` spellings and root catch-alls, which
+ * Node matches across `/`; {@link BundledPackage.excludedRootSubpaths} is the only thing a root
+ * catch-all does not serve.
  */
 export async function collectBundledPiEntries(nodeModules: string): Promise<BundledPiEntry[]> {
     let shimDir = path.join(nodeModules, SHIM_PACKAGE, "src", "extensibility");
@@ -184,7 +204,8 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
             if (!pattern || !/\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/.test(pattern.sourceSuffix))
                 continue;
             let rootWildcard = pattern.exportPrefix === "" || pattern.exportPrefix === "/";
-            if (rootWildcard && (exportKey !== "./*" || !pkg.rootWildcard)) continue;
+            // `./*.js` and friends are legacy spellings of a subpath `./*` already serves.
+            if (rootWildcard && exportKey !== "./*") continue;
 
             let sourceDir = path.join(packageRoot, pattern.sourcePrefix);
             try {
@@ -204,8 +225,6 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
                 matches.sort();
                 for (let match of matches) {
                     if (!match.endsWith(pattern.sourceSuffix)) continue;
-                    if (rootWildcard && pkg.rootWildcard === "flat" && match.includes("/"))
-                        continue;
                     let basename = match.slice(0, match.length - pattern.sourceSuffix.length);
                     let segments = basename.split("/");
                     // Every directory on the way has to be importable too: a private or hidden
@@ -217,6 +236,7 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
                     }
                     if (!isSafeWildcardBasename(segments.at(-1) ?? "")) continue;
                     let subpath = `${pattern.exportPrefix}${basename}${pattern.exportSuffix}`;
+                    if (rootWildcard && pkg.excludedRootSubpaths.includes(subpath)) continue;
                     let key = `${manifest.name}/${subpath}`;
                     addEntry(key, bindingForSubpath(pkg.identifier, subpath), key);
                 }

@@ -58,7 +58,8 @@ function fixtureNodeModules(t: TestContext): string {
         ".": { import: "./src/index.ts" },
         "./*": { import: "./src/*.ts" },
     });
-    writeSource("@oh-my-pi/pi-coding-agent", "src/cli.ts");
+    for (let file of ["src/cli.ts", "src/main.ts", "src/sdk.ts", "src/tools/bash.ts"])
+        writeSource("@oh-my-pi/pi-coding-agent", file);
 
     writePackage("@oh-my-pi/pi-natives", {
         ".": {
@@ -161,19 +162,27 @@ test("proposal.0002 wildcard expansion skips private, hidden, test and worker fi
     }
 });
 
-test("proposal.0002 a root catch-all is expanded only where oh-my-pi expands it", async t => {
+// The binary must resolve what the source build resolves. Node matches `*` in an `exports`
+// pattern across `/`, so a root `./*` serves every module under the package's source root, and
+// an extension importing one of them has to find it in `pico` too.
+test("proposal.0002 a root catch-all is expanded as Node resolves it", async t => {
     let keys = keysOf(await collectBundledPiEntries(fixtureNodeModules(t)));
-    // pi-catalog is flat: top-level files only.
+    assert.ok(keys.has("@oh-my-pi/pi-utils/dirs"), "`@oh-my-pi/pi-utils/dirs` loads from source");
+    assert.ok(keys.has("@oh-my-pi/pi-agent-core/root-level"));
     assert.ok(keys.has("@oh-my-pi/pi-catalog/top"));
-    assert.ok(!keys.has("@oh-my-pi/pi-catalog/deep/inner"));
-    // pi-tui is nested: `*` matches across `/`, as Node does.
+    assert.ok(keys.has("@oh-my-pi/pi-catalog/deep/inner"), "`*` matches across `/`");
     assert.ok(keys.has("@oh-my-pi/pi-tui/colors"));
     assert.ok(keys.has("@oh-my-pi/pi-tui/components/box"));
-    // pi-coding-agent's root catch-all serves its binary entry, so it stays out.
+    assert.ok(keys.has("@oh-my-pi/pi-coding-agent/sdk"));
+    assert.ok(keys.has("@oh-my-pi/pi-coding-agent/tools/bash"));
+});
+
+// The one exception: importing either of these runs oh-my-pi's own command line, and both drag
+// the binary entry's module graph into the registry.
+test("proposal.0002 oh-my-pi's entry modules stay out of the registry", async t => {
+    let keys = keysOf(await collectBundledPiEntries(fixtureNodeModules(t)));
     assert.ok(!keys.has("@oh-my-pi/pi-coding-agent/cli"));
-    // pi-agent-core and pi-utils keep their root catch-alls out too.
-    assert.ok(!keys.has("@oh-my-pi/pi-agent-core/root-level"));
-    assert.ok(!keys.has("@oh-my-pi/pi-utils/dirs"));
+    assert.ok(!keys.has("@oh-my-pi/pi-coding-agent/main"));
 });
 
 test("proposal.0002 every entry has a unique key and binding", async t => {

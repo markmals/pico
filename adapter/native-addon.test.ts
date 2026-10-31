@@ -105,18 +105,53 @@ describe("proposal.0002 extracting the native addon", () => {
         expect(statSync(target).mtime.getTime()).toBe(past.getTime());
     });
 
-    test("other versions' directories are removed and no temporary file is left behind", () => {
+    test("other versions' directories unused for over 10 minutes are removed, and no temporary file is left behind", () => {
         const root = temporaryRoot();
         const source = embeddedAddon(root);
         const nativesDir = join(root, "natives");
         mkdirSync(join(nativesDir, "18.13.0"), { recursive: true });
         writeFileSync(join(nativesDir, "18.13.0", FILENAME), "old addon");
         mkdirSync(join(nativesDir, "19.0.0"), { recursive: true });
+        const elevenMinutesAgo = new Date(Date.now() - 11 * 60_000);
+        for (const version of ["18.13.0", "19.0.0"]) {
+            utimesSync(join(nativesDir, version), elevenMinutesAgo, elevenMinutesAgo);
+        }
 
         installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
 
         expect(readdirSync(nativesDir)).toEqual([VERSION]);
         expect(readdirSync(join(nativesDir, VERSION))).toEqual([FILENAME]);
+    });
+
+    test("another version's directory used within 10 minutes stays, so its addon can still load", () => {
+        const root = temporaryRoot();
+        const source = embeddedAddon(root);
+        const nativesDir = join(root, "natives");
+        mkdirSync(join(nativesDir, "18.13.0"), { recursive: true });
+        writeFileSync(join(nativesDir, "18.13.0", FILENAME), "addon about to load");
+        const nineMinutesAgo = new Date(Date.now() - 9 * 60_000);
+        utimesSync(join(nativesDir, "18.13.0"), nineMinutesAgo, nineMinutesAgo);
+
+        installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
+
+        expect(readFileSync(join(nativesDir, "18.13.0", FILENAME), "utf8")).toBe(
+            "addon about to load",
+        );
+    });
+
+    test("its own version directory is marked as used on every start, even when nothing is rewritten", () => {
+        const root = temporaryRoot();
+        const source = embeddedAddon(root);
+        const nativesDir = join(root, "natives");
+        const versionDir = join(nativesDir, VERSION);
+        mkdirSync(versionDir, { recursive: true });
+        writeFileSync(join(versionDir, FILENAME), "embedded addon bytes");
+        const anHourAgo = new Date(Date.now() - 60 * 60_000);
+        utimesSync(versionDir, anHourAgo, anHourAgo);
+
+        installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
+
+        expect(Date.now() - statSync(versionDir).mtime.getTime()).toBeLessThan(60_000);
     });
 
     test("extraction does not depend on a writable temporary directory", () => {
@@ -147,6 +182,10 @@ describe("proposal.0002 extracting the native addon", () => {
         mkdirSync(join(nativesDir, "grammars"), { recursive: true });
         writeFileSync(join(nativesDir, "grammars", "existing.wasm"), "grammar");
         mkdirSync(join(nativesDir, "18.13.0"), { recursive: true });
+        const anHourAgo = new Date(Date.now() - 60 * 60_000);
+        for (const entry of ["grammars", "18.13.0"]) {
+            utimesSync(join(nativesDir, entry), anHourAgo, anHourAgo);
+        }
 
         installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
 

@@ -45,10 +45,10 @@ Sesh starts `pico` itself and talks to it over its standard input and output. Ru
 
 Pico keeps the files it creates in `~/Library/Application Support/Pico`, which it creates with access for your user only:
 
-- `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs, and removes the folders of other versions.
+- `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs. It removes another version's folder once nothing has used it for 10 minutes, and leaves OMP's other folders here, such as `grammars/`, alone.
 - `models.db`: the cache of OMP's model list.
 
-If Pico can't create or write that folder, `pico` stops before Sesh can talk to it, Sesh shows that the agent failed to start, and the error reads `pico: cannot use <path>: <reason>`.
+If Pico can't create or write that folder, or can't write `models.db` and the log files SQLite keeps beside it, `pico` stops before Sesh can talk to it, Sesh shows that the agent failed to start, and the error reads `pico: cannot use <path>: <reason>`.
 
 ### Running Pico from a checkout
 

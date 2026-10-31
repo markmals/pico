@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import manifest from "../package.json" with { type: "json" };
-import { DataDirError, ensureDataDir, ensureDataFile, picoDataDir } from "./data-dir.ts";
+import { DataDirError, ensureDataDir, ensureWritableDatabase, picoDataDir } from "./data-dir.ts";
 import { isolateStdout } from "./stdout-isolation.ts";
 
 // First statement of the program: everything imported below may print, and the
@@ -15,7 +15,7 @@ const dataDir = picoDataDir(homedir());
 try {
     ensureDataDir(dataDir);
     // Oh My Pi opens the cache only once a session starts, and ignores a failure there.
-    ensureDataFile(join(dataDir, "models.db"));
+    ensureWritableDatabase(join(dataDir, "models.db"));
 } catch (error) {
     if (!(error instanceof DataDirError)) throw error;
     console.error(`pico: ${error.message}`);

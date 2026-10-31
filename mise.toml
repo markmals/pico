@@ -140,6 +140,34 @@ uvx --from git+https://github.com/agentclientprotocol/acp-tck@b7f40fb3c003c45926
     -- {{config_root}}/.build/pico-acp
 """
 
+# ── The pico executable ──────────────────────────────────────────────────────
+# `.build/pico` is the single-file executable the Homebrew formula builds and bottles.
+
+[tasks."pico:build"]
+description = "Compile .build/pico and check THIRD-PARTY-NOTICES.md against what it bundles"
+run = "bun tools/build-pico.ts --outfile {{config_root}}/.build/pico"
+
+[tasks."pico:verify"]
+description = "Check .build/pico offline: --version, initialize, and a turn through a project extension"
+depends = ["pico:build"]
+run = "bun adapter/smoke/verify.ts {{config_root}}/.build/pico"
+
+[tasks."pico:smoke"]
+description = "Drive .build/pico through a real ACP session with your own OMP credentials"
+depends = ["pico:build"]
+run = "bun adapter/smoke/run.ts {{config_root}}/.build/pico"
+
+[tasks."pico:tck"]
+description = "Check .build/pico against the ACP compatibility kit"
+depends = ["pico:build"]
+run = """
+uvx --from git+https://github.com/agentclientprotocol/acp-tck@b7f40fb3c003c45926547be5a1f7e2b374035815 \
+    acp-tck \
+    --timeout 90 --test-timeout 300 \
+    --cancel-prompt 'Use the bash tool to run exactly this command and wait for it to finish: sleep 60' \
+    -- {{config_root}}/.build/pico
+"""
+
 # ── The macOS companion app ──────────────────────────────────────────────────
 # Project.swift is the whole native project today: it has no Swift sources, so these
 # tasks generate and inspect the configuration and stop there. Building, testing and

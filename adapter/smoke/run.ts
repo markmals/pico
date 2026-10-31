@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { Checklist } from "./checklist.ts";
-import { runningPids, waitUntil } from "./processes.ts";
+import { runningPids, subprocessInput, waitUntil } from "./processes.ts";
 import {
     agentText,
     collectToolCalls,
@@ -277,18 +277,6 @@ function stopReasonProblem(turn: Turn, expected: StopReason): string | null {
     return turn.stopReason === expected ? null : `stopReason was ${turn.stopReason}`;
 }
 
-function subprocessInput(sink: Bun.FileSink): WritableStream<Uint8Array> {
-    return new WritableStream<Uint8Array>({
-        async write(chunk) {
-            sink.write(chunk);
-            await sink.flush();
-        },
-        close() {
-            sink.end();
-        },
-    });
-}
-
 async function withDeadline<T>(work: Promise<T>, seconds: number, what: string): Promise<T> {
     let { promise: deadline, reject } = Promise.withResolvers<never>();
     let timer = setTimeout(
@@ -308,9 +296,14 @@ function fail(message: string): never {
 }
 
 async function main(): Promise<void> {
-    let launcher = path.resolve(import.meta.dirname, "..", "..", ".build", "pico-acp");
+    // `pico:smoke` passes the compiled `.build/pico`; `acp:smoke` runs the source launcher.
+    let launcher = path.resolve(
+        process.argv[2] ?? path.join(import.meta.dirname, "..", "..", ".build", "pico-acp"),
+    );
     if (!existsSync(launcher)) {
-        fail(`${launcher} does not exist. Run \`mise run acp:launcher\` first.`);
+        fail(
+            `${launcher} does not exist. Run \`mise run acp:launcher\` or \`mise run pico:build\` first.`,
+        );
     }
 
     // The real path, because the tool calls report the paths the engine resolved and macOS

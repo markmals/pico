@@ -28,3 +28,16 @@ export async function waitUntil(seconds: number, settled: () => boolean): Promis
         await Bun.sleep(100);
     }
 }
+
+/** A subprocess's stdin as the writable stream `ndJsonStream` takes. */
+export function subprocessInput(sink: Bun.FileSink): WritableStream<Uint8Array> {
+    return new WritableStream<Uint8Array>({
+        async write(chunk) {
+            sink.write(chunk);
+            await sink.flush();
+        },
+        close() {
+            sink.end();
+        },
+    });
+}

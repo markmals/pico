@@ -28,8 +28,9 @@ const REPLY = "pico verified";
 // `@oh-my-pi/pi-ai`, and a subpath of `@oh-my-pi/pi-utils` served by its `./*` catch-all.
 const PROVIDER_EXTENSION = `import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { getAgentDir as viaJsSpelling } from "@oh-my-pi/pi-utils/dirs.js";
 
-if (typeof getAgentDir !== "function") throw new Error("@oh-my-pi/pi-utils/dirs did not load");
+if (getAgentDir !== viaJsSpelling) throw new Error("@oh-my-pi/pi-utils/dirs did not load as one module");
 
 const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: { content: [${JSON.stringify(REPLY)}] } });

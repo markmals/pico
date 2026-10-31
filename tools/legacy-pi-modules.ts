@@ -88,6 +88,19 @@ const BUNDLED_PACKAGES: readonly BundledPackage[] = [
 const TYPEBOX_MODULE_KEY = "typebox";
 const TYPEBOX_COMPAT_MODULE = "legacy-typebox.ts";
 const MAIN_THREAD_UNSAFE_WILDCARD_BASENAMES = new Set(["worker-entry"]);
+const MODULE_EXTENSION = /\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/;
+
+/**
+ * The same items with extensionless spellings first, order otherwise unchanged. A `.js` alias
+ * can only reuse a loader that already exists, and a manifest is free to list `./*.js` before
+ * `./*`.
+ */
+function extensionlessFirst<T>(items: readonly T[], suffixOf: (item: T) => string): T[] {
+    return [...items].sort(
+        (a, b) =>
+            Number(MODULE_EXTENSION.test(suffixOf(a))) - Number(MODULE_EXTENSION.test(suffixOf(b))),
+    );
+}
 
 /** One namespace module the binary must retain for legacy extension imports. */
 export interface BundledPiEntry {
@@ -159,21 +172,41 @@ function isEnoent(error: unknown): boolean {
  * Derive the bundled legacy Pi module surface from the installed packages' exports. Wildcard
  * exports are expanded from source, including `x/index` spellings and root catch-alls, which
  * Node matches across `/`; {@link BundledPackage.excludedRootSubpaths} is the only thing a root
- * catch-all does not serve.
+ * catch-all does not serve. A suffixed spelling such as `./*.js` becomes a second key on the
+ * extensionless subpath's loader, never a second import of the same module.
  */
 export async function collectBundledPiEntries(nodeModules: string): Promise<BundledPiEntry[]> {
     let shimDir = path.join(nodeModules, SHIM_PACKAGE, "src", "extensibility");
     let entries: BundledPiEntry[] = [];
-    let seenKeys = new Set<string>();
-    let seenBindings = new Set<string>();
+    let entryByKey = new Map<string, BundledPiEntry>();
+    let specifierByBinding = new Map<string, string>();
     function addEntry(key: string, binding: string, importSpecifier: string): void {
-        if (seenKeys.has(key)) return;
-        if (seenBindings.has(binding)) {
+        if (entryByKey.has(key)) return;
+        let declared = specifierByBinding.get(binding);
+        if (declared !== undefined && declared !== importSpecifier) {
             throw new Error(`Duplicate bundled Pi binding ${binding} for ${key}`);
         }
-        seenKeys.add(key);
-        seenBindings.add(binding);
-        entries.push({ key, binding, importSpecifier });
+        specifierByBinding.set(binding, importSpecifier);
+        let entry = { key, binding, importSpecifier };
+        entryByKey.set(key, entry);
+        entries.push(entry);
+    }
+
+    // `@oh-my-pi/pi-utils/dirs.js` and `@oh-my-pi/pi-utils/dirs` are the same module: the
+    // package exports both spellings onto one source file. Both keys are needed, and they share
+    // one loader, because two `import()`s of one module would put two copies of it in the
+    // binary and give extensions a different instance than the host's.
+    function addSubpath(identifier: string, packageName: string, subpath: string): void {
+        let key = `${packageName}/${subpath}`;
+        let suffix = MODULE_EXTENSION.exec(subpath);
+        if (suffix !== null) {
+            let canonical = entryByKey.get(`${packageName}/${subpath.slice(0, -suffix[0].length)}`);
+            if (canonical !== undefined) {
+                addEntry(key, canonical.binding, canonical.importSpecifier);
+                return;
+            }
+        }
+        addEntry(key, bindingForSubpath(identifier, subpath), key);
     }
 
     for (let pkg of BUNDLED_PACKAGES) {
@@ -187,26 +220,27 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
         let rootSpecifier = pkg.rootShim ? path.join(shimDir, pkg.rootShim) : manifest.name;
         addEntry(manifest.name, `bundled${pkg.identifier}`, rootSpecifier);
 
-        for (let exportKey in exportsField) {
-            if (!exportKey.startsWith("./") || exportKey === "." || exportKey.includes("*"))
-                continue;
-            let subpath = exportKey.slice(2);
-            let key = `${manifest.name}/${subpath}`;
-            addEntry(key, bindingForSubpath(pkg.identifier, subpath), key);
+        // Extensionless spellings first in both loops below: an alias can only reuse a loader
+        // that already exists, and a manifest is free to list `./*.js` before `./*`.
+        let named = Object.keys(exportsField).filter(
+            key => key.startsWith("./") && !key.includes("*"),
+        );
+        for (let exportKey of extensionlessFirst(named, key => key)) {
+            addSubpath(pkg.identifier, manifest.name, exportKey.slice(2));
         }
 
-        for (let exportKey in exportsField) {
-            if (!exportKey.startsWith("./") || exportKey === "." || !exportKey.includes("*"))
-                continue;
+        let wildcards: WildcardPattern[] = [];
+        for (let exportKey of Object.keys(exportsField)) {
+            if (!exportKey.startsWith("./") || !exportKey.includes("*")) continue;
             let sourcePattern = exportImportTarget(exportsField[exportKey]);
             if (!sourcePattern) continue;
             let pattern = parseWildcardPattern(exportKey, sourcePattern);
-            if (!pattern || !/\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/.test(pattern.sourceSuffix))
-                continue;
-            let rootWildcard = pattern.exportPrefix === "" || pattern.exportPrefix === "/";
-            // `./*.js` and friends are legacy spellings of a subpath `./*` already serves.
-            if (rootWildcard && exportKey !== "./*") continue;
+            if (!pattern || !MODULE_EXTENSION.test(pattern.sourceSuffix)) continue;
+            wildcards.push(pattern);
+        }
 
+        for (let pattern of extensionlessFirst(wildcards, entry => entry.exportSuffix)) {
+            let rootWildcard = pattern.exportPrefix === "" || pattern.exportPrefix === "/";
             let sourceDir = path.join(packageRoot, pattern.sourcePrefix);
             try {
                 // Recursive on purpose: Node matches `*` in an `exports` pattern across `/`, so
@@ -235,10 +269,18 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
                         continue;
                     }
                     if (!isSafeWildcardBasename(segments.at(-1) ?? "")) continue;
-                    let subpath = `${pattern.exportPrefix}${basename}${pattern.exportSuffix}`;
-                    if (rootWildcard && pkg.excludedRootSubpaths.includes(subpath)) continue;
-                    let key = `${manifest.name}/${subpath}`;
-                    addEntry(key, bindingForSubpath(pkg.identifier, subpath), key);
+                    // Withheld in every spelling: `cli.js` runs the same module `cli` does.
+                    if (
+                        rootWildcard &&
+                        pkg.excludedRootSubpaths.includes(`${pattern.exportPrefix}${basename}`)
+                    ) {
+                        continue;
+                    }
+                    addSubpath(
+                        pkg.identifier,
+                        manifest.name,
+                        `${pattern.exportPrefix}${basename}${pattern.exportSuffix}`,
+                    );
                 }
             } catch (error) {
                 if (!isEnoent(error)) throw error;
@@ -252,9 +294,17 @@ export async function collectBundledPiEntries(nodeModules: string): Promise<Bund
 
 /** Render the lazy loader registry; exported so tests can read the generated module. */
 export function renderLegacyPiVirtualModule(entries: readonly BundledPiEntry[]): string {
-    let loaders = entries.map(
-        entry => `const ${entry.binding} = () => import(${JSON.stringify(entry.importSpecifier)});`,
-    );
+    // One loader per binding: aliased spellings of a subpath are extra keys on the same lazy
+    // import, so the binary holds one copy of the module behind every name it answers to.
+    let declared = new Set<string>();
+    let loaders: string[] = [];
+    for (let entry of entries) {
+        if (declared.has(entry.binding)) continue;
+        declared.add(entry.binding);
+        loaders.push(
+            `const ${entry.binding} = () => import(${JSON.stringify(entry.importSpecifier)});`,
+        );
+    }
     let modules = entries.map(entry => `\t${JSON.stringify(entry.key)}: ${entry.binding},`);
     return [
         ...loaders,

@@ -1,7 +1,19 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+    mkdirSync,
+    readdirSync,
+    readFileSync,
+    renameSync,
+    rmSync,
+    statSync,
+    utimesSync,
+    writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 import { DataDirError } from "./data-dir.ts";
+
+/** How long another version's directory must sit unused before it is removed: Oh My Pi's figure. */
+const IDLE_VERSION_MS = 10 * 60_000;
 
 export interface NativeAddonInstall {
     /** The addon `pico` carries: a `/$bunfs` path in a compiled build. */
@@ -21,13 +33,25 @@ export interface NativeAddonInstall {
 export function installNativeAddon(install: NativeAddonInstall): string {
     const versionDir = join(install.nativesDir, install.version);
     const target = join(versionDir, install.filename);
+    // Marked first, so another version's cleanup sees this one in use before it is loaded.
+    markInUse(versionDir);
     // `readFileSync` works on `/$bunfs`; `copyFileSync` does not.
     const content = readFileSync(install.source);
     if (!matches(target, content)) {
-        writeAtomically(versionDir, target, content);
+        writeAtomically(target, content);
     }
-    removeOtherVersions(install.nativesDir, install.version);
+    removeIdleVersions(install.nativesDir, install.version);
     return target;
+}
+
+function markInUse(versionDir: string): void {
+    try {
+        mkdirSync(versionDir, { recursive: true });
+        const now = new Date();
+        utimesSync(versionDir, now, now);
+    } catch (error) {
+        throw new DataDirError(versionDir, error);
+    }
 }
 
 function matches(target: string, content: Buffer): boolean {
@@ -38,10 +62,9 @@ function matches(target: string, content: Buffer): boolean {
     }
 }
 
-function writeAtomically(versionDir: string, target: string, content: Buffer): void {
+function writeAtomically(target: string, content: Buffer): void {
     const temporary = `${target}.${process.pid}.tmp`;
     try {
-        mkdirSync(versionDir, { recursive: true });
         writeFileSync(temporary, content, { mode: 0o755 });
         renameSync(temporary, target);
     } catch (error) {
@@ -51,15 +74,18 @@ function writeAtomically(versionDir: string, target: string, content: Buffer): v
 }
 
 /**
- * A process still running an older `pico` keeps the addon it loaded: the mapping outlives
- * the deleted file. Only version-named directories go; Oh My Pi keeps other caches here,
- * such as `grammars/`.
+ * Removes other versions' directories nothing has marked for {@link IDLE_VERSION_MS}, as Oh My
+ * Pi's own loader does: a process of that version that is still starting has marked its
+ * directory, and one already running keeps the addon it loaded, because the mapping outlives
+ * the deleted file. Only version-named directories go; Oh My Pi keeps other caches here, such
+ * as `grammars/`.
  */
-function removeOtherVersions(nativesDir: string, version: string): void {
+function removeIdleVersions(nativesDir: string, version: string): void {
     for (const entry of readdirSync(nativesDir)) {
         if (entry === version || !/^\d+\.\d+\.\d+/.test(entry)) continue;
         const path = join(nativesDir, entry);
         try {
+            if (Date.now() - statSync(path).mtimeMs < IDLE_VERSION_MS) continue;
             rmSync(path, { recursive: true, force: true });
         } catch (error) {
             throw new DataDirError(path, error);

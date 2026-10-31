@@ -175,9 +175,10 @@ test("proposal.0002 an override carries the license of a package that ships none
     let dir = writePackage(root, "bare", { version: "4.5.6", license: "Apache-2.0" });
     let file = path.join(root, "vendored-license.txt");
     writeFileSync(file, "Apache License, Version 2.0\n");
-    let notices = await collectPackageNotices([dir], {}, [
-        { name: "bare", version: "4.5.6", file, sourceUrl: "https://example.invalid/LICENSE" },
-    ]);
+    let notices = await collectPackageNotices(
+        [dir],
+        [{ name: "bare", version: "4.5.6", file, sourceUrl: "https://example.invalid/LICENSE" }],
+    );
     assert.deepEqual(notices, [
         {
             name: "bare",
@@ -201,14 +202,17 @@ test("proposal.0002 an override for a package that has a license file fails", as
     writeFileSync(file, "stale copy\n");
     await assert.rejects(
         () =>
-            collectPackageNotices([dir], {}, [
-                {
-                    name: "licensed",
-                    version: "1.0.0",
-                    file,
-                    sourceUrl: "https://example.invalid/LICENSE",
-                },
-            ]),
+            collectPackageNotices(
+                [dir],
+                [
+                    {
+                        name: "licensed",
+                        version: "1.0.0",
+                        file,
+                        sourceUrl: "https://example.invalid/LICENSE",
+                    },
+                ],
+            ),
         (error: Error) => {
             assert.match(error.message, /licensed 1\.0\.0/);
             assert.match(error.message, /ships its own license file/);
@@ -224,14 +228,17 @@ test("proposal.0002 an override is pinned to the version it was read for", async
     writeFileSync(file, "Apache License, Version 2.0\n");
     await assert.rejects(
         () =>
-            collectPackageNotices([dir], {}, [
-                {
-                    name: "bare",
-                    version: "4.5.6",
-                    file,
-                    sourceUrl: "https://example.invalid/LICENSE",
-                },
-            ]),
+            collectPackageNotices(
+                [dir],
+                [
+                    {
+                        name: "bare",
+                        version: "4.5.6",
+                        file,
+                        sourceUrl: "https://example.invalid/LICENSE",
+                    },
+                ],
+            ),
         (error: Error) => {
             assert.match(error.message, /bare 4\.5\.7/);
             return true;
@@ -239,19 +246,57 @@ test("proposal.0002 an override is pinned to the version it was read for", async
     );
 });
 
-test("proposal.0002 extra notice text is reproduced after the license", async t => {
+// axe-core's vendored dependencies and oh-my-pi's Playwright-derived code are licensed only in
+// these files. A package that ships one is reproducing terms, not documentation.
+test("proposal.0002 a package's further notice files are collected with its license", async t => {
     let root = fixturePackages(t);
     let dir = writePackage(
         root,
-        "@oh-my-pi/pi-natives-darwin-arm64",
+        "noticed",
         { version: "18.14.0", license: "MIT" },
-        { LICENSE: "MIT text\n", "THIRD-PARTY-NOTICES.txt": "crate notices\n" },
+        {
+            LICENSE: "MIT text\n",
+            "THIRD-PARTY-NOTICES.txt": "crate notices\n",
+            NOTICE: "apache notice\n",
+            "LICENSE-3RD-PARTY.txt": "vendored deps\n",
+            "README.md": "not a notice\n",
+        },
     );
-    let notices = await collectPackageNotices([dir], {
-        [dir]: { extraTextFile: "THIRD-PARTY-NOTICES.txt", extraTextLead: "The crates below:" },
-    });
-    assert.equal(notices[0]?.extraText, "crate notices");
-    assert.equal(notices[0]?.extraTextLead, "The crates below:");
+    assert.deepEqual((await collectPackageNotices([dir]))[0]?.extraNotices, [
+        { file: "LICENSE-3RD-PARTY.txt", text: "vendored deps" },
+        { file: "NOTICE", text: "apache notice" },
+        { file: "THIRD-PARTY-NOTICES.txt", text: "crate notices" },
+    ]);
+});
+
+test("proposal.0002 a further notice file is never mistaken for the license itself", async t => {
+    let root = fixturePackages(t);
+    let dir = writePackage(
+        root,
+        "axe-like",
+        { version: "1.0.0", license: "MPL-2.0" },
+        { LICENSE: "the real license\n", "LICENSE-3RD-PARTY.txt": "vendored deps\n" },
+    );
+    assert.equal((await collectPackageNotices([dir]))[0]?.licenseText, "the real license");
+});
+
+test("proposal.0002 a package that ships only a notice file still needs a license", async t => {
+    let root = fixturePackages(t);
+    let dir = writePackage(
+        root,
+        "noticed-only",
+        { version: "1.0.0", license: "MIT" },
+        {
+            NOTICE: "apache notice\n",
+        },
+    );
+    await assert.rejects(
+        () => collectPackageNotices([dir]),
+        (error: Error) => {
+            assert.match(error.message, /noticed-only 1\.0\.0/);
+            return true;
+        },
+    );
 });
 
 test("proposal.0002 the rendered file keeps the committed preamble verbatim", () => {
@@ -302,20 +347,28 @@ test("proposal.0002 rendering is deterministic and carries no timestamp", () => 
     assert.ok(!/\d{4}-\d{2}-\d{2}/.test(renderNotices(notices)));
 });
 
-test("proposal.0002 extra notice text is rendered in its own fence", () => {
+test("proposal.0002 each further notice file is rendered in its own named fence", () => {
     let rendered = renderNotices([
         {
             name: "native",
             version: "1.0.0",
             license: "MIT",
             licenseText: "MIT text",
-            extraText: "crate notices",
-            extraTextLead: "The crates below:",
+            extraNotices: [
+                { file: "NOTICE", text: "apache notice" },
+                { file: "THIRD-PARTY-NOTICES.txt", text: "crate notices" },
+            ],
         },
     ]);
     assert.match(rendered, /```text\nMIT text\n```/);
-    assert.match(rendered, /The crates below:/);
+    assert.match(rendered, /`NOTICE`/);
+    assert.match(rendered, /```text\napache notice\n```/);
+    assert.match(rendered, /`THIRD-PARTY-NOTICES\.txt`/);
     assert.match(rendered, /```text\ncrate notices\n```/);
+    assert.ok(
+        rendered.indexOf("apache notice") < rendered.indexOf("crate notices"),
+        "the fences keep the order they are given",
+    );
 });
 
 test("proposal.0002 matching notices are no drift", () => {

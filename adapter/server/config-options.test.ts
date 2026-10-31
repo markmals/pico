@@ -19,7 +19,12 @@ import type { ConnectedClient } from "./agent-harness.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
 import { installTestProvider } from "../engine/testing/test-provider.ts";
 import { connectPicoAgent, INVALID_PARAMS, requestError } from "./agent-harness.ts";
-import { mockEngine, removeTemporaryDirectories, temporaryProject } from "./engine-harness.ts";
+import {
+    mockEngine,
+    removeTemporaryDirectories,
+    temporaryDataDir,
+    temporaryProject,
+} from "./engine-harness.ts";
 
 /** Provider keys in the environment would add the machine's own models to the menu. */
 const hiddenCredentials: [string, string][] = [];
@@ -67,6 +72,7 @@ async function startModelSession(scripts: TestProviderScripts = {}): Promise<Mod
                 cwd: sessionCwd,
                 mcpServers,
                 agentDir,
+                dataDir: temporaryDataDir(),
                 authStorage,
             });
             return created;

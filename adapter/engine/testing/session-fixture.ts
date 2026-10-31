@@ -83,14 +83,20 @@ export function temporaryDirectory(t: Cleanups, prefix: string): string {
 export interface PicoWorkspace {
     cwd: string;
     agentDir: string;
+    /** Stands in for `~/Library/Application Support/Pico`. */
+    dataDir: string;
 }
 
-/** A temporary working directory and OMP agent directory, so no test reads or writes the user's `~/.omp`. */
+/**
+ * A temporary working directory, OMP agent directory and Pico data directory, so no test
+ * reads or writes the user's `~/.omp` or Pico's real data directory.
+ */
 export function picoWorkspace(t: Cleanups, agentConfig?: string): PicoWorkspace {
     const cwd = temporaryDirectory(t, "cwd");
     const agentDir = temporaryDirectory(t, "agent");
+    const dataDir = temporaryDirectory(t, "data");
     if (agentConfig !== undefined) fs.writeFileSync(path.join(agentDir, "config.yml"), agentConfig);
-    return { cwd, agentDir };
+    return { cwd, agentDir, dataDir };
 }
 
 /** A credential store in `agentDir` holding the runtime key the mock provider needs. */

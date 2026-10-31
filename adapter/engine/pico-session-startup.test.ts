@@ -20,13 +20,14 @@ import {
 
 describe("proposal.0001 credential store", () => {
     test("a store Pico may not write to names the store, the cause and the Autonomous limitation", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         await lockCredentialStore(agentDir);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [],
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
             }),
@@ -48,13 +49,14 @@ describe("proposal.0001 credential store", () => {
     });
 
     test("a store that cannot be opened names the store and the cause without blaming Autonomous", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         fs.mkdirSync(path.join(agentDir, "agent.db"));
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [],
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
             }),
@@ -72,11 +74,12 @@ describe("proposal.0001 credential store", () => {
     });
 
     test("the store Pico opened is closed when the session is disposed", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         writeMockProviderKey(agentDir);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });
@@ -88,11 +91,12 @@ describe("proposal.0001 credential store", () => {
     });
 
     test("a store the caller injected outlives the session", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const authStorage = await mockAuthStorage(agentDir);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage,
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -107,10 +111,10 @@ describe("proposal.0001 credential store", () => {
 describe("proposal.0001 model selection", () => {
     test("a configuration that resolves no model fails creation instead of substituting one", async t => {
         withoutProviderCredentials(t);
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
-            createPicoSession({ cwd, agentDir, mcpServers: [] }),
+            createPicoSession({ cwd, agentDir, dataDir, mcpServers: [] }),
             (error: unknown) => {
                 assert.ok(error instanceof PicoSessionError);
                 assert.match(error.message, /no model/i);
@@ -124,7 +128,7 @@ describe("proposal.0001 model selection", () => {
     });
 
     test("a model Oh My Pi substituted for the configured one fails creation", async t => {
-        const { cwd, agentDir } = picoWorkspace(
+        const { cwd, agentDir, dataDir } = picoWorkspace(
             t,
             "modelRoles:\n  default: openai/pico-no-such-model\n",
         );
@@ -132,7 +136,7 @@ describe("proposal.0001 model selection", () => {
         authStorage.keys.setRuntime("anthropic", "test-key");
 
         await assert.rejects(
-            createPicoSession({ cwd, agentDir, mcpServers: [], authStorage }),
+            createPicoSession({ cwd, agentDir, dataDir, mcpServers: [], authStorage }),
             (error: unknown) => {
                 assert.ok(error instanceof PicoSessionError);
                 assert.match(error.message, /openai\/pico-no-such-model/);
@@ -143,12 +147,13 @@ describe("proposal.0001 model selection", () => {
     });
 
     test("a model whose credentials cannot be resolved fails creation", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [],
                 authStorage: await unauthenticatedAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -164,13 +169,14 @@ describe("proposal.0001 model selection", () => {
 
     test("a failure after the engine exists still terminates the MCP servers", async t => {
         withoutProviderCredentials(t);
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "fake.pid");
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("fake", { flags: ["--pid-file", pidFile] })],
             }),
             PicoSessionError,
@@ -192,10 +198,11 @@ function writeProjectConfig(projectDir: string, config: string): void {
 }
 describe("proposal.0001 thinking level", () => {
     test("the session uses the thinking level the configuration selects", async t => {
-        const { cwd, agentDir } = picoWorkspace(t, "defaultThinkingLevel: low\n");
+        const { cwd, agentDir, dataDir } = picoWorkspace(t, "defaultThinkingLevel: low\n");
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
@@ -206,7 +213,7 @@ describe("proposal.0001 thinking level", () => {
     });
 
     test("project settings come from the session's worktree, not the main checkout", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const mainCheckout = temporaryDirectory(t, "sesh-root");
         writeProjectConfig(cwd, "defaultThinkingLevel: low\n");
         writeProjectConfig(mainCheckout, "defaultThinkingLevel: high\n");
@@ -220,6 +227,7 @@ describe("proposal.0001 thinking level", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
@@ -255,7 +263,7 @@ describe("proposal.0001 stored credentials", () => {
     }
 
     test("a session neither copies nor removes the user's stored credentials", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         writeMockProviderKey(agentDir);
         (await unauthenticatedAuthStorage(agentDir)).close();
         const seed = new Database(path.join(agentDir, "agent.db"));
@@ -270,6 +278,7 @@ describe("proposal.0001 stored credentials", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });

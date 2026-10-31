@@ -4,7 +4,13 @@ import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
-import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
+import {
+    createAgentSession,
+    getAgentDir,
+    ModelRegistry,
+    SessionManager,
+} from "@oh-my-pi/pi-coding-agent";
+import path from "node:path";
 
 import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedChange } from "./write-bridge.ts";
@@ -28,6 +34,8 @@ export interface PicoSessionOptions {
     mcpServers: McpServerStdio[];
     /** Defaults to OMP's agent directory. */
     agentDir?: string;
+    /** Pico's data directory, which must exist: the model cache lives here, not in `agentDir`. */
+    dataDir: string;
     /** Defaults to the user's OMP credential store. */
     authStorage?: AuthStorage;
     /** Defaults to the model the user's OMP configuration resolves for `cwd`. */
@@ -83,11 +91,19 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         const settings = await loadPicoSettings({ cwd, agentDir });
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
         const mcpToolNames = mcp.tools.map(tool => tool.name);
+        // The same registry Oh My Pi would build, except for where its cache lives.
+        const modelRegistry = new ModelRegistry(authStorage, path.join(agentDir, "models.yml"), {
+            settings,
+            cacheDbPath: path.join(options.dataDir, "models.db"),
+        });
+        // Oh My Pi only starts the refresh for a registry it built itself.
+        modelRegistry.refreshInBackground();
         const created = await createAgentSession({
             cwd,
             agentDir,
             settings,
             authStorage,
+            modelRegistry,
             model: options.model,
             sessionManager: SessionManager.inMemory(cwd),
             enableMCP: false,

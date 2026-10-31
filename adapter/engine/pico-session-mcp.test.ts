@@ -24,13 +24,14 @@ import {
 
 describe("proposal.0001 host MCP servers", () => {
     test("a server is launched with its command, arguments and environment, and its tools run", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const model = createMockModel({
             responses: [{ content: [toolCall("mcp__fake_launch_report")] }, { content: ["done"] }],
         });
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [
                 fakeMcpServer("fake", {
                     flags: ["--flavor", "alpha"],
@@ -59,7 +60,7 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("stdio environment values reach the server exactly as the client sent them", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const env = {
             PICO_FAKE_COMMAND: "!echo injected",
             PICO_FAKE_HOST_VARIABLE: "HOME",
@@ -71,6 +72,7 @@ describe("proposal.0001 host MCP servers", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake", { env })],
             authStorage: await mockAuthStorage(agentDir),
             model,
@@ -85,12 +87,13 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("the server's instructions reach the model", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const instructions = "House rules from the fake server: PICO-MCP-INSTRUCTIONS.";
         const model = createMockModel({ responses: [{ content: ["ok"] }] });
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake", { flags: ["--instructions", instructions] })],
             authStorage: await mockAuthStorage(agentDir),
             model,
@@ -106,10 +109,11 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a server slower than the discovery window still contributes its tools", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("slow", { flags: ["--delay-tools-list", "600"] })],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -123,7 +127,7 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("an inherited startup window never silently omits a slow server", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const previous = process.env.OMP_MCP_STARTUP_TIMEOUT_MS;
         process.env.OMP_MCP_STARTUP_TIMEOUT_MS = "100";
         t.after(() => {
@@ -135,6 +139,7 @@ describe("proposal.0001 host MCP servers", () => {
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("slow", { flags: ["--delay-tools-list", "600"] })],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -148,12 +153,13 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a server that dies before listing its tools fails creation, naming it", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("quitter", { flags: ["--exit-after-initialize"] })],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -167,10 +173,11 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a server named __proto__ is connected like any other", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("__proto__")],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -188,10 +195,11 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("an MCP tool's server and tool name come from the connection, not from its minted name", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("my_server", { flags: ["--tool", "ping"] })],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -207,12 +215,13 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("two servers sharing a name are rejected by name", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("twin"), fakeMcpServer("twin")],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -227,12 +236,13 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a server that cannot start fails creation, naming the server and the cause", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [unstartableMcpServer("unstartable")],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -247,12 +257,13 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a server that cannot list its tools fails creation, naming the server and the cause", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("listless", { flags: ["--fail-tools-list"] })],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -267,13 +278,14 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("a failing server terminates the servers that already started", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "healthy.pid");
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [
                     fakeMcpServer("healthy", { flags: ["--pid-file", pidFile] }),
                     fakeMcpServer("listless", { flags: ["--fail-tools-list"] }),
@@ -293,11 +305,12 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("dispose terminates the spawned servers and repeats harmlessly", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "fake.pid");
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake", { flags: ["--pid-file", pidFile] })],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -310,7 +323,7 @@ describe("proposal.0001 host MCP servers", () => {
     });
 
     test("MCP servers in the user's own OMP configuration are never connected", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const projectPid = path.join(cwd, "project.pid");
         const userPid = path.join(cwd, "user.pid");
         writeOmpMcpConfig(
@@ -326,6 +339,7 @@ describe("proposal.0001 host MCP servers", () => {
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -342,13 +356,14 @@ describe("proposal.0001 MCP secrets", () => {
     const SECRET = "pico-secret-XYZ";
 
     test("a failed server's environment reaches neither the error nor the log", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const stderr = captureStderr(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [unstartableMcpServer("leaky", { SESH_MCP_TOKEN: SECRET })],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -367,11 +382,12 @@ describe("proposal.0001 MCP secrets", () => {
     });
 
     test("a connected server's environment never reaches the log", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const stderr = captureStderr(t);
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake", { env: { SESH_MCP_TOKEN: SECRET } })],
             authStorage: await mockAuthStorage(agentDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -386,13 +402,14 @@ describe("proposal.0001 MCP secrets", () => {
 
 describe("proposal.0001 MCP working directory and names", () => {
     test("a server runs in the session's working directory", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const model = createMockModel({
             responses: [{ content: [toolCall("mcp__fake_launch_report")] }, { content: ["done"] }],
         });
         const session = await createPicoSession({
             cwd,
             agentDir,
+            dataDir,
             mcpServers: [fakeMcpServer("fake")],
             authStorage: await mockAuthStorage(agentDir),
             model,
@@ -408,12 +425,13 @@ describe("proposal.0001 MCP working directory and names", () => {
     });
 
     test("two servers whose tools mint the same name fail creation, naming both", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [fakeMcpServer("a-b"), fakeMcpServer("a_b")],
                 authStorage: await mockAuthStorage(agentDir),
                 model: createMockModel({ responses: [{ content: ["ok"] }] }),
@@ -429,12 +447,13 @@ describe("proposal.0001 MCP working directory and names", () => {
     });
 
     test("two tools of one server that mint the same name fail creation, naming both", async t => {
-        const { cwd, agentDir } = picoWorkspace(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
         await assert.rejects(
             createPicoSession({
                 cwd,
                 agentDir,
+                dataDir,
                 mcpServers: [
                     fakeMcpServer("collision", { flags: ["--tool", "a-b", "--tool", "a_b"] }),
                 ],

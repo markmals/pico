@@ -47,7 +47,16 @@ function fixtureNodeModules(t: TestContext): string {
         writeSource("@oh-my-pi/pi-agent-core", file);
     }
 
-    writePackage("@oh-my-pi/pi-ai", { ".": { import: "./src/index.ts" } });
+    // `./providers/*.js` deliberately precedes `./*`: the extensionless spelling a `.js` alias
+    // reuses need not come first in the manifest.
+    writePackage("@oh-my-pi/pi-ai", {
+        ".": { import: "./src/index.ts" },
+        "./providers/*.js": { import: "./src/providers/*.ts" },
+        "./*.js": { import: "./src/*.ts" },
+        "./*": { import: "./src/*.ts" },
+    });
+    for (let file of ["src/providers/anthropic.ts", "src/stream.ts"])
+        writeSource("@oh-my-pi/pi-ai", file);
     writePackage("@oh-my-pi/pi-catalog", {
         ".": { import: "./src/index.ts" },
         "./*": { import: "./src/*.ts" },
@@ -57,6 +66,7 @@ function fixtureNodeModules(t: TestContext): string {
     writePackage("@oh-my-pi/pi-coding-agent", {
         ".": { import: "./src/index.ts" },
         "./*": { import: "./src/*.ts" },
+        "./*.js": { import: "./src/*.ts" },
     });
     for (let file of ["src/cli.ts", "src/main.ts", "src/sdk.ts", "src/tools/bash.ts"])
         writeSource("@oh-my-pi/pi-coding-agent", file);
@@ -185,10 +195,61 @@ test("proposal.0002 oh-my-pi's entry modules stay out of the registry", async t 
     assert.ok(!keys.has("@oh-my-pi/pi-coding-agent/main"));
 });
 
-test("proposal.0002 every entry has a unique key and binding", async t => {
+// From source, `import … from "@oh-my-pi/pi-utils/dirs.js"` resolves through the package's
+// `./*.js` export onto the same module `./*` serves. The binary has to answer both spellings,
+// and with one loader: a second `import()` of the same module would be a second copy of it.
+test("proposal.0002 a suffixed wildcard export aliases the extensionless subpath", async t => {
+    let entries = await collectBundledPiEntries(fixtureNodeModules(t));
+    let entryFor = (key: string) => entries.find(entry => entry.key === key);
+
+    for (let [alias, canonical] of [
+        ["@oh-my-pi/pi-utils/dirs.js", "@oh-my-pi/pi-utils/dirs"],
+        ["@oh-my-pi/pi-ai/providers/anthropic.js", "@oh-my-pi/pi-ai/providers/anthropic"],
+        ["@oh-my-pi/pi-ai/stream.js", "@oh-my-pi/pi-ai/stream"],
+        ["@oh-my-pi/pi-coding-agent/tools/bash.js", "@oh-my-pi/pi-coding-agent/tools/bash"],
+    ]) {
+        let aliased = entryFor(alias as string);
+        let target = entryFor(canonical as string);
+        assert.ok(aliased !== undefined, `${alias} must be a bundled module key`);
+        assert.ok(target !== undefined, `${canonical} must be a bundled module key`);
+        assert.equal(aliased.binding, target.binding, `${alias} must reuse one loader`);
+        assert.equal(aliased.importSpecifier, target.importSpecifier);
+    }
+});
+
+test("proposal.0002 a withheld root subpath is withheld in every spelling", async t => {
+    let keys = keysOf(await collectBundledPiEntries(fixtureNodeModules(t)));
+    assert.ok(!keys.has("@oh-my-pi/pi-coding-agent/cli.js"));
+    assert.ok(!keys.has("@oh-my-pi/pi-coding-agent/main.js"));
+});
+
+test("proposal.0002 keys are unique, and a shared binding always means a shared module", async t => {
     let entries = await collectBundledPiEntries(fixtureNodeModules(t));
     assert.equal(new Set(entries.map(entry => entry.key)).size, entries.length);
-    assert.equal(new Set(entries.map(entry => entry.binding)).size, entries.length);
+    let specifierOf = new Map<string, string>();
+    for (let entry of entries) {
+        let previous = specifierOf.get(entry.binding);
+        if (previous !== undefined) assert.equal(entry.importSpecifier, previous);
+        specifierOf.set(entry.binding, entry.importSpecifier);
+    }
+});
+
+test("proposal.0002 aliases share one loader in the rendered module", () => {
+    let source = renderLegacyPiVirtualModule([
+        {
+            key: "@oh-my-pi/pi-utils/dirs",
+            binding: "bundledPiUtilsDirs",
+            importSpecifier: "@oh-my-pi/pi-utils/dirs",
+        },
+        {
+            key: "@oh-my-pi/pi-utils/dirs.js",
+            binding: "bundledPiUtilsDirs",
+            importSpecifier: "@oh-my-pi/pi-utils/dirs",
+        },
+    ]);
+    assert.equal(source.match(/const bundledPiUtilsDirs = /g)?.length, 1);
+    assert.match(source, /"@oh-my-pi\/pi-utils\/dirs": bundledPiUtilsDirs,/);
+    assert.match(source, /"@oh-my-pi\/pi-utils\/dirs\.js": bundledPiUtilsDirs,/);
 });
 
 test("proposal.0002 the rendered module is a lazy registry of literal dynamic imports", () => {

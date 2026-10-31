@@ -77,6 +77,30 @@ export function bundledPackageRoots(inputs: Iterable<string>, baseDir: string): 
     return [...roots].sort();
 }
 
+/**
+ * The directories bundled inputs came from, grouped by package root and sorted. A notice file
+ * can sit beside the code it covers rather than at the package root, so the walk from each of
+ * these directories upward is what finds it.
+ */
+export function bundledInputDirectories(
+    inputs: Iterable<string>,
+    baseDir: string,
+): Map<string, string[]> {
+    let directories = new Map<string, Set<string>>();
+    for (let input of inputs) {
+        let absolute = path.resolve(baseDir, input);
+        let root = packageRootOf(absolute);
+        if (root === null) continue;
+        let known = directories.get(root);
+        if (known === undefined) {
+            known = new Set();
+            directories.set(root, known);
+        }
+        known.add(path.dirname(absolute));
+    }
+    return new Map([...directories].map(([root, dirs]) => [root, [...dirs].sort()]));
+}
+
 // Verbatim, minus what would make two builds of the same tree differ or make this repository's
 // own gate rewrite the committed file: a byte-order mark, CRLF line endings, trailing blank
 // lines, and the trailing whitespace hk and Oxfmt strip. None of that is part of a license's
@@ -118,6 +142,33 @@ async function findLicenseFiles(packageRoot: string): Promise<PackageLicenseFile
     return { license: licenses[0] as string, additional };
 }
 
+/**
+ * Notice files between the given directories and the package root, as package-relative paths,
+ * sorted. `@oh-my-pi/pi-coding-agent/src/markit/NOTICE` is the case this exists for: the
+ * attribution sits beside the code it covers, and the package root says nothing about it. A
+ * directory holding no bundled input is not walked, because nothing from it is in the binary.
+ */
+async function nestedNoticeFiles(
+    packageRoot: string,
+    directories: readonly string[] = [],
+): Promise<string[]> {
+    let found: string[] = [];
+    let walked = new Set<string>();
+    for (let directory of directories) {
+        let current = directory;
+        while (current.startsWith(packageRoot + path.sep) && !walked.has(current)) {
+            walked.add(current);
+            for (let entry of await readdir(current, { withFileTypes: true })) {
+                if (!entry.isFile() || !ADDITIONAL_NOTICE_FILE.test(entry.name)) continue;
+                found.push(path.relative(packageRoot, path.join(current, entry.name)));
+            }
+            current = path.dirname(current);
+        }
+    }
+    found.sort();
+    return found;
+}
+
 /** Section order in the generated file, and the order the build merges new notices into. */
 export const byNameThenVersion = (a: PackageNotice, b: PackageNotice): number =>
     (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) ||
@@ -125,14 +176,17 @@ export const byNameThenVersion = (a: PackageNotice, b: PackageNotice): number =>
 
 /**
  * Read one notice per package root, sorted by name, with every further notice file the package
- * ships. A package that ships no license file is never guessed at: the whole collection fails,
- * naming every such package, unless `overrides` carries a committed copy of that exact
- * version's license. An override for a package that does ship a license file fails too, so a
- * stale one can never hide the real text.
+ * ships: those at its root, then those beside the directories `inputDirectories` names, which
+ * are where a vendored or derived subtree carries its own attribution. A package that ships no
+ * license file is never guessed at: the whole collection fails, naming every such package,
+ * unless `overrides` carries a committed copy of that exact version's license. An override for
+ * a package that does ship a license file fails too, so a stale one can never hide the real
+ * text.
  */
 export async function collectPackageNotices(
     packageRoots: readonly string[],
     overrides: readonly LicenseOverride[] = [],
+    inputDirectories: ReadonlyMap<string, readonly string[]> = new Map(),
 ): Promise<PackageNotice[]> {
     let notices: PackageNotice[] = [];
     let unlicensed: string[] = [];
@@ -172,6 +226,12 @@ export async function collectPackageNotices(
                 : override.file;
         let extraNotices: ExtraNotice[] = [];
         for (let file of files.additional) {
+            extraNotices.push({
+                file,
+                text: normalizeLicenseText(await readFile(path.join(packageRoot, file), "utf8")),
+            });
+        }
+        for (let file of await nestedNoticeFiles(packageRoot, inputDirectories.get(packageRoot))) {
             extraNotices.push({
                 file,
                 text: normalizeLicenseText(await readFile(path.join(packageRoot, file), "utf8")),

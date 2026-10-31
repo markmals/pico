@@ -1,0 +1,14 @@
+Licenses Pico carries for packages that publish no license file of their own.
+
+tools/build-pico.ts reads these only for the exact package and version named below, and fails
+if that package starts shipping a license file, so no copy here can hide a real one. Each file
+is the verbatim LICENSE at the root of the project's repository, at the release tag matching
+the bundled version.
+
+puppeteer-core-25.3.0.LICENSE.txt
+    puppeteer-core 25.3.0
+    https://github.com/puppeteer/puppeteer/blob/puppeteer-core-v25.3.0/LICENSE
+
+puppeteer-browsers-3.0.6.LICENSE.txt
+    @puppeteer/browsers 3.0.6
+    https://github.com/puppeteer/puppeteer/blob/browsers-v3.0.6/LICENSE

@@ -5,6 +5,7 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 
 import {
+    bundledInputDirectories,
     bundledPackageRoots,
     collectPackageNotices,
     noticesDriftProblem,
@@ -41,7 +42,9 @@ function writePackage(
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, ...manifest }));
     for (let [file, text] of Object.entries(licenseFiles)) {
-        writeFileSync(path.join(dir, file), text);
+        let target = path.join(dir, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        writeFileSync(target, text);
     }
     return dir;
 }
@@ -57,6 +60,20 @@ test("proposal.0002 every bundled input under node_modules names its package roo
 
 test("proposal.0002 inputs outside node_modules contribute no package", () => {
     assert.deepEqual(bundledPackageRoots(["adapter/main.ts", "tools/build-pico.ts"], "/repo"), []);
+});
+
+test("proposal.0002 every bundled input names the directory it came from", () => {
+    assert.deepEqual([...bundledInputDirectories(Object.keys(METAFILE.inputs), "/repo")].sort(), [
+        ["/repo/node_modules/@scope/widget", ["/repo/node_modules/@scope/widget/src"]],
+        [
+            "/repo/node_modules/left-pad",
+            ["/repo/node_modules/left-pad", "/repo/node_modules/left-pad/lib"],
+        ],
+        [
+            "/repo/node_modules/left-pad/node_modules/nested-dep",
+            ["/repo/node_modules/left-pad/node_modules/nested-dep"],
+        ],
+    ]);
 });
 
 test("proposal.0002 a package's notice carries its name, version, license and license text", async t => {
@@ -267,6 +284,51 @@ test("proposal.0002 a package's further notice files are collected with its lice
         { file: "NOTICE", text: "apache notice" },
         { file: "THIRD-PARTY-NOTICES.txt", text: "crate notices" },
     ]);
+});
+
+// `@oh-my-pi/pi-coding-agent/src/markit/NOTICE` attributes markit-ai, and it licenses code the
+// binary bundles from that directory. A notice beside the code is still a notice.
+test("proposal.0002 notice files beside a bundled input are collected too", async t => {
+    let root = fixturePackages(t);
+    let dir = writePackage(
+        root,
+        "deep",
+        { version: "1.0.0", license: "MIT" },
+        {
+            LICENSE: "MIT text\n",
+            NOTICE: "root notice\n",
+            "src/markit/NOTICE": "markit notice\n",
+            "src/unused/NOTICE": "nothing bundled here\n",
+        },
+    );
+    let directories = new Map([[dir, [path.join(dir, "src", "markit")]]]);
+    assert.deepEqual((await collectPackageNotices([dir], [], directories))[0]?.extraNotices, [
+        { file: "NOTICE", text: "root notice" },
+        { file: path.join("src", "markit", "NOTICE"), text: "markit notice" },
+    ]);
+});
+
+test("proposal.0002 a nested notice is collected once however many inputs sit beside it", async t => {
+    let root = fixturePackages(t);
+    let dir = writePackage(
+        root,
+        "deep",
+        { version: "1.0.0", license: "MIT" },
+        {
+            LICENSE: "MIT text\n",
+            "src/markit/NOTICE": "markit notice\n",
+            "src/markit/html/README.md": "a bundled input's directory\n",
+        },
+    );
+    let directories = new Map([
+        [dir, [path.join(dir, "src", "markit"), path.join(dir, "src", "markit", "html")]],
+    ]);
+    assert.deepEqual(
+        (await collectPackageNotices([dir], [], directories))[0]?.extraNotices?.map(
+            notice => notice.file,
+        ),
+        [path.join("src", "markit", "NOTICE")],
+    );
 });
 
 test("proposal.0002 a further notice file is never mistaken for the license itself", async t => {

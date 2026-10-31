@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { createLegacyPiVirtualModulePlugin } from "./legacy-pi-modules.ts";
 import {
+    bundledInputDirectories,
     bundledPackageRoots,
     byNameThenVersion,
     collectPackageNotices,
@@ -161,7 +162,9 @@ export interface NoticesInputs {
 
 /** Render `THIRD-PARTY-NOTICES.md` for one build. */
 export async function noticesForBuild(inputs: NoticesInputs): Promise<string> {
-    let roots = bundledPackageRoots(Object.keys(inputs.metafile.inputs), inputs.baseDir);
+    let keys = Object.keys(inputs.metafile.inputs);
+    let roots = bundledPackageRoots(keys, inputs.baseDir);
+    let directories = bundledInputDirectories(keys, inputs.baseDir);
 
     // The addon is embedded as a file rather than imported as JavaScript, so it is listed here
     // in its own right; its `THIRD-PARTY-NOTICES.txt` carries the Rust crates linked into it.
@@ -175,6 +178,7 @@ export async function noticesForBuild(inputs: NoticesInputs): Promise<string> {
             ...override,
             file: path.join(import.meta.dirname, "licenses", override.file),
         })),
+        directories,
     );
 
     // Bun is linked into every compiled executable, and no metafile input names it.

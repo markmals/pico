@@ -2,7 +2,7 @@
 id: proposal.0001
 title: ACP Adapter Core Turn Path
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/1
 issues: []
 supersedes: []
@@ -29,6 +29,8 @@ Direct human consent from Mark Malstrom on 2026-10-30, in the Sesh session that 
 - **Sesh Autonomous support** gets its own follow-up proposal built on a Pico-owned credential and state store, not this one;
 - **Sesh's MCP servers only** in 0001; connecting arbitrary MCP servers configured through the companion app comes later;
 - **`task` stays permanently excluded**, alongside eval and the built-in LSP. The other omitted tools are deferred, not excluded.
+
+Mark accepted the implementation on 2026-10-30, after their own checks of the second handoff (readiness report on pull request #1). Delivery is merge-only: there is no release or publish step.
 
 ## Motivation
 

@@ -2,7 +2,7 @@
 id: proposal.0002
 title: Pico Homebrew Distribution
 authors: [Mark Malstrom]
-status: draft
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/3
 issues: []
 supersedes: []

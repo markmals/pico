@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+    chmodSync,
     existsSync,
     mkdirSync,
     mkdtempSync,
@@ -14,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { DataDirError } from "./data-dir.ts";
 import { installNativeAddon } from "./native-addon.ts";
 
 const FILENAME = "pi_natives.darwin-arm64.node";
@@ -73,6 +75,21 @@ describe("proposal.0002 extracting the native addon", () => {
         expect(readFileSync(installed, "utf8")).toBe("embedded addon bytes");
     });
 
+    test("a rewrite replaces the file whole instead of writing into the one a process may be loading", () => {
+        const root = temporaryRoot();
+        const source = embeddedAddon(root, "embedded addon bytes");
+        const nativesDir = join(root, "natives");
+        const target = join(nativesDir, VERSION, FILENAME);
+        mkdirSync(join(nativesDir, VERSION), { recursive: true });
+        writeFileSync(target, "tampered addon bytes");
+        const before = statSync(target).ino;
+
+        installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
+
+        // A rename puts a new file in place; writing into the old one keeps its inode.
+        expect(statSync(target).ino).not.toBe(before);
+    });
+
     test("an extracted addon that matches is left in place", () => {
         const root = temporaryRoot();
         const source = embeddedAddon(root);
@@ -120,6 +137,41 @@ describe("proposal.0002 extracting the native addon", () => {
         } finally {
             if (previous === undefined) delete process.env.TMPDIR;
             else process.env.TMPDIR = previous;
+        }
+    });
+
+    test("only version directories are removed; Oh My Pi's other caches there stay", () => {
+        const root = temporaryRoot();
+        const source = embeddedAddon(root);
+        const nativesDir = join(root, "natives");
+        mkdirSync(join(nativesDir, "grammars"), { recursive: true });
+        writeFileSync(join(nativesDir, "grammars", "existing.wasm"), "grammar");
+        mkdirSync(join(nativesDir, "18.13.0"), { recursive: true });
+
+        installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME });
+
+        expect(readdirSync(nativesDir).toSorted()).toEqual([VERSION, "grammars"]);
+        expect(readFileSync(join(nativesDir, "grammars", "existing.wasm"), "utf8")).toBe("grammar");
+    });
+
+    test("a rewrite that cannot finish leaves the previous file whole", () => {
+        const root = temporaryRoot();
+        const source = embeddedAddon(root, "embedded addon bytes");
+        const nativesDir = join(root, "natives");
+        const versionDir = join(nativesDir, VERSION);
+        const target = join(versionDir, FILENAME);
+        mkdirSync(versionDir, { recursive: true });
+        writeFileSync(target, "stale addon");
+        // The file stays writable, but nothing new can be created beside it.
+        chmodSync(versionDir, 0o555);
+
+        try {
+            expect(() =>
+                installNativeAddon({ source, nativesDir, version: VERSION, filename: FILENAME }),
+            ).toThrow(DataDirError);
+            expect(readFileSync(target, "utf8")).toBe("stale addon");
+        } finally {
+            chmodSync(versionDir, 0o755);
         }
     });
 });

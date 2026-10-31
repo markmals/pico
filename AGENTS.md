@@ -110,6 +110,8 @@ mise run changeset   # add a changeset for this change
 
 Pico is two programs. One is a Bun/TypeScript [ACP](https://agentclientprotocol.com) agent that exposes an [OMP](https://omp.sh) SDK agent to Sesh. The other is a native macOS app that installs, configures and inspects it, so the user never opens a terminal. **The adapter's core turn path exists** ([proposal 0001](proposals/0001-acp-adapter-core.md), guide [`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). It speaks ACP over stdio, runs OMP SDK sessions with the curated tool roster, reports every tool call, cancels turns, and offers model and thinking-level selection. **The Mac app is not written**: nothing in this repository draws a window. Session restore, delegation through Sesh child sessions and Autonomous sessions are follow-up proposals tracked in Beads.
 
+The adapter ships as `pico`, a Bun single-file executable ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Users install it with `brew install markmals/tap/pico`, a formula in the public tap `markmals/homebrew-tap` whose bottles the tap's CI builds. Homebrew is Pico's install path. `pico` keeps its own files (the extracted native addon and the model cache) in `~/Library/Application Support/Pico`.
+
 [`PROTOTYPE.md`](PROTOTYPE.md) is the implementation brief: the behavior to build, the acceptance criteria, and the evidence each claim requires. It is input to proposal development — the baseline and much of the grounding are already in it — not a substitute for the proposal. [`VISION.md`](VISION.md) carries the purpose and the deliberate exclusions.
 
 What the Mac app has is project configuration: a Tuist project definition, a target with no sources, and the toolchain pinned to generate it. A project that generates proves the configuration is valid. It does not prove an app exists. The session that writes the app adds its sources, points the target at them, and adds the tasks that build, test and launch it, with the code.
@@ -131,8 +133,9 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | Path | What lives there |
 | --- | --- |
 | `PROTOTYPE.md` | the implementation brief for the adapter and the Mac app |
-| `adapter/` | the ACP adapter: `main.ts` and stdout isolation, `server/` (ACP requests, sessions, config options), `events/` (engine events to ACP updates), `engine/` (OMP session construction, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run) |
-| `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts, commit checkers and the adapter launcher writer |
+| `adapter/` | the ACP adapter: `pico.ts` (the compiled entry point: arguments, data directory, native addon), `main.ts` and stdout isolation, `server/` (ACP requests, sessions, config options), `events/` (engine events to ACP updates), `engine/` (OMP session construction, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run and the offline `pico:verify` check) |
+| `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts, commit checkers, the adapter launcher writer, and `build-pico.ts`, which compiles `pico` and generates the third-party notices |
+| `LICENSE`, `THIRD-PARTY-NOTICES.md` | Pico's MIT license, and the generated notices for everything `pico` bundles |
 | `.omp/extensions/` | harness lifecycle wiring: the gate on stop, formatting after an edit, `bd prime` |
 | `mise.toml` | the task graph — every routine command |
 | `hk.pkl` | every git hook |
@@ -143,7 +146,7 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | `Config/Version.xcconfig` | app version projection and build number; `version:sync` writes `MARKETING_VERSION` from package.json |
 | `.swift-format` | the Swift formatter's configuration |
 
-The adapter lives in `adapter/`, with tests beside the code; `mise run acp:launcher` writes `.build/pico-acp`, the executable Sesh launches. The app has no sources yet: the proposal that introduces it adds them, points the `Pico` target at them, and adds the tasks that run them, with the code.
+The adapter lives in `adapter/`, with tests beside the code. `mise run acp:launcher` writes `.build/pico-acp`, the development launcher that runs from source; `mise run pico:build` compiles `.build/pico`, the executable the Homebrew formula ships. The app has no sources yet: the proposal that introduces it adds them, points the `Pico` target at them, and adds the tasks that run them, with the code.
 
 ### Commands
 
@@ -164,6 +167,10 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run acp:launcher` | write `.build/pico-acp`, the executable Sesh launches |
 | `mise run acp:smoke` | drive `.build/pico-acp` through a real ACP session with your own OMP credentials |
 | `mise run acp:tck` | check `.build/pico-acp` against the ACP compatibility kit |
+| `mise run pico:build` | compile `.build/pico`; fails when `THIRD-PARTY-NOTICES.md` no longer matches what it bundles (rerun `bun tools/build-pico.ts --outfile .build/pico --write-notices`) |
+| `mise run pico:verify` | run `.build/pico` offline with a scratch home: `--version`, `initialize`, and a turn through a project extension |
+| `mise run pico:smoke` | drive `.build/pico` through a real ACP session with your own OMP credentials |
+| `mise run pico:tck` | check `.build/pico` against the ACP compatibility kit |
 | `mise run macos:generate` | generate `Pico.xcodeproj` and `Pico.xcworkspace` from `Project.swift` |
 | `mise run macos:open` | generate the project and open it in Xcode |
 | `mise run macos:fmt` | format the Swift manifests in place |
@@ -172,9 +179,9 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run macos:clean` | remove the generated project and Tuist's artifacts |
 | `mise run version:sync` | write the version `package.json` carries into `Config/Version.xcconfig` |
 
-`mise run check` runs the Bun suites and `macos:check`, then `hk check --all` and `mise run validate`. The native check skips on non-macOS hosts, so Linux retains the workflow gate; CI also exercises native configuration in a dedicated macOS job.
+`mise run check` runs the Bun suites and `macos:check`, then `hk check --all` and `mise run validate`. The native check skips on non-macOS hosts, so Linux retains the workflow gate. CI's macOS job runs `macos:check` and `pico:verify`.
 
-There is no `dev`, `build` or `start` task; the adapter runs from source through the launcher. There is no `macos:build`, `macos:test` or launch task because the app has no sources to compile, and no release or deploy task at all. Add the task with the thing it runs, not before.
+There is no `dev` or `start` task; the development launcher runs from source. There is no `macos:build`, `macos:test` or launch task because the app has no sources to compile. There is no release or deploy task either: a release is a `v<version>` tag on `main` after the Changesets version pull request, followed by a pull request to `markmals/homebrew-tap` that updates `Formula/pico.rb`. The tap's CI builds the bottles, and labelling that pull request `pr-pull` publishes them. Both the tag and the label are publishing, so each needs the human's explicit confirmation. Add the task with the thing it runs, not before.
 
 ### Runtime
 
@@ -190,7 +197,7 @@ Bun leaves lifecycle scripts for the transitive `onnxruntime-node` and `protobuf
 
 One macOS target, `Pico`, bundle identifier `me.malstrom.pico`, deployment target macOS 14. No iOS target or Mac Catalyst. Swift 6 uses complete strict concurrency and `ExistentialAny`. The prototype does not configure App Sandbox integration or an entitlements file; the planned app uses a local helper and explicit access to existing OMP configuration.
 
-`Project.swift` is the source of truth; Tuist generates the Xcode project from it and the generated `.xcodeproj` and `.xcworkspace` are ignored. Tuist is pinned in `mise.toml` and installs on macOS only; `swift`, `swift format`, `xcodebuild` and `xcrun` come from the selected Xcode rather than from mise. Nothing is signed: `CODE_SIGNING_ALLOWED` is `NO`, and there is no distribution or notarization path here.
+`Project.swift` is the source of truth; Tuist generates the Xcode project from it and the generated `.xcodeproj` and `.xcworkspace` are ignored. Tuist is pinned in `mise.toml` and installs on macOS only; `swift`, `swift format`, `xcodebuild` and `xcrun` come from the selected Xcode rather than from mise. Nothing is Developer ID signed or notarized: the app's `CODE_SIGNING_ALLOWED` is `NO`, and `pico` carries only Bun's ad-hoc signature. Developer ID signing and notarization wait for a paid Apple Developer Program membership.
 
 The configured deployment floor is macOS 14, matching CodexBar's documented minimum. The packaged engine's compatibility with that floor remains unverified; do not claim older-system support until the complete runtime is exercised there.
 

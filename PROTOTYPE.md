@@ -31,7 +31,7 @@ ACP can carry generic tool calls and code text. It does not by itself supply a d
 | Tool discovery | Build an explicit supported roster. Avoid the generic `read`/`write` to `xd://` indirection for exposed tools. |
 | Configuration | Persist intentional changes in Pico-owned configuration and apply them as process/session-local policy over the user's normal OMP configuration. Reuse existing credentials without silently copying or rewriting them. |
 | Product surface | A native SwiftUI/AppKit configuration app and a local stdio ACP executable launched by seshd. Sesh remains the conversation UI. No separate web frontend, database, or network service. |
-| End-user setup | Bundle or app-manage the helper, runtime, and engine assets needed to use Pico. No terminal commands, global Bun/Node/OMP installation, shell PATH edits, or hand-edited config files. |
+| End-user setup | Homebrew is the install path: `brew install markmals/tap/pico` installs the `pico` executable, which carries its runtime and engine assets in one file ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Installed pieces may rely on Homebrew-provided locations such as `/opt/homebrew/bin`. No global Bun/Node/OMP installation, shell PATH edits, or hand-edited config files. |
 
 ## Architecture and ownership
 
@@ -62,7 +62,7 @@ An end user can open Pico, connect an account, choose a model and supported reas
 
 Use a native SwiftUI/AppKit app, with a macOS-only Tuist target following the repository's Apple template conventions. The initial deployment target is macOS 14; compatibility of the packaged Bun runtime, OMP native dependencies, and authentication paths on older supported systems still requires verification. Local project generation is unsigned. Distribution signing, notarization, and packaging must be established before describing a downloadable build as ready.
 
-The delivered app must include or install into its own managed location the ACP helper, Bun runtime or compiled equivalent, required JavaScript/native engine assets, and any resources needed for supported functionality. Do not depend on a login shell, Homebrew, mise, npm, a global `omp`, or an existing Bun installation. Verify GUI-launched environments. Do not modify shell profiles to make the app work.
+The delivered app installs through Homebrew, with the `pico` executable, and may rely on Homebrew-provided locations ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). It must not depend on a login shell, mise, npm, a global `omp`, or an existing Bun installation. Verify GUI-launched environments. Do not modify shell profiles to make the app work.
 
 The app supplies the actual absolute helper launch location through a supported Sesh setup flow. Use a documented registration API if one exists; otherwise guide the user through Sesh's Custom Agent GUI with a file picker/Finder reveal and ready-to-use launch details. Do not invent a private registration endpoint or silently edit Sesh's files. Updates and app relocation must not leave Sesh pointing to a removed helper, and existing sessions must not lose their running engine when the settings app quits or updates.
 

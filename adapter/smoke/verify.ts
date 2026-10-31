@@ -23,9 +23,13 @@ import { acpMessageProblem, inspectLines } from "./wire.ts";
 
 const REPLY = "pico verified";
 
-// Loaded by `pico` at runtime from the project, as a user's extension would be. Its import
-// of `@oh-my-pi/pi-ai` resolves only through the module map compiled into `pico`.
+// Loaded by `pico` at runtime from the project, as a user's extension would be. Its imports
+// resolve only through the module map compiled into `pico`: a named subpath export of
+// `@oh-my-pi/pi-ai`, and a subpath of `@oh-my-pi/pi-utils` served by its `./*` catch-all.
 const PROVIDER_EXTENSION = `import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
+import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
+
+if (typeof getAgentDir !== "function") throw new Error("@oh-my-pi/pi-utils/dirs did not load");
 
 const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: { content: [${JSON.stringify(REPLY)}] } });
@@ -114,6 +118,9 @@ async function checkTurn(
         stdout: "pipe",
         stderr: "pipe",
     });
+    // Drained from the start: unread, a chatty stderr would fill its pipe and stall the agent.
+    let stderr = new Response(agent.stderr).text();
+    let failure: string | null = null;
     let strayLines: string[] = [];
     let replyText = "";
     let app = client({ name: "pico-verify" }).onNotification("session/update", ({ params }) => {
@@ -165,14 +172,16 @@ async function checkTurn(
             );
         });
     } catch (error) {
-        let stderr = await new Response(agent.stderr).text().catch(() => "");
-        checklist.record(
-            "the ACP exchange completes",
-            `${error instanceof Error ? error.message : String(error)}; stderr: ${stderr.slice(-800)}`,
-        );
+        failure = error instanceof Error ? error.message : String(error);
     } finally {
         agent.kill();
         await agent.exited;
+    }
+    if (failure !== null) {
+        checklist.record(
+            "the ACP exchange completes",
+            `${failure}; stderr: ${(await stderr).slice(-800)}`,
+        );
     }
     checklist.record(
         "stdout carries ACP messages only",

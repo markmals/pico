@@ -17,6 +17,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@oh-my-pi/pi-coding-agent@18.14.0": "patches/@oh-my-pi%2Fpi-coding-agent@18.14.0.patch",
+  },
   "packages": {
     "@agentclientprotocol/sdk": ["@agentclientprotocol/sdk@2.1.0", "", { "peerDependencies": { "@modelcontextprotocol/server": "^2.4.0", "zod": "^3.25.76 || ^4.0.0" }, "optionalPeers": ["@modelcontextprotocol/server"] }, "sha512-IuKjJmHLPzbmbg26eK9Jopd8AVxgLuu8fX114YzYAU6tLYclCo2DUzLL4vbCpYGr9mzvs2T0kigE3ZCueL06tg=="],
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import manifest from "../package.json" with { type: "json" };
 import { DataDirError, ensureDataDir, ensureWritableDatabase, picoDataDir } from "./data-dir.ts";
+import { initializeRuntimeStorage } from "./engine/runtime-storage.ts";
 import { isolateStdout } from "./stdout-isolation.ts";
 
 // First statement of the program: everything imported below may print, and the
@@ -25,13 +26,16 @@ try {
 const { ndJsonStream } = await import("@agentclientprotocol/sdk");
 const { createPicoAgent, picoAgentShutdown } = await import("./server/pico-agent.ts");
 const { createPicoSession } = await import("./engine/pico-session.ts");
+const agentDir = initializeRuntimeStorage(dataDir);
 
 /** How long shutdown may take before Pico reports an unclean exit. */
 const SHUTDOWN_GRACE_MS = 5_000;
 
 const app = createPicoAgent({
     version: manifest.version,
-    createSession: (cwd, mcpServers) => createPicoSession({ cwd, mcpServers, dataDir }),
+    dataDir,
+    createSession: (cwd, mcpServers, sessionManager) =>
+        createPicoSession({ cwd, mcpServers, dataDir, agentDir, sessionManager }),
 });
 
 const connection = app.connect(ndJsonStream(protocolStdout, Bun.stdin.stream()));
@@ -45,7 +49,16 @@ await connection.closed;
 const shutdown = picoAgentShutdown(app);
 const expiry = Promise.withResolvers<false>();
 const timer = setTimeout(() => expiry.resolve(false), SHUTDOWN_GRACE_MS);
-const disposed = await Promise.race([shutdown.completed.then(() => true), expiry.promise]);
+let disposed = false;
+try {
+    disposed = await Promise.race([shutdown.completed.then(() => true), expiry.promise]);
+} catch (error) {
+    clearTimeout(timer);
+    console.error(
+        `pico: shutdown failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(1);
+}
 clearTimeout(timer);
 
 if (!disposed) {

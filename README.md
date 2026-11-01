@@ -87,8 +87,9 @@ Beads (`bd`) is the work tracker, the ready-work queue, and durable agent memory
 In the repository today:
 
 - `mise.toml`, the only task graph. Every routine command is a mise task.
-- `adapter/`, the ACP adapter from [proposals 0001 and 0002](proposals/), with its tests beside the code; `tools/write-launcher.ts`, which writes the `.build/pico-acp` development launcher; and `tools/build-pico.ts`, which compiles the `pico` executable and generates `THIRD-PARTY-NOTICES.md`.
+- `adapter/`, the ACP adapter with its curated turn path, Pico-only child launches and private session persistence ([proposals 0001–0004](proposals/)), with tests beside the code; `tools/write-launcher.ts`, which writes the `.build/pico-acp` development launcher; and `tools/build-pico.ts`, which compiles the `pico` executable and generates `THIRD-PARTY-NOTICES.md`.
 - `LICENSE` (MIT).
+- `patches/`, the version-pinned SDK discovery correction applied by Bun's frozen install, preserving the original configuration directory while Pico's history lives separately.
 - `tools/check-scoped-commit.ts` with its tests, enforcing commit subjects from `commit-msg`, and `tools/check-pr-commits.ts`, which applies the same rule to a pull request. They are the live example of the TypeScript and test conventions here.
 - the Workbench workflow scripts `tools/status.ts`, `tools/validate.ts` and `tools/require-changeset.ts`, with their tests.
 - `AGENTS.md`, `PROCESS.md`, `.agents/rules/`, `.agents/skills/` and `.agents/templates/`: the process, the binding rules, and the record templates.
@@ -100,10 +101,10 @@ In the repository today:
 
 Not in the repository, and not stubbed anywhere:
 
-- session load, list and resume; delegation workflow guidance for Sesh child sessions; Autonomous sessions; MCP servers beyond the ones Sesh sends. Each is a follow-up proposal tracked in Beads.
+- broader child-session handoff and integration workflows; Autonomous sessions; MCP servers beyond the ones Sesh sends. These remain follow-up work tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
 - the Mac app: no SwiftUI views, no provider sign-in, no model catalog UI, no bundled engine or runtime, and no task that builds or launches an app. The target has no sources, and a target with no sources is configuration, not an application.
 
-`proposals/` holds proposals 0001 and 0002 and `guides/` their guide; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
+`proposals/` holds proposals 0001–0004 and `guides/` their guide; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 
 [`CHANGELOG.md`](CHANGELOG.md) records the initial template adaptation.

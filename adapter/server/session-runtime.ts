@@ -1,14 +1,24 @@
 // Derived from oh-my-pi 18.14.0 src/modes/acp/acp-agent.ts (MIT; see THIRD-PARTY-NOTICES.md).
 
-import type { AgentContext, SessionConfigOption, StopReason } from "@agentclientprotocol/sdk";
+import type {
+    AgentContext,
+    SessionConfigOption,
+    SessionUpdate,
+    StopReason,
+} from "@agentclientprotocol/sdk";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
 
 import { RequestError } from "@agentclientprotocol/sdk";
 import { USER_INTERRUPT_LABEL } from "@oh-my-pi/pi-coding-agent";
 
 import type { PicoSession } from "../engine/pico-session.ts";
+import type { ToolPresentation } from "../events/tool-presentation.ts";
+import type { StoredSession } from "../history/session-store.ts";
 
+import { attempt } from "../engine/errors.ts";
+import { replayHistory } from "../events/history-replay.ts";
 import { SessionEventMapper } from "../events/session-event-mapper.ts";
+import { readToolPresentations, recordToolPresentation } from "../events/tool-presentation.ts";
 import { applyConfigOption, configOptionsOf } from "./config-options.ts";
 import { UpdateQueue } from "./update-queue.ts";
 
@@ -37,6 +47,9 @@ export class SessionRuntime {
     readonly #sessionId: string;
     readonly #session: PicoSession;
     readonly #queue: UpdateQueue;
+    readonly #history: StoredSession | undefined;
+    readonly #presentations: ReadonlyMap<string, ToolPresentation>;
+    readonly #stopWatchingPersistence: () => void;
     #turn: Turn | undefined;
     #closedReason: string | undefined;
     #disposal: Promise<void> | undefined;
@@ -47,11 +60,23 @@ export class SessionRuntime {
     #reportedOptions: string;
     readonly #stopWatchingModel: () => void;
 
-    constructor(sessionId: string, session: PicoSession, client: AgentContext) {
+    constructor(
+        sessionId: string,
+        session: PicoSession,
+        client: AgentContext,
+        history?: StoredSession,
+    ) {
         this.#sessionId = sessionId;
         this.#session = session;
         this.#queue = new UpdateQueue(client, sessionId);
         this.#reportedOptions = JSON.stringify(this.configOptions());
+        this.#history = history;
+        this.#presentations = readToolPresentations(history?.manager.getBranch() ?? []);
+        this.#stopWatchingPersistence =
+            history?.onFailure(error => {
+                this.#closedReason = `Session history could not be saved: ${error.message}`;
+                this.cancel();
+            }) ?? (() => {});
         // The engine can change the model or thinking level itself (a clamp, a retry
         // fallback); the client's menus have to follow, through the ordered queue.
         this.#stopWatchingModel = session.engine.subscribe(event => {
@@ -61,9 +86,49 @@ export class SessionRuntime {
         });
     }
 
+    get cwd(): string {
+        return this.#session.cwd;
+    }
+
+    get busy(): boolean {
+        return (
+            this.#turn !== undefined ||
+            this.#applyingConfigOption > 0 ||
+            this.#disposal !== undefined
+        );
+    }
+
     /** The session's model and thinking menus as they stand now. */
     configOptions(): SessionConfigOption[] {
         return configOptionsOf(this.#session.engine);
+    }
+
+    async flushPersistence(): Promise<void> {
+        try {
+            await this.#history?.flush();
+        } catch (error) {
+            this.#closedReason = `Session history could not be saved: ${describe(error)}`;
+            throw RequestError.internalError(undefined, this.#closedReason);
+        }
+    }
+
+    async replay(signal: AbortSignal): Promise<void> {
+        if (!this.#history) throw new Error("A session without history cannot be loaded");
+        for (const update of replayHistory(
+            this.#history.manager,
+            this.#session.cwd,
+            this.#presentations,
+        )) {
+            if (signal.aborted) throw RequestError.requestCancelled();
+            this.#queue.push(update);
+            await this.#queue.drained();
+        }
+        if (signal.aborted) throw RequestError.requestCancelled();
+    }
+
+    #publish(update: SessionUpdate): void {
+        if (this.#history) recordToolPresentation(this.#history.manager, update);
+        this.#queue.push(update);
     }
 
     /** Applies a client's menu choice and answers with the menus that result. */
@@ -71,11 +136,14 @@ export class SessionRuntime {
         configId: string,
         value: string | boolean,
     ): Promise<SessionConfigOption[]> {
-        if (this.#closedReason) throw RequestError.internalError(undefined, this.#closedReason);
+        this.#requireOpen();
         this.#applyingConfigOption += 1;
         let applied = false;
         try {
+            await this.flushPersistence();
+            this.#requireOpen();
             await applyConfigOption(this.#session, configId, value);
+            await this.flushPersistence();
             applied = true;
         } finally {
             this.#applyingConfigOption -= 1;
@@ -114,7 +182,7 @@ export class SessionRuntime {
     }
 
     async prompt(text: string): Promise<StopReason> {
-        if (this.#closedReason) throw RequestError.internalError(undefined, this.#closedReason);
+        this.#requireOpen();
         if (this.#turn) {
             throw RequestError.invalidParams(
                 undefined,
@@ -131,10 +199,13 @@ export class SessionRuntime {
             if (event.type === "message_end" && event.message.role === "assistant") {
                 lastAssistantMessage = event.message;
             }
-            for (const update of mapper.map(event)) this.#queue.push(update);
+            for (const update of mapper.map(event)) this.#publish(update);
         });
 
         try {
+            await this.flushPersistence();
+            if (turn.cancellation) return "cancelled";
+            this.#requireOpen();
             turn.enginePrompt = this.#session.engine.prompt(text).then(
                 () => undefined,
                 (error: unknown) => {
@@ -155,18 +226,24 @@ export class SessionRuntime {
                 await Promise.race([this.#session.writesSettled(), turn.abandoned.promise]);
             }
             unsubscribe();
-            for (const update of mapper.closeOpenToolCalls()) this.#queue.push(update);
+            for (const update of mapper.closeOpenToolCalls()) this.#publish(update);
             // A cancel can still arrive while the last update is in flight, so the
             // turn is only free once nothing is draining and none is pending.
             let joined: Promise<void> | undefined;
-            do {
-                joined = turn.cancellation;
-                await joined;
-                await this.#queue.drained();
-            } while (joined !== turn.cancellation);
-            this.#turn = undefined;
+            try {
+                do {
+                    joined = turn.cancellation;
+                    await joined;
+                    await this.#queue.drained();
+                    await this.flushPersistence();
+                } while (joined !== turn.cancellation);
+            } finally {
+                this.#turn = undefined;
+            }
         }
 
+        if (this.#history?.failure)
+            throw RequestError.internalError(undefined, this.#history.failure.message);
         if (turn.cancellation) return "cancelled";
         if (turn.failure !== undefined) {
             throw RequestError.internalError(undefined, describe(turn.failure));
@@ -244,11 +321,26 @@ export class SessionRuntime {
         });
     }
 
+    #requireOpen(): void {
+        if (this.#closedReason || this.#disposal) {
+            throw RequestError.internalError(
+                undefined,
+                this.#closedReason ?? "This attachment is closed.",
+            );
+        }
+    }
+
     /** The engine session is torn down once; every later caller awaits that work. */
     #dispose(): Promise<void> {
         if (!this.#disposal) {
             this.#stopWatchingModel();
-            this.#disposal = this.#session.dispose();
+            this.#stopWatchingPersistence();
+            this.#disposal = (async () => {
+                const engineDisposed = await attempt(() => this.#session.dispose());
+                const historyClosed = await attempt(() => this.#history?.close());
+                const failure = engineDisposed ?? historyClosed;
+                if (failure) throw failure.error;
+            })();
         }
         return this.#disposal;
     }

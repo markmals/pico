@@ -10,6 +10,7 @@ import { client, RequestError } from "@agentclientprotocol/sdk";
 
 import type { PicoAgentOptions } from "./pico-agent.ts";
 
+import { temporaryDataDir } from "./engine-harness.ts";
 import { createPicoAgent } from "./pico-agent.ts";
 
 /** A client connected in process to a Pico agent, recording everything the agent sends it. */
@@ -30,7 +31,9 @@ export interface ConnectedClient {
     close(): Promise<void>;
 }
 
-export function connectPicoAgent(options: PicoAgentOptions): ConnectedClient {
+export function connectPicoAgent(
+    options: Omit<PicoAgentOptions, "dataDir"> & { dataDir?: string },
+): ConnectedClient {
     const notifications: SessionNotification[] = [];
     const permissionRequests: unknown[] = [];
     const waiters: ((notification: SessionNotification) => void)[] = [];
@@ -45,7 +48,7 @@ export function connectPicoAgent(options: PicoAgentOptions): ConnectedClient {
             throw new Error("Pico must not ask the client for permission");
         });
 
-    const app = createPicoAgent(options);
+    const app = createPicoAgent({ ...options, dataDir: options.dataDir ?? temporaryDataDir() });
     const connection = clientApp.connect(app);
 
     return {

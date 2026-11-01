@@ -1,7 +1,7 @@
 ---
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
-describes: [proposal.0001, proposal.0002, proposal.0003]
+describes: [proposal.0001, proposal.0002, proposal.0003, proposal.0004]
 ---
 
 # Running Pico in Sesh
@@ -31,10 +31,26 @@ Pico runs on Apple silicon Macs with macOS 14 or later, and installs with Homebr
 
 2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Name it "Pico" and choose `/opt/homebrew/bin/pico` as the executable.
 3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
-4. To choose a model, use Sesh's **Model** menu for the agent. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts.
+4. To choose a model, use Sesh's **Model** menu for the agent. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only, survives reconnecting to it, and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts.
 5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
 
 Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` yourself in a terminal prints `usage: pico [--version]` and a reminder that Sesh launches it, then exits; `pico` with any argument other than `--version` prints the usage line and exits with status 2.
+
+### Reopening a conversation
+
+When Sesh reconnects to an existing Pico session after the adapter stops, Pico restores the agent's saved context instead of starting another conversation. Sesh still owns the conversation UI and workspace; Pico's saved state lets the agent remember earlier messages, tool results and its session-local model and thinking choices. Starting a new Sesh session creates a different agent conversation, even in the same project.
+
+The project must still exist at the same directory. A moved or removed worktree, unavailable saved model, unusable credentials, damaged history, or another process already using that agent session produces an error rather than a new empty conversation or a substituted model. Pico never imports your terminal OMP sessions.
+
+An ACP client can resume without receiving old messages, or load the full saved conversation when it needs history replay. Loading includes messages retained before compaction, one card per tool invocation, and the saved final results and captured diffs rather than a reconstruction from today's files. A tool interrupted by the previous process is shown as failed with an unknown outcome when its result was not recorded; loading never runs it again or promises that its side effects were undone. Transient output that was not committed before a crash may be missing, and a missing saved diff says so.
+
+An ACP client can also load or resume an idle session again on the same connection, keeping its identifier and saved choices. Each explicit load returns one full replay; resume returns none. A request made while a turn, model/thinking change or another reattachment is in progress is refused as busy without interrupting that work. Invalid working-directory or MCP transport parameters leave the existing attachment alone; another connection or process cannot take over a live attachment.
+
+Only the MCP servers supplied by the reconnecting client are connected. An absent server from an earlier turn remains visible in history but is not available for new calls. Saving a conversation does not save MCP server commands, connection credentials or tokens for later reconnection.
+
+Pico confirms a turn or a setting change only after its state has been saved. If saving fails, the operation reports the cause and that attachment cannot accept more prompts; reopen it after correcting the storage problem. Conversations created by older, in-memory-only Pico versions have no saved state to restore.
+
+Other ACP clients can use `session/list` to discover Pico's saved conversations, optionally filtered by directory, in pages of up to 50. That list is private to Pico's storage; it is not a second history browser or a list of your terminal OMP sessions.
 
 ### Upgrading and uninstalling
 
@@ -47,6 +63,8 @@ Pico keeps the files it creates in `~/Library/Application Support/Pico`, which i
 
 - `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs. It removes another version's folder once nothing has used it for 10 minutes, and leaves OMP's other folders here, such as `grammars/`, alone.
 - `models.db`: the cache of OMP's model list.
+- `sessions/`: the private OMP-format journals for Pico's agent conversations and their artifacts, grouped by working directory.
+- `engine/`: SDK supporting history state, including saved blobs and any title index. This is separate from the original OMP configuration and credential store.
 
 If Pico can't create or write that folder, or can't write `models.db` and the log files SQLite keeps beside it, `pico` stops before Sesh can talk to it, Sesh shows that the agent failed to start, and the error reads `pico: cannot use <path>: <reason>`.
 
@@ -102,7 +120,7 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 
 ## Limits and edge cases
 
-- **Model:** a session starts on the model and thinking level your OMP configuration selects for the project, and you can switch both from Sesh's menus (see above). The session fails to start, with an error saying why, when no model is configured, when the configured model isn't available (Pico never starts on another model instead), or when its credentials can't be used. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model. The same happens if Sesh re-applies a model you used before that is no longer available: Sesh shows that Pico didn't accept it and stops applying it. Switching to a model that can't reason sets Thinking to Off.
+- **Model:** a new session starts on the model and thinking level your OMP configuration selects for the project, and you can switch both from Sesh's menus (see above). Reopening uses that conversation's saved choices instead of replacing them with a changed project default. A session fails to start or restore, with an error saying why, when its model isn't available (Pico never starts on another model instead), or its credentials can't be used. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model. Switching to a model that can't reason sets Thinking to Off.
 - **Provider errors during a turn** (an expired key, a rate limit, a network failure) end the turn with an error that carries the provider's message, not with a normal reply. What the agent had already shown stays in the conversation.
 - **Credentials:** Pico uses your OMP credential store at `~/.omp/agent/agent.db`. If an OAuth token has expired, OMP refreshes it there when the session starts or later, exactly as terminal OMP does. Pico never copies or deletes credentials.
 - **What Pico still writes in `~/.omp`:** OMP keeps these files there, and Pico has no way to move them:
@@ -110,6 +128,7 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
     - its skill-description cache, `~/.omp/agent/skill-descriptions.db`;
     - its logs, in `~/.omp/logs`;
     - with the Homebrew `pico`, a cache of the extensions it has loaded, `~/.omp/cache/legacy-pi-extension-cache.db`.
+    - the SDK's runtime ownership locks, in `~/.omp/run/session-owners`; these are not conversation archives.
 
     Everything else Pico creates is in `~/Library/Application Support/Pico`.
 
@@ -122,6 +141,6 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 - **Turning Sesh's tools off** (**Sesh Tools for Agents** in the machine's details) leaves the agent without them; Pico doesn't replace them.
 - **Prompts:** text, in the order you send it, and links to files, which the agent receives as a named reference rather than the file's contents. Images, audio and embedded file contents are rejected with an error naming the unsupported type.
 - **One turn at a time:** a prompt sent while a turn is still running is rejected with an error; the running turn continues.
-- **No history after restart:** if Sesh restarts the agent, earlier conversations can't be resumed in Pico yet.
+- **History after restart:** Pico restores saved agent context when the client reconnects to the same identifier. Sessions created before Pico had persistence cannot be recovered. See [Reopening a conversation](#reopening-a-conversation) for restoration errors and interrupted tools.
 - **A stuck cancellation:** if pressing Stop can't stop the agent, the turn ends as cancelled within at most 10 seconds and that session is closed. Later prompts in it fail with an error saying so; start a new session.
-- **Removing Pico:** run `brew uninstall pico`, delete `~/Library/Application Support/Pico`, and remove the agent in Sesh's machine settings. A checkout install is removed by deleting `.build/`. Pico stores no conversation history and never rewrites your OMP configuration; only what the agent did in your projects, and any OAuth refresh in `agent.db`, remain.
+- **Removing Pico:** run `brew uninstall pico`, delete `~/Library/Application Support/Pico` if you also want to delete its saved conversations and supporting files, and remove the agent in Sesh's machine settings. A checkout install is removed by deleting `.build/`. This does not delete OMP's own history or credentials, undo changes made in your projects, or remove Sesh's own displayed history.

@@ -17,7 +17,7 @@ import type { RecordedChange } from "./write-bridge.ts";
 
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
 import { openCredentialStore } from "./credential-store.ts";
-import { describeCause, PicoSessionError } from "./errors.ts";
+import { attempt, describeCause, PicoSessionError } from "./errors.ts";
 import { connectHostMcpServers } from "./host-mcp-servers.ts";
 import { loadPicoSettings } from "./pico-settings.ts";
 import { prepareDiscoveredExtensions, reportExtensionFailure } from "./session-extensions.ts";
@@ -32,7 +32,7 @@ export interface PicoSessionOptions {
     cwd: string;
     /** The stdio MCP servers the client sent. Nothing else is connected. */
     mcpServers: McpServerStdio[];
-    /** Defaults to OMP's agent directory. */
+    /** Configuration source; ACP bootstrap explicitly supplies the user's original directory. */
     agentDir?: string;
     /** Pico's data directory, which must exist: the model cache lives here, not in `agentDir`. */
     dataDir: string;
@@ -40,6 +40,8 @@ export interface PicoSessionOptions {
     authStorage?: AuthStorage;
     /** Defaults to the model the user's OMP configuration resolves for `cwd`. */
     model?: Model<Api>;
+    /** Engine-owned journal; omit for ephemeral sessions. The engine closes a supplied manager. */
+    sessionManager?: SessionManager;
 }
 
 /** Which MCP server a mounted tool came from, and its name on that server. */
@@ -66,12 +68,11 @@ export interface PicoSession {
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /**
-     * Switches this session to `model` once its credentials resolve, as they must at startup.
-     * Lasts for this session only; nothing is persisted. Throws `PicoSessionError` when the
-     * credentials cannot be used, leaving the session on its current model.
+     * Selects and journals a session-local model without changing OMP defaults.
+     * Credential failure throws PicoSessionError without switching models.
      */
     selectModel(model: Model<Api>): Promise<void>;
-    /** Sets this session's thinking level. Lasts for this session only; nothing is persisted. */
+    /** Selects and journals this session's thinking level without changing OMP defaults. */
     selectThinkingLevel(level: ConfiguredThinkingLevel): void;
     /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
@@ -105,7 +106,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             authStorage,
             modelRegistry,
             model: options.model,
-            sessionManager: SessionManager.inMemory(cwd),
+            sessionManager: options.sessionManager ?? SessionManager.inMemory(cwd),
             enableMCP: false,
             enableLsp: false,
             hasUI: false,
@@ -213,16 +214,6 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             disposalPhase = undefined;
         },
     };
-}
-
-/** Runs one teardown step, reporting its failure instead of abandoning the steps after it. */
-async function attempt(step: () => Promise<void> | void): Promise<{ error: unknown } | undefined> {
-    try {
-        await step();
-        return undefined;
-    } catch (error) {
-        return { error };
-    }
 }
 
 /**

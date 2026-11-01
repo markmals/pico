@@ -108,9 +108,9 @@ mise run changeset   # add a changeset for this change
 
 ## Platform: Bun ACP adapter and Mac companion app
 
-Pico is two programs. One is a Bun/TypeScript [ACP](https://agentclientprotocol.com) agent that exposes an [OMP](https://omp.sh) SDK agent to Sesh. The other is a native macOS app that installs, configures and inspects it, so the user never opens a terminal. **The adapter's core turn path exists** ([proposal 0001](proposals/0001-acp-adapter-core.md), guide [`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). It speaks ACP over stdio, runs OMP SDK sessions with the curated tool roster, reports every tool call, cancels turns, and offers model and thinking-level selection. **The Mac app is not written**: nothing in this repository draws a window. Session restore, delegation through Sesh child sessions and Autonomous sessions are follow-up proposals tracked in Beads.
+Pico is two programs. One is a Bun/TypeScript [ACP](https://agentclientprotocol.com) agent that exposes an [OMP](https://omp.sh) SDK agent to Sesh. The other is a native macOS app that installs, configures and inspects it, so the user never opens a terminal. **The adapter's core turn path exists** ([proposal 0001](proposals/0001-acp-adapter-core.md), guide [`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). It speaks ACP over stdio, runs OMP SDK sessions with the curated tool roster, reports every tool call, cancels turns, and offers model and thinking-level selection. It also handles ACP load, list and resume over Pico-owned history ([proposal 0004](proposals/0004-session-restoration.md)). **The Mac app is not written**: nothing in this repository draws a window. Broader child-session workflows and Autonomous sessions remain follow-up work tracked in Beads.
 
-The adapter ships as `pico`, a Bun single-file executable ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Users install it with `brew install markmals/tap/pico`, a formula in the public tap `markmals/homebrew-tap` whose bottles the tap's CI builds. Homebrew is Pico's install path. `pico` keeps its own files (the extracted native addon and the model cache) in `~/Library/Application Support/Pico`.
+The adapter ships as `pico`, a Bun single-file executable ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Users install it with `brew install markmals/tap/pico`, a formula in the public tap `markmals/homebrew-tap` whose bottles the tap's CI builds. Homebrew is Pico's install path. `pico` keeps its own files (the extracted native addon, model cache and private agent-continuation history) in `~/Library/Application Support/Pico`. Sesh retains the conversation UI and its own client-side history.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) is the implementation brief: the behavior to build, the acceptance criteria, and the evidence each claim requires. It is input to proposal development — the baseline and much of the grounding are already in it — not a substitute for the proposal. [`VISION.md`](VISION.md) carries the purpose and the deliberate exclusions.
 
@@ -118,7 +118,7 @@ What the Mac app has is project configuration: a Tuist project definition, a tar
 
 ### Where the APIs come from
 
-The OMP side is the published SDK, `@oh-my-pi/pi-coding-agent`, documented at [omp.sh/docs/sdk](https://omp.sh/docs/sdk). Use public exports only; the brief says what to do when a needed hook is missing from them. The installed package's type declarations outrank any summary, including this one.
+The OMP side is the published SDK, `@oh-my-pi/pi-coding-agent`, documented at [omp.sh/docs/sdk](https://omp.sh/docs/sdk). Use public exports only; the brief says what to do when a needed hook is missing from them. The installed package's type declarations outrank any summary, including this one. Pico carries the narrowly approved, version-pinned Bun patch from proposal 0004 so native discovery honors the original configuration directory without moving history there; the ordinary frozen dependency install applies it.
 
 The ACP side is the official TypeScript SDK and the protocol at [agentclientprotocol.com](https://agentclientprotocol.com). Implement against the version actually negotiated with the client and against the SDK's types, not against a remembered shape of the protocol.
 
@@ -133,9 +133,10 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | Path | What lives there |
 | --- | --- |
 | `PROTOTYPE.md` | the implementation brief for the adapter and the Mac app |
-| `adapter/` | the ACP adapter: `pico.ts` (the compiled entry point: arguments, data directory, native addon), `main.ts` and stdout isolation, `server/` (ACP requests, sessions, config options), `events/` (engine events to ACP updates), `engine/` (OMP session construction, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run and the offline `pico:verify` check) |
+| `adapter/` | the ACP adapter: `pico.ts` (the compiled entry point: arguments, data directory, native addon), `main.ts` and stdout isolation, `server/` (ACP requests, attachments, config options), `history/` (journals, ownership, listing), `events/` (live and replayed ACP updates), `engine/` (OMP session construction, configuration sources, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run and offline executable restart check) |
 | `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts, commit checkers, the adapter launcher writer, and `build-pico.ts`, which compiles `pico` and generates the third-party notices |
 | `LICENSE`, `THIRD-PARTY-NOTICES.md` | Pico's MIT license, and the generated notices for everything `pico` bundles |
+| `patches/` | Bun-managed, version-pinned SDK discovery correction; `package.json` and `bun.lock` bind its application |
 | `.omp/extensions/` | harness lifecycle wiring: the gate on stop, formatting after an edit, `bd prime` |
 | `mise.toml` | the task graph — every routine command |
 | `hk.pkl` | every git hook |
@@ -168,7 +169,7 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run acp:smoke` | drive `.build/pico-acp` through a real ACP session with your own OMP credentials |
 | `mise run acp:tck` | check `.build/pico-acp` against the ACP compatibility kit |
 | `mise run pico:build` | compile `.build/pico`; fails when `THIRD-PARTY-NOTICES.md` no longer matches what it bundles (rerun `bun tools/build-pico.ts --outfile .build/pico --write-notices`) |
-| `mise run pico:verify` | run `.build/pico` offline with a scratch home: `--version`, `initialize`, and a turn through a project extension |
+| `mise run pico:verify` | run `.build/pico` offline with a scratch home: version, initialize, tool execution, restart, list, load replay and resume with saved context |
 | `mise run pico:smoke` | drive `.build/pico` through a real ACP session with your own OMP credentials |
 | `mise run pico:tck` | check `.build/pico` against the ACP compatibility kit |
 | `mise run macos:generate` | generate `Pico.xcodeproj` and `Pico.xcworkspace` from `Project.swift` |

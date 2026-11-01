@@ -1,8 +1,14 @@
 import type { AgentContext, SessionNotification } from "@agentclientprotocol/sdk";
 
+import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { textDelta } from "../events/engine-event-fixtures.ts";
+import { SessionStore } from "../history/session-store.ts";
+import { StoredSession } from "../history/stored-session.ts";
 import { requestError } from "./agent-harness.ts";
 import { fakeSession } from "./fake-session.ts";
 import { settle } from "./session-fixture.ts";
@@ -104,4 +110,73 @@ describe("proposal.0001 turn admission", () => {
         landed.resolve();
         expect(await first).toBe("end_turn");
     }, 15_000);
+});
+
+describe("proposal.0004 persistence admission", () => {
+    test("cancelling while the pre-turn save is pending does not start model work afterwards", async () => {
+        const manager = SessionManager.inMemory("/workspace");
+        const history = new StoredSession({
+            manager,
+            sessionId: manager.getSessionId(),
+            cwd: "/workspace",
+            file: "/unused-history.jsonl",
+            artifactsDir: null,
+            removable: false,
+            detach: () => {},
+        });
+        const saving = Promise.withResolvers<void>();
+        const saved = Promise.withResolvers<void>();
+        let flushes = 0;
+        history.flush = () => {
+            if (flushes++ > 0) return Promise.resolve();
+            saving.resolve();
+            return saved.promise;
+        };
+        const fake = fakeSession("/workspace", { prompt: async () => true, abort: async () => {} });
+        const runtime = new SessionRuntime(
+            manager.getSessionId(),
+            fake.session,
+            quietClient(),
+            history,
+        );
+        try {
+            const turn = runtime.prompt("this turn is cancelled before execution");
+            await saving.promise;
+            runtime.cancel();
+            saved.resolve();
+            expect(await turn).toBe("cancelled");
+            expect(fake.calls.filter(call => call === "prompt")).toEqual([]);
+        } finally {
+            saved.resolve();
+            await runtime.dispose();
+        }
+    });
+
+    test("a failed engine teardown still closes its history writer and releases ownership", async () => {
+        const root = realpathSync(mkdtempSync(join(tmpdir(), "pico-failed-dispose-")));
+        const cwd = join(root, "project");
+        const dataDir = join(root, "data");
+        mkdirSync(cwd);
+        mkdirSync(dataDir);
+        const store = new SessionStore(dataDir);
+        const history = await store.create(cwd);
+        const fake = fakeSession(cwd, {
+            dispose: async () => {
+                throw new Error("engine teardown failed");
+            },
+        });
+        const runtime = new SessionRuntime(history.sessionId, fake.session, quietClient(), history);
+        try {
+            await expect(runtime.dispose()).rejects.toThrow("engine teardown failed");
+            const reopened = await store.open(history.sessionId, cwd).then(
+                value => ({ value }),
+                (error: unknown) => ({ error }),
+            );
+            expect("error" in reopened).toBe(false);
+            if ("value" in reopened) await reopened.value.close();
+        } finally {
+            await history.close().catch(() => {});
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
 });

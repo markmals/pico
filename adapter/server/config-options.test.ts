@@ -67,13 +67,14 @@ async function startModelSession(scripts: TestProviderScripts = {}): Promise<Mod
     let created: PicoSession | undefined;
     const client = connectPicoAgent({
         version: "0.0.0-test",
-        createSession: async (sessionCwd, mcpServers) => {
+        createSession: async (sessionCwd, mcpServers, sessionManager) => {
             created = await createPicoSession({
                 cwd: sessionCwd,
                 mcpServers,
                 agentDir,
                 dataDir: temporaryDataDir(),
                 authStorage,
+                sessionManager,
             });
             return created;
         },

@@ -2,7 +2,7 @@
 id: proposal.0003
 title: Pico-Only Child Sessions
 authors: [Mark Malstrom]
-status: draft
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/4
 issues: []
 supersedes: []
@@ -18,7 +18,7 @@ Make Pico’s Sesh child-session tool inherit the parent’s registered agent an
 
 Mark has observed OMP running in Sesh start Codex-harness review sessions. A review should not silently switch away from Pico’s tool roster, approval policy, and execution backend. Disabling OMP’s native subagents does not prevent this switch: Sesh’s own child-session tool accepts an explicit agent selection.
 
-Inspection of the relevant local Sesh events on 2026-10-31 found a review launch through `start_session` with `agent: "codex"`. The parent was running stock OMP, not Pico. This establishes the observed route, not a claim that a Pico child has already been exercised. Pico currently admits that same host-supplied tool without constraining its agent argument.
+Inspection of the relevant local Sesh events on 2026-10-31 found a review launch through `start_session` with `agent: "codex"`. The parent was running stock OMP, not Pico. This establishes the observed route, not a claim that a Pico child has already been exercised. Before this change, Pico admitted that host-supplied tool without constraining its agent argument.
 
 Mark also reported repeated approval requests for `rm -rf` cleanup in `/tmp`. Those recorded requests came from stock OMP’s ACP permission gate. Its critical-command decisions remain per-call even after an “Always allow” answer. Pico already promises no approval requests under [proposal 0001](0001-acp-adapter-core.md#approvals), and does not install that gate. A separate `/tmp` exemption would neither fix a stock-OMP session nor establish that a file belongs to an agent. This proposal does not change the approval policy.
 
@@ -74,11 +74,11 @@ Add guidance that reviews and other delegated work use that Sesh operation, neve
 
 Adapt the client-supplied Sesh server’s original `start_session` tool before its schema and implementation enter the admitted engine roster. Use the original server/tool identity (`sesh` and `start_session`), not an agent-authored title, display label, or a guessed normalized name. Retain the existing cross-server collision checks.
 
-The model-facing tool keeps its existing minted name, `mcp__sesh_start_session`, and its ordinary Sesh purpose. Remove `agent` from the parameters and any corresponding required-field entry. Its description states that children use this session’s registered agent and that choosing a different harness is unsupported. Preserve all other host parameters and their requiredness; Sesh continues to own project lookup, worktree creation, reporting, and launch validation.
+The model-facing tool keeps its existing minted name, `mcp__sesh_start_session`, and its ordinary Sesh purpose. For a compatible host contract, remove the optional `agent` selector from the parameters. Its description states that children use this session’s registered agent and that choosing a different harness is unsupported. Preserve all other host parameters and their requiredness; Sesh continues to own project lookup, worktree creation, reporting, and launch validation.
 
 Only the adapted implementation is admitted under that tool name. Do not retain a second unadapted alias or an indirect device route. Do not mutate shared SDK tool schemas or lose class method receivers while adapting the tool. Preserve the original execution context, progress callback, cancellation signal, MCP identity metadata, and result/error handling.
 
-If Sesh supplies the tool with a schema that cannot safely express this narrowed contract, fail `session/new` with an error naming the incompatible Sesh `start_session` contract. Never mount its original implementation as a fallback. When Sesh supplies no `start_session` at all, retain proposal 0001’s behavior: the session can perform its other work, but delegation is unavailable. Other servers’ unrelated tools are not reclassified from their titles.
+If Sesh supplies the tool with a schema that cannot safely express this narrowed contract, fail `session/new` with an error naming the incompatible Sesh `start_session` contract. A schema that requires `agent`, directly or through a closed object’s minimum property count, is incompatible because it cannot accept an inherited-agent launch. Never mount its original implementation as a fallback. When Sesh supplies no `start_session` at all, retain proposal 0001’s behavior: the session can perform its other work, but delegation is unavailable. Other servers’ unrelated tools are not reclassified from their titles.
 
 ### Reject overrides at the execution boundary
 
@@ -127,7 +127,7 @@ No new credentials, provider integration, service, sandbox, or private Sesh API 
 - Narrow and enforce Pico’s admitted Sesh child-launch operation, including failure on incompatible supplied schemas.
 - Explain the supported delegation path and prohibit native/shell harness fallbacks in Pico guidance.
 - Verify the runtime boundary and exercise actual Pico-to-Pico inheritance in Sesh.
-- Update the existing Sesh guide and add the implementation’s changeset when the behavior is built. This proposal-only pull request carries an empty changeset.
+- Update the existing Sesh guide and include a changeset describing the implemented restriction.
 
 ### Out of scope
 
@@ -144,7 +144,7 @@ No new credentials, provider integration, service, sandbox, or private Sesh API 
 - Access: local developer checkout and a user-approved custom Pico registration through Sesh’s supported setup. Do not replace the user’s active registration or start a model-backed review during proposal development.
 - Exercise: a harmless child review in a disposable project; inspect its parent relationship, agent identity and curated policy, then attempt an override and observe the failed call with no extra child. Inspect failure/cancellation in the existing visible tool stream.
 - Completion cleanup: stop/archive disposable sessions through Sesh and remove only the implementation’s own temporary project and preview registration with the user’s permission. Leave existing registrations, credentials, and terminal sessions unchanged.
-- Current state: proposal only. No adapted tool or functioning preview is claimed.
+- Current state: the implementation passes the proposal’s regression tests. Live Sesh parent/child verification is pending.
 
 ## Policies and decisions checked
 
@@ -168,4 +168,4 @@ The broader delegation proposal can define task handoffs, result-state handling,
 
 ## Open questions
 
-None about the selected behavior. The human authorized proposal development and selected the tool-level enforcement boundary on 2026-10-31; this remains a draft, not implementation approval. Same-agent inheritance still requires the live verification specified above before implementation can be presented as working.
+None about the selected behavior. The human approved implementation on 2026-10-31 after selecting tool-level enforcement with ordinary shell access retained. Same-agent inheritance still requires the live verification specified above before implementation can be presented as working.

@@ -1,7 +1,7 @@
 ---
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
-describes: [proposal.0001]
+describes: [proposal.0001, proposal.0003]
 ---
 
 # Running Pico in Sesh
@@ -15,7 +15,7 @@ Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session get
 
 Every tool the agent runs appears in the Sesh conversation as its own tool call, with a title, its output, and whether it succeeded or failed. Reads, writes and edits also show the files they work on, and a search shows the folder it searched when the agent named one. A successful edit or write shows a diff of each file it changed.
 
-Pico never asks for approval. Every tool call runs as soon as the agent makes it.
+Pico never asks for approval. Tool calls do not wait for a permission decision; invalid requests can still fail validation before execution.
 
 ## How to use it
 
@@ -48,6 +48,18 @@ The conversation shows:
 - a `bash` tool call titled `cat pico-smoke.txt`, completed, with `hello from pico` as its output.
 
 Then ask it to run `exit 3` with the bash tool: that tool call shows as failed, with the message `Command exited with code 3`.
+
+## Delegating reviews and other work
+
+Start the parent session with your registered Pico agent. Pico is instructed to use Sesh’s `start_session` tool for reviews and other delegation when Sesh supplies it. The child appears under the parent in Sesh and uses the same registered Pico agent, with Pico’s curated tools and approval-free policy. Your registration does not have to be named `pico`.
+
+The child-session tool has no agent selector. Supplying an `agent` field anyway makes that call fail before Sesh receives a launch request, even if the field is empty, null, or names the parent’s own agent. Omit the field instead. Pico never silently changes an explicitly requested harness or retries the launch with another one.
+
+This rule selects the harness, not the provider or model. A Codex model available inside Pico is still usable; a Codex harness is not an alternative child-session backend. Child model and thinking settings follow the options Pico and Sesh actually offer; this rule does not copy the parent’s model selection to its children.
+
+Sesh still owns worktrees, launch limits, reporting, and stopping children. A failed launch remains a failed tool call with its cause. If Sesh does not provide child-session tools, Pico can continue its other work but cannot delegate. If Sesh provides an incompatible child-launch definition, Pico refuses to start the session and names `sesh/start_session` in the error rather than exposing an unprotected launch operation. A host definition that requires an explicit agent cannot support inherited-agent launches and is rejected at startup.
+
+Pico’s instructions prohibit native workers and shell-launched harnesses as delegation fallbacks. Normal shell access remains available: this tool-level restriction is not an operating-system sandbox against arbitrary commands or scripts. Sessions running stock OMP or another registered agent do not acquire Pico’s policy; select Pico when starting the parent.
 
 ## What the agent can't do
 

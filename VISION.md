@@ -1,6 +1,6 @@
 ---
 title: A Vision for Pico
-updated: 2026-10-29
+updated: 2026-11-01
 ---
 
 # A Vision for Pico
@@ -23,7 +23,9 @@ The user configures all of that in a native macOS companion app rather than a te
 
 ## Minimum viable product
 
-The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. Permissions, cancellation, and session restoration must work through that same interaction surface. This is the intended product outcome; the adapter is not implemented yet.
+The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. The core adapter turn path exists ([proposal 0001](proposals/0001-acp-adapter-core.md)): retained tools, model and thinking-level selection, and cancellation work. Child-session launches now inherit the parent’s registered Pico agent and reject harness overrides ([proposal 0003](proposals/0003-pico-only-child-sessions.md)), with a real Pico parent/child flow exercised in Sesh. Session restoration and the broader delegation handoff, result-state and integration workflow remain follow-up work.
+
+Permissions, cancellation, and session restoration must work through that same interaction surface.
 
 The companion app is part of that minimum: a native macOS application that installs what Pico needs, signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Prepared so far: a Tuist project definition and the pinned toolchain that generates it.
 
@@ -37,7 +39,7 @@ Capability is claimed only after it is exercised. Advertised tools perform their
 
 Sesh MCP tools are first-class named tools for questions, artifacts, notifications, and session management. File operations, search, and `intellisense` use their own visible coding or execution tools.
 
-Pico's runtime delegation uses Sesh child sessions. Native worker execution hidden behind a synthetic session card would defeat the desired visibility.
+Pico’s runtime delegation uses Sesh child sessions running the same registered Pico agent. Native worker execution hidden behind a synthetic session card would defeat the desired visibility.
 
 Configuration is native and truthful. The companion app reuses credentials by explicit choice, offers models from OMP's available catalog, and exposes only settings backed by real capabilities.
 
@@ -66,3 +68,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | --- | --- | --- |
 | 2026-10-29 | Record the Pico runtime direction and preserve the template's Workbench and Beads workflow. | N/A: project preparation brief |
 | 2026-10-29 | Make the native macOS companion app Pico's configuration surface and prepare its project configuration. | N/A: project preparation brief |
+| 2026-11-01 | Record the exercised core adapter capabilities and Pico-only child-session launches. | [proposal.0001](proposals/0001-acp-adapter-core.md), [proposal.0003](proposals/0003-pico-only-child-sessions.md) |

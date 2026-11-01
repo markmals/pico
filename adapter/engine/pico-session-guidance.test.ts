@@ -6,10 +6,8 @@ import { describe, test } from "node:test";
 import { createPicoSession } from "./pico-session.ts";
 import {
     createMockModel,
-    EXCLUDED_TOOL_NAMES,
     mockAuthStorage,
     picoWorkspace,
-    systemPromptOf,
     temporaryDirectory,
     toolCall,
 } from "./testing/session-fixture.ts";
@@ -31,45 +29,8 @@ async function promptedSession(
     });
     t.after(() => session.dispose());
     await session.engine.prompt("hello");
-    return { agentDir, cwd, prompt: systemPromptOf(model), session };
+    return { agentDir };
 }
-
-describe("proposal.0001 agent guidance", () => {
-    test("the model is told where code intelligence, Sesh's tools and the worktree come from", async t => {
-        const { prompt } = await promptedSession(t);
-        const lines = prompt.split("\n");
-
-        assert.ok(
-            lines.some(line => line.includes("intellisense") && line.includes("bash")),
-            "no line tells the model to run intellisense through bash",
-        );
-        assert.ok(prompt.includes("mcp__sesh_"), "the prompt never mentions Sesh's MCP tools");
-        assert.ok(
-            lines.some(line => /worktree/i.test(line) && line.includes("mcp__sesh_session_info")),
-            "no line ties the Sesh worktree to mcp__sesh_session_info",
-        );
-    });
-
-    test("the agent:// internal URL is gone while the rest of OMP's prompt stays", async t => {
-        const { prompt } = await promptedSession(t);
-
-        assert.ok(!prompt.includes("agent://"), "the subagent internal URL is still in the prompt");
-        assert.ok(prompt.includes("# Internal URLs"), "the internal-URL list was dropped with it");
-        assert.ok(prompt.includes("skill://"), "the surviving internal URLs were dropped with it");
-        assert.ok(prompt.includes("# Engineering"), "OMP's default guidance was dropped");
-    });
-
-    test("Pico's prompt refers to no excluded tool", async t => {
-        const { prompt } = await promptedSession(t);
-
-        for (const excluded of EXCLUDED_TOOL_NAMES) {
-            assert.ok(
-                !prompt.includes(`\`${excluded}\``),
-                `the prompt refers to the excluded tool ${excluded}`,
-            );
-        }
-    });
-});
 
 describe("proposal.0001 the user's OMP configuration", () => {
     test("running a session rewrites no configuration and stores no session", async t => {

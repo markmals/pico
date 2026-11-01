@@ -2,7 +2,7 @@
 id: proposal.0003
 title: Pico-Only Child Sessions
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/4
 issues: []
 supersedes: []
@@ -168,4 +168,4 @@ The broader delegation proposal can define task handoffs, result-state handling,
 
 ## Open questions
 
-None about the selected behavior. The human approved implementation on 2026-10-31 after selecting tool-level enforcement with ordinary shell access retained. Same-agent inheritance still requires the live verification specified above before implementation can be presented as working.
+None about the selected behavior. The human approved implementation on 2026-10-31 and accepted the result on 2026-11-01 with explicit authorization to merge and clean up. The live verification is recorded above. Merge-only integration and preview teardown are authorized; no tag, package release or deployment is authorized.

@@ -7,9 +7,14 @@ struct AppIconTile: View {
     let size: CGFloat
 
     var body: some View {
+        // Fitting each glyph into the same inset box keeps wide and tall symbols from
+        // touching the tile's edges, as System Settings' icons don't.
         Image(systemName: destination.symbol)
-            .font(.system(size: size * 0.56, weight: .semibold))
+            .resizable()
+            .scaledToFit()
+            .fontWeight(.semibold)
             .foregroundStyle(.white)
+            .padding(size * 0.2)
             .frame(width: size, height: size)
             .background(
                 destination.tileColor.gradient,

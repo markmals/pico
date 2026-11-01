@@ -3,9 +3,11 @@ import SwiftUI
 struct ProvidersPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .providers)
+
             Section {
-                UnconnectedPicker(label: "Provider")
-                UnconnectedValueRow(label: "Connection status")
+                UnconnectedPicker(item: .provider)
+                UnconnectedValueRow(item: .providerConnectionStatus)
             } header: {
                 Text("Providers")
             } footer: {
@@ -13,9 +15,9 @@ struct ProvidersPane: View {
             }
 
             Section {
-                UnconnectedPicker(label: "Account")
-                UnconnectedPicker(label: "Credential source")
-                UnconnectedValueRow(label: "Credential status")
+                UnconnectedPicker(item: .account)
+                UnconnectedPicker(item: .credentialSource)
+                UnconnectedValueRow(item: .credentialStatus)
             } header: {
                 Text("Account")
             } footer: {

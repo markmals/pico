@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "ACP" : {
+
+    },
+    "API key" : {
+
+    },
     "About" : {
 
     },
@@ -11,6 +17,9 @@
 
     },
     "Available models" : {
+
+    },
+    "Back" : {
 
     },
     "Built-in LSP" : {
@@ -73,6 +82,9 @@
     "Excluded" : {
 
     },
+    "Forward" : {
+
+    },
     "General" : {
 
     },
@@ -80,6 +92,9 @@
 
     },
     "Helper location" : {
+
+    },
+    "How Sesh launches Pico as a custom agent." : {
 
     },
     "Included" : {
@@ -92,6 +107,12 @@
 
     },
     "Integrations" : {
+
+    },
+    "JavaScript" : {
+
+    },
+    "Keychain" : {
 
     },
     "Launch arguments" : {
@@ -112,6 +133,9 @@
     "Native delegation" : {
 
     },
+    "No Results" : {
+
+    },
     "No account is read, imported, or signed in from this scaffold." : {
 
     },
@@ -127,7 +151,16 @@
     "Nothing is read from Sesh, and no registration is inspected." : {
 
     },
+    "OAuth" : {
+
+    },
+    "OK" : {
+
+    },
     "Pico" : {
+
+    },
+    "Pico Can't Open This Link" : {
 
     },
     "Pico app" : {
@@ -136,10 +169,16 @@
     "Provider" : {
 
     },
+    "Provider accounts, and where their credentials come from." : {
+
+    },
     "Providers" : {
 
     },
     "Providers & Accounts" : {
+
+    },
+    "Python" : {
 
     },
     "Read" : {
@@ -157,10 +196,16 @@
     "Runtime" : {
 
     },
+    "Runtime readiness, installed versions, and where Pico keeps its settings." : {
+
+    },
     "Runtime status" : {
 
     },
     "Search" : {
+
+    },
+    "Search catalog" : {
 
     },
     "Sesh" : {
@@ -190,10 +235,16 @@
     "The adapter fixes these built-in tools; each session also adds the tools Sesh supplies. Not editable here." : {
 
     },
+    "The default model and reasoning level for new sessions." : {
+
+    },
     "The helper's location is not resolved while settings stay unconnected." : {
 
     },
     "The settings location is not read and cannot be chosen yet." : {
+
+    },
+    "The tools Pico's agent can use, and the programs it works with." : {
 
     },
     "Tools & Integrations" : {
@@ -205,13 +256,109 @@
     "Versions" : {
 
     },
+    "Versions, recent errors, and reports for troubleshooting." : {
+
+    },
     "Web search" : {
 
     },
     "Write" : {
 
     },
+    "authentication" : {
+
+    },
+    "bash" : {
+
+    },
+    "catalog" : {
+
+    },
+    "code intelligence" : {
+
+    },
+    "command" : {
+
+    },
+    "configuration" : {
+
+    },
+    "default" : {
+
+    },
+    "effort" : {
+
+    },
+    "executable" : {
+
+    },
+    "export" : {
+
+    },
+    "file" : {
+
+    },
+    "find" : {
+
+    },
+    "glob" : {
+
+    },
+    "grep" : {
+
+    },
     "intellisense location" : {
+
+    },
+    "language server" : {
+
+    },
+    "location" : {
+
+    },
+    "login" : {
+
+    },
+    "logs" : {
+
+    },
+    "path" : {
+
+    },
+    "problems" : {
+
+    },
+    "readiness" : {
+
+    },
+    "register" : {
+
+    },
+    "sign in" : {
+
+    },
+    "subagent" : {
+
+    },
+    "support" : {
+
+    },
+    "task" : {
+
+    },
+    "terminal" : {
+
+    },
+    "thinking" : {
+
+    },
+    "token" : {
+
+    },
+    "version" : {
+
+    },
+    "“%@” doesn't name a pane or setting in Pico." : {
 
     }
   },

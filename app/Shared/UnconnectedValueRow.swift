@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// A labeled form row for a value this scaffold does not load.
+/// A settings item's row whose value this scaffold does not load.
 struct UnconnectedValueRow: View {
-    let label: LocalizedStringKey
+    let item: SettingsItem
 
     var body: some View {
         LabeledContent {
             Text("Not connected")
                 .foregroundStyle(.secondary)
         } label: {
-            Text(label)
+            Text(item.title)
         }
+        .settingsRow(item)
     }
 }

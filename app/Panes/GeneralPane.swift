@@ -3,9 +3,11 @@ import SwiftUI
 struct GeneralPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .general)
+
             Section {
-                UnconnectedValueRow(label: "Runtime status")
-                UnconnectedValueRow(label: "Engine status")
+                UnconnectedValueRow(item: .runtimeStatus)
+                UnconnectedValueRow(item: .engineStatus)
             } header: {
                 Text("Runtime")
             } footer: {
@@ -13,8 +15,8 @@ struct GeneralPane: View {
             }
 
             Section {
-                UnconnectedValueRow(label: "Pico app")
-                UnconnectedValueRow(label: "Engine")
+                UnconnectedValueRow(item: .generalAppVersion)
+                UnconnectedValueRow(item: .generalEngineVersion)
             } header: {
                 Text("Versions")
             } footer: {
@@ -22,7 +24,7 @@ struct GeneralPane: View {
             }
 
             Section {
-                UnconnectedValueRow(label: "Settings file")
+                UnconnectedValueRow(item: .settingsFile)
             } header: {
                 Text("Configuration")
             } footer: {

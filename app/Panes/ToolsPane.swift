@@ -3,10 +3,12 @@ import SwiftUI
 struct ToolsPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .tools)
+
             ToolPolicySection()
 
             Section {
-                UnconnectedValueRow(label: "intellisense location")
+                UnconnectedValueRow(item: .intellisenseLocation)
             } header: {
                 Text("Integrations")
             } footer: {

@@ -114,7 +114,7 @@ The adapter ships as `pico`, a Bun single-file executable ([proposal 0002](propo
 
 [`PROTOTYPE.md`](PROTOTYPE.md) is the implementation brief: the behavior to build, the acceptance criteria, and the evidence each claim requires. It is input to proposal development — the baseline and much of the grounding are already in it — not a substitute for the proposal. [`VISION.md`](VISION.md) carries the purpose and the deliberate exclusions.
 
-What the Mac app has is its window, its navigation, and six pane layouts, built from `app/` by the `Pico` target. A window that opens proves the layout; it does not prove a setting works, and none of them does: the app reads and writes no configuration, holds no credentials, discovers no models, launches no helper, and contacts no Sesh. Configuration functionality waits for the shared configuration contract in [issue #12](https://github.com/markmals/pico/issues/12); the session that connects these controls adds that behavior, its tests, and its guide with the code.
+What the Mac app has is a System Settings-style window built from `app/` by the `Pico` target: six pane layouts, back/forward history, sidebar search across every setting, and `pico://settings` links. Navigation works and has native tests; no setting does: the app reads and writes no configuration, holds no credentials, discovers no models, launches no helper, and contacts no Sesh. Configuration functionality waits for the shared configuration contract in [issue #12](https://github.com/markmals/pico/issues/12); the session that connects these controls adds that behavior, its tests, and its guide with the code.
 
 ### Where the APIs come from
 
@@ -134,7 +134,7 @@ Provider configuration uses public OMP SDK authentication and model-registry API
 | --- | --- |
 | `PROTOTYPE.md` | the implementation brief for the adapter and the Mac app |
 | `adapter/` | the ACP adapter: `pico.ts` (the compiled entry point: arguments, data directory, native addon), `main.ts` and stdout isolation, `server/` (ACP requests, sessions, config options), `events/` (engine events to ACP updates), `engine/` (OMP session construction, tool roster, MCP, write bridge), `smoke/` (the real-credential smoke run and the offline `pico:verify` check) |
-| `app/` | the Mac app's Swift: `PicoApp.swift` and `Navigation/` (the window scene, the split-view navigation and its destinations), `Panes/` (the six settings-pane layouts), and `Localizable.xcstrings`, the string catalog the compiler extracts into |
+| `app/` | the Mac app's Swift, with its Swift Testing files beside the code as `*Tests.swift`: `PicoApp.swift`; `Navigation/` (the window, sidebar, toolbar, menu commands, and back/forward history); `Settings/` (destinations' settings items and locations); `Search/` and `Links/` (sidebar search and `pico://` links); `Panes/` (the six settings-pane layouts); `Shared/` (rows and icon tiles); and `Localizable.xcstrings`, the string catalog the compiler extracts into |
 | `tools/` | zero-dependency TypeScript scripts run by Bun: the Workbench workflow scripts, commit checkers, the adapter launcher writer, and `build-pico.ts`, which compiles `pico` and generates the third-party notices |
 | `LICENSE`, `THIRD-PARTY-NOTICES.md` | Pico's MIT license, and the generated notices for everything `pico` bundles |
 | `.omp/extensions/` | harness lifecycle wiring: the gate on stop, formatting after an edit, `bd prime` |
@@ -178,13 +178,14 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run macos:lint` | check the formatting of the Swift manifests and `app/` without rewriting it |
 | `mise run macos:build` | build the Debug `Pico.app` into `.build/macos` |
 | `mise run macos:run` | build the app and open `.build/macos/Build/Products/Debug/Pico.app`, this checkout's copy |
-| `mise run macos:check` | the native gate: formatting, generation, the build settings `xcodebuild` resolves, and a Debug build of the app |
+| `mise run macos:test` | build the app and run the native `PicoTests` suite |
+| `mise run macos:check` | the native gate: formatting, generation, the build settings `xcodebuild` resolves, a Debug build of the app, and the native tests |
 | `mise run macos:clean` | remove the generated project and Tuist's artifacts |
 | `mise run version:sync` | write the version `package.json` carries into `Config/Version.xcconfig` |
 
 `mise run check` runs the Bun suites and `macos:check`, then `hk check --all` and `mise run validate`. The native check skips on non-macOS hosts, so Linux retains the workflow gate. CI's macOS job runs `macos:check` and `pico:verify` on the `xcode-27` runner image: building the app's macOS 27 floor needs the macOS 27 SDK, which `macos-latest` does not carry.
 
-There is no `dev` or `start` task; the development launcher runs from source. There is no `macos:test` task: the scaffold has no behavior worth a test, and the running app is its layout and navigation check — native tests arrive with the functionality that warrants them. There is no release or deploy task either: a release is a `v<version>` tag on `main` after the Changesets version pull request, followed by a pull request to `markmals/homebrew-tap` that updates `Formula/pico.rb`. The tap's CI builds the bottles, and labelling that pull request `pr-pull` publishes them. Both the tag and the label are publishing, so each needs the human's explicit confirmation. Add the task with the thing it runs, not before.
+There is no `dev` or `start` task; the development launcher runs from source. There is no release or deploy task either: a release is a `v<version>` tag on `main` after the Changesets version pull request, followed by a pull request to `markmals/homebrew-tap` that updates `Formula/pico.rb`. The tap's CI builds the bottles, and labelling that pull request `pr-pull` publishes them. Both the tag and the label are publishing, so each needs the human's explicit confirmation. Add the task with the thing it runs, not before.
 
 ### Runtime
 
@@ -204,7 +205,7 @@ One macOS target, `Pico`, bundle identifier `me.malstrom.pico`, deployment targe
 
 The app's configured deployment floor is macOS 27, the floor Mark chose for it ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)). It belongs to the app alone: `pico`, the Homebrew executable, keeps its own supported range, and the packaged engine's compatibility with any floor remains unverified. Building the app therefore needs an Xcode carrying the macOS 27 SDK, which is why CI's macOS job names the `xcode-27` runner image instead of `macos-latest`.
 
-What is built today is the UI scaffold from [proposal 0005](proposals/0005-mac-app-ui-workspace.md): the window, the sidebar navigation, and six pane layouts whose configuration controls are unconnected stubs. Window management, navigation and scrolling work; nothing else in the app does. [`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md) is how a human builds, runs and inspects it.
+What is built today is the UI scaffold from [proposal 0005](proposals/0005-mac-app-ui-workspace.md): a fixed-width window with a fixed sidebar, back/forward history, search across every setting, `pico://settings` links, and six pane layouts whose configuration controls are unconnected stubs. Navigation, search, links, window management and scrolling work; no setting does. [`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md) is how a human builds, runs and inspects it.
 
 [`PROTOTYPE.md`](PROTOTYPE.md#native-macos-configuration-app) carries the app's design: the System Settings layout, the CodexBar-shaped provider and account configuration, what the app bundles, and how configuration reaches a session. It is the one place that design lives. Do not restate it here, in a second brief, or in a new skill.
 

@@ -3,9 +3,11 @@ import SwiftUI
 struct ModelsPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .models)
+
             Section {
-                UnconnectedPicker(label: "Model")
-                UnconnectedPicker(label: "Reasoning level")
+                UnconnectedPicker(item: .model)
+                UnconnectedPicker(item: .reasoningLevel)
             } header: {
                 Text("Defaults")
             } footer: {
@@ -13,10 +15,13 @@ struct ModelsPane: View {
             }
 
             Section {
-                TextField("Search", text: .constant(""), prompt: Text("Not connected"))
-                    .disabled(true)
-                    .accessibilityLabel("Search")
-                UnconnectedValueRow(label: "Available models")
+                TextField(text: .constant(""), prompt: Text("Not connected")) {
+                    Text(SettingsItem.catalogSearch.title)
+                }
+                .disabled(true)
+                .accessibilityLabel(Text(SettingsItem.catalogSearch.title))
+                .settingsRow(.catalogSearch)
+                UnconnectedValueRow(item: .availableModels)
             } header: {
                 Text("Catalog")
             } footer: {

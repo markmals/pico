@@ -1,18 +1,25 @@
 import SwiftUI
 
+/// The fixed sidebar: a search field above either the pane list or, while searching, the
+/// search results.
 struct SettingsSidebar: View {
-    @Binding var selection: SettingsDestination
+    @Bindable var navigator: SettingsNavigator
+
+    @State private var query = ""
+    @State private var results: [SettingsLocation]?
 
     var body: some View {
-        List(SettingsDestination.allCases, selection: $selection) { destination in
-            Label {
-                Text(destination.title)
-            } icon: {
-                Image(systemName: destination.symbol)
+        VStack {
+            if let results {
+                SearchResultsList(results: results, selection: $navigator.searchSelection)
+            } else {
+                DestinationList(selection: $navigator.selectedDestination)
             }
-            .tag(destination)
         }
-        .listStyle(.sidebar)
-        .navigationTitle("Pico")
+        .searchable(text: $query, placement: .sidebar, prompt: Text("Search"))
+        .onChange(of: query) { _, query in
+            results = SettingsSearch.results(for: query)
+        }
+        .toolbar(removing: .sidebarToggle)
     }
 }

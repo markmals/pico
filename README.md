@@ -32,7 +32,7 @@ mise run status              # where the work stands: phase, next action, who ac
 
 `mise run check` should pass on a clean clone. If it does not, fix that before starting any feature work.
 
-`mise run macos:check` checks Swift formatting, generates the Xcode project from `Project.swift`, builds the Debug app, and reads the build settings that `xcodebuild` resolves. It is included in `mise run check` on macOS, skips off a Mac, and runs in its own macOS CI job on the `xcode-27` runner image.
+`mise run macos:check` checks Swift formatting, generates the Xcode project from `Project.swift`, builds the Debug app, runs the native tests, and reads the build settings that `xcodebuild` resolves. It is included in `mise run check` on macOS, skips off a Mac, and runs in its own macOS CI job on the `xcode-27` runner image.
 
 ### Dependency status
 
@@ -53,9 +53,10 @@ Bun supplies the `node:*` compatibility modules used by existing scripts and tes
 | `mise run status`         | where the work stands: phase, next action, who acts        |
 | `mise run changeset`      | add the changeset every pull request carries               |
 | `mise run macos:generate` | generate the Mac app's Xcode project from `Project.swift`  |
-| `mise run macos:check`    | macOS only: format, generation, settings, Debug build      |
+| `mise run macos:check`    | macOS only: format, generation, build, native tests        |
 | `mise run macos:build`    | build the Debug `Pico.app` into `.build/macos`             |
 | `mise run macos:run`      | build the Mac app and open this checkout's copy            |
+| `mise run macos:test`     | run the Mac app's native tests                             |
 | `mise run acp:launcher`   | write `.build/pico-acp`, the adapter Sesh launches         |
 | `mise run acp:smoke`      | drive the adapter through a real session, your credentials |
 | `mise run acp:tck`        | check the adapter against the ACP compatibility kit        |
@@ -66,7 +67,7 @@ Bun supplies the `node:*` compatibility modules used by existing scripts and tes
 
 `mise run check` is what the pre-push hook and CI both run. If it is green, the change is ready to push.
 
-There is no `dev` or `start` task; the development launcher runs from source, and `pico:build` compiles the shipped executable. `mise run macos:build` and `mise run macos:run` build and launch the Mac app; there is no `macos:test` task, because the UI scaffold has no behavior to test and the running app is its layout check. There is no release or deploy task: a release is a version tag plus a pull request to `markmals/homebrew-tap`, as [`AGENTS.md`](AGENTS.md) describes.
+There is no `dev` or `start` task; the development launcher runs from source, and `pico:build` compiles the shipped executable. `mise run macos:build` and `mise run macos:run` build and launch the Mac app, and `mise run macos:test` runs its native tests. There is no release or deploy task: a release is a version tag plus a pull request to `markmals/homebrew-tap`, as [`AGENTS.md`](AGENTS.md) describes.
 
 ## How this project is built
 

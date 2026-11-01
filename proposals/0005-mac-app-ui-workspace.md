@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -161,7 +161,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, pane layouts, scrolling, resizing, appearance, and accessibility. Configuration controls remain visibly unconnected; no demonstration workflow is exercised.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: no app preview exists during proposal development; no app sources are added until the human approves implementation.
+- Current state: the Debug `Pico.app` built from `9dd9859` is available at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run` rebuilds and opens it from any checkout of the branch. In-process inspection exercised navigation, per-pane scroll retention, Command-Comma, close-to-quit, relaunch, resizing, appearance overrides, and the accessibility tree. VoiceOver itself was not run.
 
 ## Policies and decisions checked
 

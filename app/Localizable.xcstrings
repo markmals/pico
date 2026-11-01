@@ -1,0 +1,219 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "About" : {
+
+    },
+    "Account" : {
+
+    },
+    "App version" : {
+
+    },
+    "Available models" : {
+
+    },
+    "Built-in LSP" : {
+
+    },
+    "Catalog" : {
+
+    },
+    "Choices come from the connected account's catalog, not from here." : {
+
+    },
+    "Choosing or checking the intellisense program is not available here." : {
+
+    },
+    "Configuration" : {
+
+    },
+    "Connection" : {
+
+    },
+    "Connection status" : {
+
+    },
+    "Credential source" : {
+
+    },
+    "Credential status" : {
+
+    },
+    "Curated tool policy" : {
+
+    },
+    "Defaults" : {
+
+    },
+    "Diagnostic report" : {
+
+    },
+    "Diagnostics" : {
+
+    },
+    "Diagnostics & About" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Engine" : {
+
+    },
+    "Engine status" : {
+
+    },
+    "Engine version" : {
+
+    },
+    "Eval" : {
+
+    },
+    "Excluded" : {
+
+    },
+    "General" : {
+
+    },
+    "Guided setup through Sesh is not available from this scaffold." : {
+
+    },
+    "Helper location" : {
+
+    },
+    "Included" : {
+
+    },
+    "Installed app and engine versions are not read here." : {
+
+    },
+    "Installed versions are not read while settings stay unconnected." : {
+
+    },
+    "Integrations" : {
+
+    },
+    "Launch arguments" : {
+
+    },
+    "Launch details" : {
+
+    },
+    "Model" : {
+
+    },
+    "Models" : {
+
+    },
+    "Native configuration for the Pico ACP adapter." : {
+
+    },
+    "Native delegation" : {
+
+    },
+    "No account is read, imported, or signed in from this scaffold." : {
+
+    },
+    "No catalog is loaded, so the search field filters nothing." : {
+
+    },
+    "No diagnostics are collected, redacted, or exported here." : {
+
+    },
+    "Not connected" : {
+
+    },
+    "Nothing is read from Sesh, and no registration is inspected." : {
+
+    },
+    "Pico" : {
+
+    },
+    "Pico app" : {
+
+    },
+    "Provider" : {
+
+    },
+    "Providers" : {
+
+    },
+    "Providers & Accounts" : {
+
+    },
+    "Read" : {
+
+    },
+    "Readiness is not inspected while settings stay unconnected." : {
+
+    },
+    "Reasoning level" : {
+
+    },
+    "Recent errors" : {
+
+    },
+    "Runtime" : {
+
+    },
+    "Runtime status" : {
+
+    },
+    "Search" : {
+
+    },
+    "Sesh" : {
+
+    },
+    "Sesh custom agent" : {
+
+    },
+    "Settings file" : {
+
+    },
+    "Settings…" : {
+
+    },
+    "Setup" : {
+
+    },
+    "Setup status" : {
+
+    },
+    "Shell" : {
+
+    },
+    "Supported providers come from the engine; none are listed here." : {
+
+    },
+    "The helper's location is not resolved while settings stay unconnected." : {
+
+    },
+    "The roster is fixed in the adapter and is not editable here." : {
+
+    },
+    "The settings location is not read and cannot be chosen yet." : {
+
+    },
+    "Tools & Integrations" : {
+
+    },
+    "UI scaffold — configuration not connected" : {
+
+    },
+    "Versions" : {
+
+    },
+    "Web search" : {
+
+    },
+    "Write" : {
+
+    },
+    "intellisense location" : {
+
+    }
+  },
+  "version" : "1.0"
+}

@@ -170,9 +170,9 @@ uvx --from git+https://github.com/agentclientprotocol/acp-tck@b7f40fb3c003c45926
 """
 
 # ── The macOS companion app ──────────────────────────────────────────────────
-# Project.swift is the whole native project today: it has no Swift sources, so these
-# tasks generate and inspect the configuration and stop there. Building, testing and
-# launching an app arrive with the app's source.
+# Project.swift points the Pico target at app/, so these tasks generate the Xcode
+# project and build the actual app. Paths are quoted for the same reason the pico
+# tasks quote theirs: a checkout can live under a folder with a space.
 
 [tasks."macos:generate"]
 description = "Generate Pico.xcodeproj and Pico.xcworkspace from Project.swift"
@@ -183,28 +183,48 @@ description = "Generate the Xcode project and open it in Xcode"
 run = "tuist generate"
 
 [tasks."macos:fmt"]
-description = "Format the Swift manifests in place"
-run = "swift format --in-place --parallel Project.swift Tuist.swift"
+description = "Format the Swift manifests and the app sources in place"
+# --recursive is what lets `app` be named as a directory; without it swift format
+# rejects a path that is not a file.
+run = "swift format --in-place --recursive --parallel Project.swift Tuist.swift app"
 
 [tasks."macos:lint"]
 description = "Check Swift formatting without rewriting it"
 # --strict: without it `swift format lint` prints findings as warnings and still
 # exits 0, so the gate would pass on unformatted code.
-run = "swift format lint --strict --parallel Project.swift Tuist.swift"
+run = "swift format lint --strict --recursive --parallel Project.swift Tuist.swift app"
+
+[tasks."macos:build"]
+description = "Build the Debug Pico.app into .build/macos"
+depends = ["macos:generate"]
+# Derived data goes under the ignored .build/ with the repository's other build
+# output, so the app the run task opens is always this checkout's.
+run = '''
+xcodebuild -workspace Pico.xcworkspace -scheme Pico -configuration Debug \
+    -derivedDataPath "{{config_root}}/.build/macos" build
+'''
+
+[tasks."macos:run"]
+description = "Build the app and open this checkout's .build/macos Debug Pico.app"
+depends = ["macos:build"]
+# The explicit path matters: a bare `open -a Pico` would launch whichever copy
+# Launch Services knows about, which is not necessarily the one just built.
+run = 'open "{{config_root}}/.build/macos/Build/Products/Debug/Pico.app"'
 
 [tasks."macos:check"]
-description = "Check the native project configuration: formatting, generation, and the build settings xcodebuild resolves"
+description = "Check the native project: formatting, generation, the build settings xcodebuild resolves, and a Debug build of the app"
 # Everything below needs Xcode, and Tuist is a macOS-only pin, so off macOS this
 # task reports success having run nothing.
 skip_if = 'test "$(uname -s)" != Darwin'
 run = [
     "mise run macos:lint",
-    "mise run macos:generate",
-    # Generation alone proves the manifest compiles, not that it configures
-    # anything: `-list` reads the generated workspace back, and `-showBuildSettings`
-    # resolves every setting for the target. Neither compiles code — with no
-    # sources there is none — and the settings dump is kept out of the log because
-    # its failures go to stderr.
+    # `macos:build` generates the project through its own dependency and compiles
+    # the app, so the gate generates once and builds once.
+    "mise run macos:build",
+    # Compiling proves the sources build, not that the project is configured the
+    # way the manifest says: `-list` reads the generated workspace back, and
+    # `-showBuildSettings` resolves every setting for the target. The settings dump
+    # is kept out of the log because its failures go to stderr.
     "xcodebuild -workspace Pico.xcworkspace -list",
     "xcodebuild -project Pico.xcodeproj -target Pico -configuration Debug -showBuildSettings > /dev/null",
 ]

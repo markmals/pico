@@ -211,16 +211,26 @@ depends = ["macos:build"]
 # Launch Services knows about, which is not necessarily the one just built.
 run = 'open "{{config_root}}/.build/macos/Build/Products/Debug/Pico.app"'
 
+[tasks."macos:test"]
+description = "Build the app and run the native PicoTests suite"
+depends = ["macos:generate"]
+# Same derived data as macos:build, so the test run reuses the app it already built.
+run = '''
+xcodebuild -workspace Pico.xcworkspace -scheme Pico -configuration Debug \
+    -destination "platform=macOS" -derivedDataPath "{{config_root}}/.build/macos" test
+'''
+
 [tasks."macos:check"]
-description = "Check the native project: formatting, generation, the build settings xcodebuild resolves, and a Debug build of the app"
+description = "Check the native project: formatting, generation, the build settings xcodebuild resolves, a Debug build, and the native tests"
 # Everything below needs Xcode, and Tuist is a macOS-only pin, so off macOS this
 # task reports success having run nothing.
 skip_if = 'test "$(uname -s)" != Darwin'
 run = [
     "mise run macos:lint",
     # `macos:build` generates the project through its own dependency and compiles
-    # the app, so the gate generates once and builds once.
+    # the app; `macos:test` then reuses that build for the test bundle.
     "mise run macos:build",
+    "mise run macos:test",
     # Compiling proves the sources build, not that the project is configured the
     # way the manifest says: `-list` reads the generated workspace back, and
     # `-showBuildSettings` resolves every setting for the target. The settings dump

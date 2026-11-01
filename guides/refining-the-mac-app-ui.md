@@ -8,9 +8,9 @@ describes: [proposal.0005]
 
 ## What it does
 
-Pico's Mac app is a native UI scaffold for refining the settings window before connecting it to real configuration. Its sidebar opens General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Each pane has a grouped layout; settings controls remain unavailable and values say “Not connected.”
+Pico's Mac app is a native settings window, laid out like macOS System Settings, for refining the design before it is connected to real configuration. Its sidebar opens General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Each pane starts with a header and lists its settings in grouped rows. Every configuration control is unavailable, and every value reads “Not connected.”
 
-Only window management, navigation, and scrolling work. The app does not inspect or change your Pico or OMP configuration, read credentials, discover models, launch a helper, or contact Sesh. Configuration functionality waits for issue #12's shared contract and subsequent integration work.
+Navigation works: the sidebar, back and forward, search across every setting, and `pico://` links. The app does not inspect or change your Pico or OMP configuration, read credentials, discover models, launch a helper, or contact Sesh. Configuration functionality waits for issue #12's shared contract and subsequent integration work.
 
 ## How to use it
 
@@ -22,34 +22,76 @@ mise run macos:run
 
 The task generates the Xcode workspace, builds this checkout's app, and opens `.build/macos/Build/Products/Debug/Pico.app`. No provider account, installed adapter, settings file, or Sesh registration is required. After the first build, you can also open that app directly in Finder.
 
-1. Start on General and choose another sidebar destination. Its title and selected row change together.
-2. Inspect the grouped rows and disabled controls. “UI scaffold — configuration not connected” identifies the boundary; none of the configuration controls can save, authenticate, or perform a simulated operation.
-3. Scroll a pane, visit another destination, then return. Its scroll position is retained while this app process runs.
-4. Choose Pico > Settings or press Command-Comma. The same window comes forward; no second settings window opens.
-5. Resize the window and inspect Light and Dark appearances, keyboard navigation, and accessibility. It initially opens at 920 by 680 points. It cannot become narrower than 760 points, and its content keeps at least 520 points of height below the toolbar; with the standard macOS 27 toolbar that makes the smallest window 572 points tall.
+### The window
 
-Closing the window quits the app. Reopening starts at General. There is no saved selection, setting, or cross-launch restoration contract.
+Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
+
+The sidebar lists the panes in four groups. Choose one to open it; the pane's title appears in the toolbar. “UI scaffold — configuration not connected” at the bottom of every pane marks the boundary: none of the controls can save, sign in, or perform a simulated operation.
+
+Each pane keeps its scroll position while the app runs, including when you return to it with back or forward. Choose Pico > Settings or press Command-Comma to bring the same window forward. Closing the window quits the app; reopening starts at General with no history.
+
+### Back and forward
+
+The toolbar's back and forward buttons work like a browser's. View > Back (⌘[) and View > Forward (⌘]) do the same.
+
+- Opening a different pane adds the pane you left to the back history and clears the forward history. Choosing the pane you are already on changes nothing.
+- Back returns to the previous pane; forward undoes back.
+- A button and its menu command are unavailable when there is nothing to go back or forward to.
+
+### Search
+
+Type in the search field at the top of the sidebar. The pane list is replaced by results: matching panes and settings, each with its pane's icon and, for a setting, the pane's name beneath it. The pane you are looking at does not change while you type.
+
+A result matches when every word you type starts a word in its name. Case and accents are ignored. Some settings also match common alternative terms, such as “thinking” for Reasoning level or “terminal” for Shell. When nothing matches, the sidebar shows “No Results”.
+
+Choose a result with the mouse or the arrow keys. Pico opens its pane, scrolls to the setting, and outlines its row; VoiceOver moves to that row. The outline stays until you navigate elsewhere. Your search stays in place so you can choose another result. Clear the field, or press Escape, to return to the pane list.
+
+### Links
+
+Every pane and setting has a link:
+
+| Link | Opens |
+| --- | --- |
+| `pico://settings` | Pico, without changing the pane |
+| `pico://settings/models` | the Models pane |
+| `pico://settings/models/reasoning-level` | Models, scrolled to Reasoning level with its row outlined |
+
+Open a link from Terminal with `open`, from a browser, or from another app. If Pico is not running, the link launches it. A link Pico does not recognize shows an alert naming the link and leaves the window where it was.
+
+Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `diagnostics`. The setting names for each pane are listed in [proposal 0005](../proposals/0005-mac-app-ui-workspace.md#deep-links); a setting keeps its link name even if its label changes.
 
 ## Worked example
 
-Run `mise run macos:run`, select Models, and inspect the model and reasoning rows. Their controls are unconnected; there is no model catalog to search or choice to apply. Switch to Sesh to inspect its setup layout, then press Command-Comma: Sesh remains selected in the existing window. No model, credential, or Sesh registration has changed.
+Run `mise run macos:run`, then type `thinking` in the sidebar search. Choose “Reasoning level”: Models opens with the Reasoning level row outlined. Its picker is unavailable; there is no model catalog or choice to apply. Clear the search and choose Sesh, then press ⌘[: Models returns, scrolled where you left it.
 
-## Build and formatting commands
+From Terminal:
+
+```sh
+open pico://settings/tools/shell
+```
+
+Pico comes forward on Tools & Integrations with the Shell row outlined. No model, credential, or Sesh registration has changed.
+
+## Build, test, and formatting commands
 
 ```sh
 mise run macos:build
+mise run macos:test
 mise run macos:fmt
 mise run macos:lint
 mise run check
 ```
 
-`macos:build` compiles the Debug app without opening it. `macos:fmt` and `macos:lint` cover both the manifests and app sources. The repository gate builds the app on macOS and retains its Bun-only gate on other hosts. There is no native test target for placeholder labels or static wiring; the running app is the layout/navigation check.
+`macos:build` compiles the Debug app without opening it. `macos:test` runs the native tests for navigation history, search, and links. `macos:fmt` and `macos:lint` cover the manifests, app sources, and tests. On macOS, the repository gate builds the app and runs the native tests; other hosts keep the Bun-only gate.
 
 ## Limits and edge cases
 
 - Settings are deliberately unavailable. Runtime readiness, installed versions, configuration location, account state, and connection state are not loaded; “Not connected” is not a diagnosis of your installation.
-- No sample accounts, fabricated model catalogs, working filters, editable demonstration settings, or simulated workflows are included.
-- Issue #12 is not required to inspect the scaffold. It is required before configuration functionality can be connected; it does not by itself implement provider sign-in or Sesh setup.
+- Search covers pane and setting names and their alternative terms, not setting values or explanatory text. There is no keyboard shortcut for the search field.
+- History and search do not survive quitting Pico.
+- The Models pane's “Search catalog” field is a disabled placeholder; there is no model catalog to filter.
+- Issue #12 is not required to use the scaffold. It is required before configuration functionality can be connected; it does not by itself implement provider sign-in or Sesh setup.
+- Links only work once macOS knows about a built copy of the app, which happens when it is first launched or opened. If another app also claims `pico://`, macOS chooses which one opens.
 - The app keeps `me.malstrom.pico` as its bundle identifier. The run task opens the exact app in this checkout, not an installed copy.
 - The local app is unsigned and has not been prepared for distribution. It is not installed over another app, and no signing, notarization, or quarantine workaround is performed by these tasks.
 - There is no bundled engine or runtime in the app. Quitting it does not stop an existing adapter or Sesh session.

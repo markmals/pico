@@ -35,13 +35,31 @@ let project = Project(
                 with: [
                     "CFBundleDisplayName": "Pico",
                     "LSApplicationCategoryType": "public.app-category.productivity",
+                    // pico://settings links open panes and settings (proposal 0005).
+                    "CFBundleURLTypes": [
+                        [
+                            "CFBundleURLName": "me.malstrom.pico.settings",
+                            "CFBundleURLSchemes": ["pico"],
+                        ]
+                    ],
                 ]
             ),
             // The app's own Swift, and the string catalog its localized titles and
             // copy resolve through. Both are globs: a new file under app/ is picked
             // up by the next generation, and the generated project is never edited.
-            sources: ["app/**/*.swift"],
+            // Tests sit beside the code they test and belong to PicoTests instead.
+            sources: [.glob("app/**/*.swift", excluding: ["app/**/*Tests.swift"])],
             resources: ["app/**/*.xcstrings"]
-        )
+        ),
+        .target(
+            name: "PicoTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "me.malstrom.pico.tests",
+            deploymentTargets: .macOS("27.0"),
+            infoPlist: .default,
+            sources: ["app/**/*Tests.swift"],
+            dependencies: [.target(name: "Pico")]
+        ),
     ]
 )

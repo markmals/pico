@@ -1,17 +1,22 @@
 import SwiftUI
 
-/// A read-only row naming a tool and whether the curated policy keeps it.
+/// A read-only row naming a built-in tool and whether Pico's policy keeps it.
 struct ToolPolicyRow: View {
-    let name: LocalizedStringKey
-    let status: LocalizedStringKey
+    let isIncluded: Bool
+    let item: SettingsItem
     let symbol: String
 
     var body: some View {
         LabeledContent {
-            Text(status)
+            Text(isIncluded ? "Included" : "Excluded")
                 .foregroundStyle(.secondary)
         } label: {
-            Label(name, systemImage: symbol)
+            Label {
+                Text(item.title)
+            } icon: {
+                Image(systemName: symbol)
+            }
         }
+        .settingsRow(item)
     }
 }

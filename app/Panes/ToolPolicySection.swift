@@ -3,15 +3,19 @@ import SwiftUI
 struct ToolPolicySection: View {
     var body: some View {
         Section {
-            ToolPolicyRow(name: "Read", status: "Included", symbol: "doc.text")
-            ToolPolicyRow(name: "Search", status: "Included", symbol: "magnifyingglass")
-            ToolPolicyRow(name: "Edit", status: "Included", symbol: "pencil")
-            ToolPolicyRow(name: "Write", status: "Included", symbol: "square.and.pencil")
-            ToolPolicyRow(name: "Shell", status: "Included", symbol: "terminal")
-            ToolPolicyRow(name: "Web search", status: "Included", symbol: "globe")
-            ToolPolicyRow(name: "Eval", status: "Excluded", symbol: "curlybraces")
-            ToolPolicyRow(name: "Built-in LSP", status: "Excluded", symbol: "stethoscope")
-            ToolPolicyRow(name: "Native delegation", status: "Excluded", symbol: "person.2")
+            ToolPolicyRow(isIncluded: true, item: .read, symbol: "doc.text")
+            ToolPolicyRow(isIncluded: true, item: .search, symbol: "magnifyingglass")
+            ToolPolicyRow(isIncluded: true, item: .edit, symbol: "pencil")
+            ToolPolicyRow(isIncluded: true, item: .write, symbol: "square.and.pencil")
+            ToolPolicyRow(isIncluded: true, item: .shell, symbol: "terminal")
+            ToolPolicyRow(isIncluded: true, item: .webSearch, symbol: "globe")
+            ToolPolicyRow(isIncluded: false, item: .eval, symbol: "curlybraces")
+            ToolPolicyRow(
+                isIncluded: false,
+                item: .builtInLSP,
+                symbol: "chevron.left.forwardslash.chevron.right"
+            )
+            ToolPolicyRow(isIncluded: false, item: .nativeDelegation, symbol: "person.2")
         } header: {
             Text("Built-in tool policy")
         } footer: {

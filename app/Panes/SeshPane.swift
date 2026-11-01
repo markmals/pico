@@ -3,9 +3,11 @@ import SwiftUI
 struct SeshPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .sesh)
+
             Section {
-                UnconnectedValueRow(label: "Helper location")
-                UnconnectedValueRow(label: "Launch arguments")
+                UnconnectedValueRow(item: .helperLocation)
+                UnconnectedValueRow(item: .launchArguments)
             } header: {
                 Text("Launch details")
             } footer: {
@@ -13,8 +15,8 @@ struct SeshPane: View {
             }
 
             Section {
-                UnconnectedValueRow(label: "Sesh custom agent")
-                UnconnectedValueRow(label: "Connection status")
+                UnconnectedValueRow(item: .customAgent)
+                UnconnectedValueRow(item: .seshConnectionStatus)
             } header: {
                 Text("Connection")
             } footer: {
@@ -22,7 +24,7 @@ struct SeshPane: View {
             }
 
             Section {
-                UnconnectedValueRow(label: "Setup status")
+                UnconnectedValueRow(item: .setupStatus)
             } header: {
                 Text("Setup")
             } footer: {

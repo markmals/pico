@@ -3,10 +3,12 @@ import SwiftUI
 struct DiagnosticsPane: View {
     var body: some View {
         Form {
+            PaneHeader(destination: .diagnostics)
+
             Section {
                 AppIdentityRow()
-                UnconnectedValueRow(label: "App version")
-                UnconnectedValueRow(label: "Engine version")
+                UnconnectedValueRow(item: .diagnosticsAppVersion)
+                UnconnectedValueRow(item: .diagnosticsEngineVersion)
             } header: {
                 Text("About")
             } footer: {
@@ -14,8 +16,8 @@ struct DiagnosticsPane: View {
             }
 
             Section {
-                UnconnectedValueRow(label: "Recent errors")
-                UnconnectedValueRow(label: "Diagnostic report")
+                UnconnectedValueRow(item: .recentErrors)
+                UnconnectedValueRow(item: .diagnosticReport)
             } header: {
                 Text("Diagnostics")
             } footer: {

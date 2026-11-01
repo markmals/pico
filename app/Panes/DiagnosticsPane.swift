@@ -1,29 +1,47 @@
 import SwiftUI
 
 struct DiagnosticsPane: View {
+    @Environment(\.sampleSettings) private var sample
+
     var body: some View {
         Form {
             PaneHeader(destination: .diagnostics)
 
             Section {
                 AppIdentityRow()
-                UnconnectedValueRow(item: .diagnosticsAppVersion)
-                UnconnectedValueRow(item: .diagnosticsEngineVersion)
+                SettingsValueRow(
+                    item: .diagnosticsAppVersion,
+                    value: sampleValue(.verbatim(SampleFacts.appVersion))
+                )
+                SettingsValueRow(
+                    item: .diagnosticsEngineVersion,
+                    value: sampleValue(.verbatim(SampleFacts.engineVersion))
+                )
             } header: {
                 Text("About")
             } footer: {
-                Text("Installed versions are not read while settings stay unconnected.")
+                sample == nil
+                    ? Text("Installed versions are not read while settings stay unconnected.")
+                    : Text("Include these versions when you report a problem.")
             }
 
             Section {
-                UnconnectedValueRow(item: .recentErrors)
-                UnconnectedValueRow(item: .diagnosticReport)
+                SettingsValueRow(item: .recentErrors, value: sampleValue(.text("None")))
+                SettingsValueRow(item: .diagnosticReport, value: sampleValue(.text("Not created")))
             } header: {
                 Text("Diagnostics")
             } footer: {
-                Text("No diagnostics are collected, redacted, or exported here.")
+                sample == nil
+                    ? Text("No diagnostics are collected, redacted, or exported here.")
+                    : Text(
+                        "Diagnostic reports leave out credentials and the contents of your files."
+                    )
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func sampleValue(_ value: SettingsValue) -> SettingsValue? {
+        sample == nil ? nil : value
     }
 }

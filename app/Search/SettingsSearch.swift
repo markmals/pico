@@ -9,10 +9,14 @@ enum SettingsSearch {
         let queryWords = words(in: query)
         guard !queryWords.isEmpty else { return [] }
         return SettingsLocation.allInSidebarOrder.filter { location in
-            let candidateWords = searchableWords(of: location)
-            return queryWords.allSatisfy { queryWord in
-                candidateWords.contains { $0.hasPrefix(queryWord) }
-            }
+            matches(queryWords, searchableWords(of: location))
+        }
+    }
+
+    /// Whether every query word starts one of `candidateWords`; both come from `words(in:)`.
+    static func matches(_ queryWords: [String], _ candidateWords: [String]) -> Bool {
+        queryWords.allSatisfy { queryWord in
+            candidateWords.contains { $0.hasPrefix(queryWord) }
         }
     }
 
@@ -25,7 +29,9 @@ enum SettingsSearch {
         }
     }
 
-    private static func words(in text: String) -> [String] {
+    /// The words of `text` folded for comparison: split at anything that is not a letter or digit,
+    /// ignoring case, diacritics, and character width.
+    static func words(in text: String) -> [String] {
         text.folding(
             options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
             locale: .current

@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// A settings item's disabled picker whose only choice states that nothing is connected.
-struct UnconnectedPicker: View {
+/// A settings item's disabled picker whose only choice says why nothing can be chosen.
+struct UnavailablePicker: View {
     let item: SettingsItem
+    var reason: LocalizedStringResource = "Not connected"
 
     var body: some View {
         Picker(selection: .constant(0)) {
-            Text("Not connected").tag(0)
+            Text(reason).tag(0)
         } label: {
             Text(item.title)
         }

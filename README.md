@@ -1,6 +1,6 @@
 # Pico
 
-Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
+Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected unless you turn on its labelled sample data ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
 
 ## Install
 
@@ -102,11 +102,11 @@ In the repository today:
 - `.github/workflows/ci.yml`, which runs `mise run check`, runs `mise run macos:check` and `mise run pico:verify` on the `xcode-27` macOS runner image, checks every commit subject in a pull request, and rejects a pull request without a changeset.
 - `Formula/pico.rb` in [`markmals/homebrew-tap`](https://github.com/markmals/homebrew-tap), which builds `pico` from a release tag and whose bottles the tap's CI builds.
 
-Not implemented. Nothing below is faked anywhere; where the Mac app shows a control for a thing it cannot do, that control is visibly unconnected:
+Not implemented. Nothing below is faked anywhere; where the Mac app shows a control for a thing it cannot do, that control is visibly unconnected, or filled with sample data that is labelled as such:
 
 - session load, list and resume; delegation workflow guidance for Sesh child sessions; Autonomous sessions; MCP servers beyond the ones Sesh sends. Each is a follow-up proposal tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
-- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub, and connecting them waits for the configuration contract in issue #12.
+- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub, and connecting them waits for the configuration contract in issue #12. View › Show Sample Data fills the panes with invented values for design review; nothing in that mode is saved or reaches a provider, Sesh or your OMP configuration.
 
 `proposals/` holds proposals 0001, 0002, 0003 and 0005, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 

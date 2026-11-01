@@ -1,6 +1,6 @@
 # Pico
 
-Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app does not exist yet; nothing in this repository draws a window.
+Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected unless you turn on its labelled sample data ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
 
 ## Install
 
@@ -16,11 +16,11 @@ Then add `/opt/homebrew/bin/pico` to Sesh as a custom agent; [the guide](guides/
 
 ## Stack
 
-[Bun](https://bun.sh) is the JavaScript/TypeScript runtime, package manager, and test runner for the adapter, workflow scripts, and skill helpers. Oxfmt formats, Oxlint lints, and `tsc` type-checks in strict mode, each invoked through Bun by a mise task. The Mac app is Swift 6 and SwiftUI, with Tuist generating `Pico.xcodeproj` from `Project.swift`; the generated project is not committed. Mise pins Bun, hk, Beads, Worktrunk, `gh`, and actionlint, plus Tuist on macOS. Node is not a repository prerequisite.
+[Bun](https://bun.sh) is the JavaScript/TypeScript runtime, package manager, and test runner for the adapter, workflow scripts, and skill helpers. Oxfmt formats, Oxlint lints, and `tsc` type-checks in strict mode, each invoked through Bun by a mise task. The Mac app is Swift 6 and SwiftUI with its sources in `app/`, and Tuist generates `Pico.xcodeproj` from `Project.swift`; the generated project is not committed. Mise pins Bun, hk, Beads, Worktrunk, `gh`, and actionlint, plus Tuist on macOS. Node is not a repository prerequisite.
 
 ## Requirements
 
-[mise](https://mise.jdx.dev) installs the pinned tools on macOS or Linux. Native tasks need a Mac with full Xcode selected, since `swift format`, `xcodebuild`, and `xcrun` come from it. Tuist installs on macOS only. `mise run check` includes the native configuration check on macOS; Linux skips that step and retains the Bun workflow gate.
+[mise](https://mise.jdx.dev) installs the pinned tools on macOS or Linux. Native tasks need a Mac with full Xcode selected, since `swift format`, `xcodebuild`, and `xcrun` come from it; building the Mac app needs an Xcode carrying the macOS 27 SDK, because macOS 27 is the app's deployment floor. Tuist installs on macOS only. `mise run check` includes the native check on macOS; Linux skips that step and retains the Bun workflow gate.
 
 ## Getting started
 
@@ -32,7 +32,7 @@ mise run status              # where the work stands: phase, next action, who ac
 
 `mise run check` should pass on a clean clone. If it does not, fix that before starting any feature work.
 
-`mise run macos:check` checks Swift formatting, generates the Xcode project from `Project.swift`, and reads the build settings that `xcodebuild` resolves. It is included in `mise run check` on macOS, skips off a Mac, and runs in its own macOS CI job.
+`mise run macos:check` checks Swift formatting, generates the Xcode project from `Project.swift`, builds the Debug app, runs the native tests, and reads the build settings that `xcodebuild` resolves. It is included in `mise run check` on macOS, skips off a Mac, and runs in its own macOS CI job on the `xcode-27` runner image.
 
 ### Dependency status
 
@@ -53,7 +53,10 @@ Bun supplies the `node:*` compatibility modules used by existing scripts and tes
 | `mise run status`         | where the work stands: phase, next action, who acts        |
 | `mise run changeset`      | add the changeset every pull request carries               |
 | `mise run macos:generate` | generate the Mac app's Xcode project from `Project.swift`  |
-| `mise run macos:check`    | macOS only: Swift format, generation, resolved settings    |
+| `mise run macos:check`    | macOS only: format, generation, build, native tests        |
+| `mise run macos:build`    | build the Debug `Pico.app` into `.build/macos`             |
+| `mise run macos:run`      | build the Mac app and open this checkout's copy            |
+| `mise run macos:test`     | run the Mac app's native tests                             |
 | `mise run acp:launcher`   | write `.build/pico-acp`, the adapter Sesh launches         |
 | `mise run acp:smoke`      | drive the adapter through a real session, your credentials |
 | `mise run acp:tck`        | check the adapter against the ACP compatibility kit        |
@@ -64,7 +67,7 @@ Bun supplies the `node:*` compatibility modules used by existing scripts and tes
 
 `mise run check` is what the pre-push hook and CI both run. If it is green, the change is ready to push.
 
-There is no `dev` or `start` task; the development launcher runs from source, and `pico:build` compiles the shipped executable. There is no task that builds or launches the Mac app because that target has no sources; the session that writes it adds the task with it. There is no release or deploy task: a release is a version tag plus a pull request to `markmals/homebrew-tap`, as [`AGENTS.md`](AGENTS.md) describes.
+There is no `dev` or `start` task; the development launcher runs from source, and `pico:build` compiles the shipped executable. `mise run macos:build` and `mise run macos:run` build and launch the Mac app, and `mise run macos:test` runs its native tests. There is no release or deploy task: a release is a version tag plus a pull request to `markmals/homebrew-tap`, as [`AGENTS.md`](AGENTS.md) describes.
 
 ## How this project is built
 
@@ -94,16 +97,17 @@ In the repository today:
 - `AGENTS.md`, `PROCESS.md`, `.agents/rules/`, `.agents/skills/` and `.agents/templates/`: the process, the binding rules, and the record templates.
 - `.omp/extensions/`, the harness lifecycle wiring: the gate on session stop, formatting after an edit, and `bd prime` once per session.
 - `hk.pkl`, `.oxfmtrc.jsonc`, `.oxlintrc.jsonc`, `tsconfig.json`, `.changeset/`, and the mise and Bun lockfiles.
-- `Project.swift`, `Tuist.swift`, `Config/Version.xcconfig` and `.swift-format`: the Mac app's project configuration. One macOS target named `Pico`, bundle identifier `me.malstrom.pico`, deployment target macOS 14, Swift 6 with complete strict concurrency, unsigned, and no sources.
-- `.github/workflows/ci.yml`, which runs `mise run check`, runs `mise run macos:check` and `mise run pico:verify` on a macOS runner, checks every commit subject in a pull request, and rejects a pull request without a changeset.
+- `app/`, the Mac app's Swift: the window scene, the sidebar navigation, the six settings panes, and the string catalog their copy resolves through.
+- `Project.swift`, `Tuist.swift`, `Config/Version.xcconfig` and `.swift-format`: the Mac app's project configuration. One macOS target named `Pico`, bundle identifier `me.malstrom.pico`, deployment target macOS 27, Swift 6 with complete strict concurrency, and unsigned.
+- `.github/workflows/ci.yml`, which runs `mise run check`, runs `mise run macos:check` and `mise run pico:verify` on the `xcode-27` macOS runner image, checks every commit subject in a pull request, and rejects a pull request without a changeset.
 - `Formula/pico.rb` in [`markmals/homebrew-tap`](https://github.com/markmals/homebrew-tap), which builds `pico` from a release tag and whose bottles the tap's CI builds.
 
-Not in the repository, and not stubbed anywhere:
+Not implemented. Nothing below is faked anywhere; where the Mac app shows a control for a thing it cannot do, that control is visibly unconnected, or filled with sample data that is labelled as such:
 
 - session load, list and resume; delegation workflow guidance for Sesh child sessions; Autonomous sessions; MCP servers beyond the ones Sesh sends. Each is a follow-up proposal tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
-- the Mac app: no SwiftUI views, no provider sign-in, no model catalog UI, no bundled engine or runtime, and no task that builds or launches an app. The target has no sources, and a target with no sources is configuration, not an application.
+- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub, and connecting them waits for the configuration contract in issue #12. View › Show Sample Data fills the panes with invented values for design review; nothing in that mode is saved or reaches a provider, Sesh or your OMP configuration.
 
-`proposals/` holds proposals 0001 and 0002 and `guides/` their guide; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
+`proposals/` holds proposals 0001, 0002, 0003 and 0005, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 
 [`CHANGELOG.md`](CHANGELOG.md) records the initial template adaptation.

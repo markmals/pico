@@ -1,0 +1,502 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "ACP" : {
+
+    },
+    "API key" : {
+
+    },
+    "About" : {
+
+    },
+    "Account" : {
+
+    },
+    "App version" : {
+
+    },
+    "Auto" : {
+
+    },
+    "Available models" : {
+
+    },
+    "Back" : {
+
+    },
+    "Browser sign-in" : {
+
+    },
+    "Built-in LSP" : {
+
+    },
+    "Built-in tool policy" : {
+
+    },
+    "Catalog" : {
+
+    },
+    "Choices come from the connected account's catalog, not from here." : {
+
+    },
+    "Choosing or checking the intellisense program is not available here." : {
+
+    },
+    "Complete" : {
+
+    },
+    "Configuration" : {
+
+    },
+    "Connected" : {
+
+    },
+    "Connection" : {
+
+    },
+    "Connection status" : {
+
+    },
+    "Credential source" : {
+
+    },
+    "Credential status" : {
+
+    },
+    "Default" : {
+
+    },
+    "Defaults" : {
+
+    },
+    "Diagnostic report" : {
+
+    },
+    "Diagnostics" : {
+
+    },
+    "Diagnostics & About" : {
+
+    },
+    "Disconnected" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Engine" : {
+
+    },
+    "Engine status" : {
+
+    },
+    "Engine version" : {
+
+    },
+    "Eval" : {
+
+    },
+    "Excluded" : {
+
+    },
+    "Existing OMP account" : {
+
+    },
+    "Forward" : {
+
+    },
+    "General" : {
+
+    },
+    "Guided setup through Sesh is not available from this scaffold." : {
+
+    },
+    "Helper location" : {
+
+    },
+    "High" : {
+
+    },
+    "How Sesh launches Pico as a custom agent." : {
+
+    },
+    "Include these versions when you report a problem." : {
+
+    },
+    "Included" : {
+
+    },
+    "Installed" : {
+
+    },
+    "Installed app and engine versions are not read here." : {
+
+    },
+    "Installed versions are not read while settings stay unconnected." : {
+
+    },
+    "Integrations" : {
+
+    },
+    "JavaScript" : {
+
+    },
+    "Key in Keychain" : {
+
+    },
+    "Keychain" : {
+
+    },
+    "Launch arguments" : {
+
+    },
+    "Launch details" : {
+
+    },
+    "Low" : {
+
+    },
+    "Medium" : {
+
+    },
+    "Model" : {
+
+    },
+    "Model or provider" : {
+
+    },
+    "Models" : {
+
+    },
+    "Models of providers that need sign-in can't be chosen." : {
+
+    },
+    "Native configuration for the Pico ACP adapter." : {
+
+    },
+    "Native delegation" : {
+
+    },
+    "Needs sign-in" : {
+
+    },
+    "New Sesh sessions can use Pico once setup is complete." : {
+
+    },
+    "New Sesh sessions start with these. A session's own choice wins." : {
+
+    },
+    "No Results" : {
+
+    },
+    "No account is read, imported, or signed in from this scaffold." : {
+
+    },
+    "No catalog is loaded, so the search field filters nothing." : {
+
+    },
+    "No diagnostics are collected, redacted, or exported here." : {
+
+    },
+    "None" : {
+
+    },
+    "None available" : {
+
+    },
+    "Not connected" : {
+
+    },
+    "Not created" : {
+
+    },
+    "Not registered" : {
+
+    },
+    "Not set up" : {
+
+    },
+    "Not signed in" : {
+
+    },
+    "Nothing is read from Sesh, and no registration is inspected." : {
+
+    },
+    "OAuth" : {
+
+    },
+    "OK" : {
+
+    },
+    "Off" : {
+
+    },
+    "Pico" : {
+
+    },
+    "Pico Can't Open This Link" : {
+
+    },
+    "Pico app" : {
+
+    },
+    "Pico keeps its settings here, apart from your OMP configuration." : {
+
+    },
+    "Pico's sessions can use the models of every connected provider." : {
+
+    },
+    "Pico's sessions run intellisense through the shell for code intelligence." : {
+
+    },
+    "Pico's sessions use this engine version." : {
+
+    },
+    "Provider" : {
+
+    },
+    "Provider accounts, and where their credentials come from." : {
+
+    },
+    "Providers" : {
+
+    },
+    "Providers & Accounts" : {
+
+    },
+    "Python" : {
+
+    },
+    "Read" : {
+
+    },
+    "Readiness is not inspected while settings stay unconnected." : {
+
+    },
+    "Ready" : {
+
+    },
+    "Reasoning level" : {
+
+    },
+    "Recent errors" : {
+
+    },
+    "Recent errors from Pico's sessions appear here as they happen." : {
+
+    },
+    "Register" : {
+
+    },
+    "Registering adds Pico to Sesh as a custom agent." : {
+
+    },
+    "Runtime" : {
+
+    },
+    "Runtime readiness, installed versions, and where Pico keeps its settings." : {
+
+    },
+    "Runtime status" : {
+
+    },
+    "Sample data — nothing here is saved or connected" : {
+
+    },
+    "Search" : {
+
+    },
+    "Search catalog" : {
+
+    },
+    "Sesh" : {
+
+    },
+    "Sesh custom agent" : {
+
+    },
+    "Sesh starts Pico with these details." : {
+
+    },
+    "Settings file" : {
+
+    },
+    "Settings…" : {
+
+    },
+    "Setup" : {
+
+    },
+    "Setup status" : {
+
+    },
+    "Shell" : {
+
+    },
+    "Show Sample Data" : {
+
+    },
+    "Sign In" : {
+
+    },
+    "Sign Out" : {
+
+    },
+    "Signed in" : {
+
+    },
+    "Signing out here doesn't sign you out of OMP in Terminal." : {
+
+    },
+    "Supported providers come from the engine; none are listed here." : {
+
+    },
+    "The adapter fixes these built-in tools; each session also adds the tools Sesh supplies. Not editable here." : {
+
+    },
+    "The default model and reasoning level for new sessions." : {
+
+    },
+    "The helper's location is not resolved while settings stay unconnected." : {
+
+    },
+    "The runtime and engine that Sesh launches for Pico sessions." : {
+
+    },
+    "The settings location is not read and cannot be chosen yet." : {
+
+    },
+    "The tools Pico's agent can use, and the programs it works with." : {
+
+    },
+    "Tools & Integrations" : {
+
+    },
+    "UI scaffold — configuration not connected" : {
+
+    },
+    "Unregister" : {
+
+    },
+    "Versions" : {
+
+    },
+    "Versions, recent errors, and reports for troubleshooting." : {
+
+    },
+    "Web search" : {
+
+    },
+    "Write" : {
+
+    },
+    "authentication" : {
+
+    },
+    "bash" : {
+
+    },
+    "catalog" : {
+
+    },
+    "code intelligence" : {
+
+    },
+    "command" : {
+
+    },
+    "configuration" : {
+
+    },
+    "default" : {
+
+    },
+    "effort" : {
+
+    },
+    "executable" : {
+
+    },
+    "export" : {
+
+    },
+    "file" : {
+
+    },
+    "find" : {
+
+    },
+    "glob" : {
+
+    },
+    "grep" : {
+
+    },
+    "intellisense location" : {
+
+    },
+    "language server" : {
+
+    },
+    "location" : {
+
+    },
+    "login" : {
+
+    },
+    "logs" : {
+
+    },
+    "path" : {
+
+    },
+    "problems" : {
+
+    },
+    "readiness" : {
+
+    },
+    "register" : {
+
+    },
+    "sign in" : {
+
+    },
+    "subagent" : {
+
+    },
+    "support" : {
+
+    },
+    "task" : {
+
+    },
+    "terminal" : {
+
+    },
+    "thinking" : {
+
+    },
+    "token" : {
+
+    },
+    "version" : {
+
+    },
+    "“%@” doesn't name a pane or setting in Pico." : {
+
+    }
+  },
+  "version" : "1.0"
+}

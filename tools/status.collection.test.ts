@@ -4,8 +4,9 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 
-let statusScript = new URL("./status.ts", import.meta.url).pathname;
+let statusScript = fileURLToPath(new URL("./status.ts", import.meta.url));
 
 // hk runs this suite from `pre-push`, and git exports GIT_DIR, GIT_INDEX_FILE and
 // GIT_WORK_TREE to its hooks. A child `git` inheriting those acts on the outer

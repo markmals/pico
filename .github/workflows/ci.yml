@@ -27,13 +27,19 @@ jobs:
             - run: mise run deps:install
             - run: mise run check
 
-    # The macOS-only gates. `macos:check` needs Xcode: Tuist generates the project, then
-    # xcodebuild reads the configuration back; nothing is compiled, because the native
-    # target has no sources yet. `pico:verify` compiles the `pico` executable the Homebrew
-    # formula ships, which fails on stale third-party notices, and runs it offline.
+    # The macOS-only gates. `macos:check` now compiles the app, so it needs an Xcode
+    # whose macOS SDK can build the manifest's macOS 27 deployment floor.
+    # `macos-latest` is macOS 26 and carries Xcode 26 only, which rejects that floor,
+    # so this job names `xcode-27` — the macOS 27 / Xcode 27 image, the only hosted
+    # runner with that SDK. It is a public preview image: GitHub excludes preview
+    # images from the Actions SLA and may change them weekly, so this job can fail or
+    # lose its label for reasons outside the repository. Fix the toolchain when that
+    # happens; never drop the build to make the job green.
+    # `pico:verify` compiles the `pico` executable the Homebrew formula ships, which
+    # fails on stale third-party notices, and runs it offline.
     native:
         name: macOS
-        runs-on: macos-latest
+        runs-on: xcode-27
         steps:
             - uses: actions/checkout@v7
             - uses: jdx/mise-action@v5

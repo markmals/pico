@@ -1,0 +1,6 @@
+# actionlint knows GitHub's stable hosted-runner labels, not its preview images.
+# `xcode-27` is the hosted macOS 27 / Xcode 27 preview image listed in
+# actions/runner-images; the native CI job needs its macOS 27 SDK to build the app.
+self-hosted-runner:
+    labels:
+        - xcode-27

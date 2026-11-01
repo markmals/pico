@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: active-review
+status: returned-for-revisions
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -12,7 +12,7 @@ supersedes: []
 
 ## Summary
 
-Scaffold the existing Pico target's native macOS 27 window, navigation, and settings-pane layouts so they behave like System Settings: fixed sidebar, back/forward history, app-icon tiles, sidebar search across every setting, and `pico://` deep links. Configuration controls remain unconnected until issue #12; this proposal adds no configuration behavior or demonstration model.
+Scaffold the existing Pico target's native macOS 27 window, navigation, and settings-pane layouts so they behave like System Settings: fixed sidebar, back/forward history, app-icon tiles, sidebar search across every setting, and `pico://` deep links. Configuration controls remain unconnected until issue #12. A sample-data mode, off at launch and labelled on screen, fills the same layouts with in-memory sample values so their working state can be reviewed; it never reads, writes, or contacts anything.
 
 ## Motivation
 
@@ -21,6 +21,8 @@ Pico's native target has project metadata but no sources or window. Generating t
 [Issue #18](https://github.com/markmals/pico/issues/18) originally combines that workspace with a General pane backed by real runtime and configuration data. This proposal covers only its UI scaffolding. Mark selected the existing Pico target and macOS 27, and explicitly deferred settings functionality until [#12](https://github.com/markmals/pico/issues/12) is implemented. The scaffold can proceed before #12; connecting its controls cannot.
 
 Mark returned the first implementation from review on 2026-11-01 with System Settings parity changes: no collapsible sidebar, a toolbar with back/forward navigation, app-icon-shaped sidebar icons, and a fixed-width window. Mark also asked for System Settings search: search every settings item, show the results in the sidebar, and take the user to the setting when a result is chosen. Each setting is also addressable from outside the app through a `pico://` URL. These are working navigation behaviors, not configuration behaviors; they need no data from #12.
+
+Mark returned the parity implementation on 2026-11-01 asking for a version with sample data, to see what the panes will look like in their working state. Mark chose a mode inside the app over a separate preview branch or Xcode previews, and chose interactive controls over values alone.
 
 ## Domain grounding
 
@@ -37,15 +39,15 @@ Mark returned the first implementation from review on 2026-11-01 with System Set
 
 The visual authority is macOS System Settings: native sidebar selection, a titled detail pane, grouped forms, SF Symbols, and system typography and materials. This is a local desktop utility, not a web dashboard, quota monitor, menu-bar app, or second conversation UI.
 
-A pane stub is a visual layout, not a configured setting, authenticated account, installed engine, or observed readiness state. A navigation destination does not advertise an adapter capability. Unconnected controls must look unavailable rather than imply that Pico can save or apply them. Search, history, and deep links navigate to and reveal stubbed settings; they never change, load, or validate a setting.
+A pane stub is a visual layout, not a configured setting, authenticated account, installed engine, or observed readiness state. A navigation destination does not advertise an adapter capability. Unconnected controls must look unavailable rather than imply that Pico can save or apply them. Search, history, and deep links navigate to and reveal stubbed settings; they never change, load, or validate a setting. Sample data is the same layout showing invented values: it must always be labelled as sample data and never be mistaken for, or turned into, configuration.
 
 ### Quality bar
 
-The workspace launches as an actual app with six pane layouts and working navigation, history, search, deep links, and scrolling. It supports visual refinement of hierarchy, spacing, sizing, typography, and native controls. Settings remain visibly unconnected; no demonstration behavior or data-loading layer is needed.
+The workspace launches as an actual app with six pane layouts and working navigation, history, search, deep links, and scrolling. It supports visual refinement of hierarchy, spacing, sizing, typography, and native controls, both unconnected and in a working state populated by sample data. No data-loading layer is needed.
 
 ### Remaining uncertainty
 
-Exact spacing, symbol choices, tile colors, and window height are refined against the running app during implementation and human preview. Mark's references fix the composition, not exact point values. #12 determines the later configuration contract. This proposal does not predesign that contract or assume provider, credential, runtime, or Sesh APIs. Another app on a Mac could also claim the `pico` URL scheme; Launch Services then chooses one handler.
+Exact spacing, symbol choices, tile colors, and window height are refined against the running app during implementation and human preview. Mark's references fix the composition, not exact point values. #12 determines the later configuration contract. This proposal does not predesign that contract or assume provider, credential, runtime, or Sesh APIs. Sample values are invented: the real engine may offer different providers, credential sources, models, and reasoning levels, so the sample panes show a plausible working state, not a promise of what Pico will support. Another app on a Mac could also claim the `pico` URL scheme; Launch Services then chooses one handler.
 
 ## Existing baseline
 
@@ -59,7 +61,7 @@ The native-app section of [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configurat
 
 ## Proposed solution
 
-Use the existing Pico app target for one native settings-style window with six sidebar destinations and grouped pane layouts. Configuration rows and controls are static, visibly unconnected stubs. Window management, navigation history, search, deep links, and scrolling work. Do not create a separate prototype target, mock configuration service, or interactive demonstration model.
+Use the existing Pico app target for one native settings-style window with six sidebar destinations and grouped pane layouts. Configuration rows and controls are visibly unconnected stubs by default. Window management, navigation history, search, deep links, and scrolling work. View › Show Sample Data switches the panes to in-memory sample values whose pickers and catalog filter respond. Do not create a separate prototype target, mock configuration service, or backend abstraction.
 
 ```text
 Type "reasoning" in the sidebar search → choose "Reasoning level — Models" → Models opens, scrolled to the highlighted row
@@ -67,7 +69,7 @@ Press the back button (⌘[) → the previous pane returns at its previous scrol
 open pico://settings/tools/shell → Pico comes forward on Tools & Integrations with the Shell row highlighted
 ```
 
-The deliverable is the UI scaffold, not a functional configuration app. It must be runnable for visual iteration, but it need not simulate the functionality that will be added later.
+The deliverable is the UI scaffold, not a functional configuration app. It must be runnable for visual iteration, and its sample-data mode shows the working state of the existing layouts without simulating the workflows that will be added later.
 
 ## Detailed design
 
@@ -75,11 +77,30 @@ The deliverable is the UI scaffold, not a functional configuration app. It must 
 
 The shared window displays a concise notice equivalent to “UI scaffold — configuration not connected.” Configuration controls remain disabled or display an explicit unconnected value. Any control shown for layout must make its unavailable state clear to both sighted users and accessibility clients.
 
-Do not add editable demonstration settings, populated sample accounts or model catalogs, a working model-catalog search or filter, simulated authentication, fake progress, or successful-looking save/apply results. Use neutral placeholders such as “Not connected” rather than inventing a configured value. A picker or the model-catalog search field can be present as a disabled layout stub. The sidebar search in [Search](#search) is navigation, not a catalog filter.
+Without sample data, do not show editable settings, populated accounts or model catalogs, a working model-catalog filter, simulated authentication, fake progress, or successful-looking save/apply results. Use neutral placeholders such as “Not connected” rather than inventing a configured value. A picker or the model-catalog search field can be present as a disabled layout stub. The sidebar search in [Search](#search) is navigation, not a catalog filter.
 
-The app performs no configuration read/write, persistence, credential access, provider request, runtime discovery, helper launch, diagnostic collection, or Sesh operation. Version, runtime-status, and configuration-location rows are also unconnected UI; this slice does not load their real values.
+The app performs no configuration read/write, persistence, credential access, provider request, runtime discovery, helper launch, diagnostic collection, or Sesh operation, with or without sample data. Version, runtime-status, and configuration-location rows are also unconnected UI; this slice does not load their real values.
 
 Do not define a configuration schema, backend protocol, mock service, or future integration abstraction to support these stubs. #12 remains the prerequisite for adding configuration functionality; its completion does not itself imply that every provider or Sesh workflow has been implemented.
+
+### Sample data
+
+Sample data is off at launch. View › Show Sample Data, a checkmarked menu item beside Back and Forward, turns it on and off for the whole window. Launching with the argument `-ShowsSampleData YES` starts with it on, for screenshots and scripted previews. The choice is not saved: the next launch starts unconnected unless it is given the argument again.
+
+While sample data is on, the window's notice reads “Sample data — nothing here is saved or connected”, with a different symbol from the unconnected notice, and is announced the same way to accessibility clients. Every row that reads “Not connected” shows a sample value instead, and the pickers and the catalog search field are enabled. A status value is a symbol and text, never color alone. The built-in tool policy rows are fixed facts and look the same in both modes.
+
+Sample data lives in memory for the life of the app. Choices made with it on survive turning it off and on again and are discarded when the app quits. It never reads or writes files or user defaults, and never touches the Keychain, the network, other processes, the pasteboard, Finder, or Sesh. It adds no rows, buttons, sheets, or flows that the unconnected layout does not have; it fills and enables the controls already there. Search, history, and deep links behave identically in both modes, and search still matches titles and keywords, never sample values.
+
+| Destination | Sample content | What responds |
+| --- | --- | --- |
+| General | Runtime status “Installed”, engine status “Ready”, Pico app 0.1.0, engine 18.14.0, settings file `~/Library/Application Support/Pico/settings.json`. | Nothing; values only. |
+| Providers & Accounts | The provider picker offers Anthropic, OpenAI, and Google. Each has its own sample accounts, credential source, and statuses: Anthropic is signed in through an existing OMP account, OpenAI uses an API key in the Keychain, and Google needs sign-in. | Choosing a provider shows that provider's account, credential source, and statuses. Choosing an account or credential source keeps that choice for that provider. |
+| Models | The default-model picker lists the models of signed-in providers. The reasoning-level picker lists the levels the chosen model supports, from Off, Auto, Low, Medium, and High. The catalog lists every sample model with its provider; a model whose provider needs sign-in is marked unavailable. Available models shows how many models can be chosen. | Choosing a model keeps the reasoning level when the model supports it and otherwise switches to that model's default level. The catalog search field filters the catalog by model and provider name with the sidebar search's word-prefix matching; no matches shows “No Results”. |
+| Tools & Integrations | intellisense location `/opt/homebrew/bin/intellisense`. | Nothing; values only. |
+| Sesh | Helper location `/opt/homebrew/bin/pico`, launch arguments “None”, Sesh custom agent “Pico”, connection status “Connected”, setup status “Complete”. | Nothing; values only. |
+| Diagnostics & About | App version 0.1.0, engine version 18.14.0, recent errors “None”, diagnostic report “Not created”. | Nothing; values only. |
+
+Sample model names follow the providers' current public naming so lengths and truncation are realistic. Sample accounts use `example.com` addresses. Sample data exists for design review in local builds; the proposal that first distributes the app decides whether it is removed or compiled out.
 
 ### Concepts
 
@@ -88,6 +109,7 @@ Do not define a configuration schema, backend protocol, mock service, or future 
 - **Settings location:** a destination or a settings item. A search result, a deep link, and a history entry all name a location, so the app uses one type rather than separate result, link, and history models.
 - **Navigation history:** the sequence of destinations the user has navigated between. Revealing a different item on the same destination is not a history entry.
 - **Revealed item:** the single item the latest navigation pointed at. It is transient and is replaced or cleared by the next navigation.
+- **Sample data:** invented, in-memory values that stand in for configuration the scaffold cannot load. It belongs to the running app, not to a configuration, an account, or a session.
 
 The settings items are the single source of each row's label: pane views render their rows from the items, and search reads the same items. Do not keep a second list of labels for search.
 
@@ -164,16 +186,18 @@ Slugs are a public contract once shipped: renaming a title does not change its s
 
 Every pane begins with a header group like System Settings: the destination's app-icon tile at a larger size, its title, and a one-sentence description of what the pane is for. Below it, panes use system text styles, grouped forms, standard controls, and explanatory copy adjacent to the relevant rows. The same row and section conventions recur across panes; do not introduce a generic schema-driven form renderer or a custom design system for six screens.
 
+The unconnected layouts, which [Sample data](#sample-data) fills without adding to:
+
 | Destination | UI stub |
 | --- | --- |
 | General | Grouped runtime, app/engine version, and configuration-location rows with unconnected values. No readiness checks or location selection. |
-| Providers & Accounts | Provider/account section layout and disabled account/credential-source controls. No sample accounts, credential entry, sign-in flow, or provider discovery. |
-| Models | Model and reasoning-selection layout with disabled controls. A catalog area with a disabled “Search catalog” field may be laid out, but it contains no fabricated catalog or working filter. |
+| Providers & Accounts | Provider/account section layout and disabled provider, account, and credential-source pickers. No credential entry, sign-in flow, or provider discovery. |
+| Models | Model and reasoning-selection layout with disabled controls. A catalog area with a disabled “Search catalog” field, an available-models row, and room for the catalog list that sample data fills. |
 | Tools & Integrations | Curated-policy explanation and unconnected integration-detail rows, including the eventual external `intellisense` location control. No executable selection or validation. |
-| Sesh | Grouped launch-details and connection/setup layout with unconnected values and disabled actions. No registration or connection inspection. |
-| Diagnostics & About | App-identity, version, and diagnostic-section layout. Version and diagnostic values are unconnected; no sample diagnostic results or collection/export behavior. |
+| Sesh | Grouped launch-details and connection/setup layout with unconnected values. No registration or connection inspection. |
+| Diagnostics & About | App-identity, version, and diagnostic-section layout with unconnected values. No diagnostic collection or export. |
 
-These are visual structures for refinement, not full workflow implementations. Do not add setup sheets, authentication screens, sample-data systems, loading/error state machines, or recovery flows to make the scaffold appear functional.
+These are visual structures for refinement, not full workflow implementations. Do not add setup sheets, authentication screens, loading/error state machines, or recovery flows to make the scaffold appear functional; [Sample data](#sample-data) is the only populated state.
 
 Light and Dark appearances follow the system, as do accent color, Increase Contrast, and Reduce Motion. Navigation, search, results, and scrolling work from the keyboard. VoiceOver announces destination labels, selected state, row labels, search results with their destination, the back/forward controls and their availability, and the unavailable status of stubbed controls. Color or an icon alone cannot convey that a control is unconnected or revealed.
 
@@ -191,15 +215,15 @@ Add the following mise tasks with the code that makes them real:
 
 Expand `macos:fmt` and `macos:lint` to include app and test sources. Extend `macos:check` from manifest inspection to building the app and running `macos:test`, retaining its non-macOS skip and the existing `mise run check` entry point. Do not add a package script block, second formatter, shell/Python wrapper, or placeholder release task.
 
-History, search matching, and deep-link parsing are behavior, so they get a Swift Testing target, `PicoTests`, whose files sit beside the code they test as `*Tests.swift` and are excluded from the app target. Write each test to fail before its implementation. Cover the history rules above, including truncation and no-op navigation; search matching, keywords, normalization, ordering, and the empty query; that every item is found by each word of its own title; that every location round-trips through its link; and that each invalid-link form is rejected. Do not test static labels, placeholder values, tile colors, or view construction.
+History, search matching, deep-link parsing, and the sample data's choices are behavior, so they get a Swift Testing target, `PicoTests`, whose files sit beside the code they test as `*Tests.swift` and are excluded from the app target. Write each test to fail before its implementation. Cover the history rules above, including truncation and no-op navigation; search matching, keywords, normalization, ordering, and the empty query; that every item is found by each word of its own title; that every location round-trips through its link; and that each invalid-link form is rejected. For sample data, cover that each provider keeps its own account and credential-source choices; that the default-model choices exclude models whose provider needs sign-in; that changing the model keeps a supported reasoning level and otherwise switches to the model's default; and the catalog filter's matching and empty query. Do not test static labels, placeholder or sample values, tile colors, or view construction.
 
 ### Implementation evidence and documentation
 
-Revise the UI-workspace guide from this proposal before changing app code. Explain how to build, run, and inspect the scaffold; how history, search, and deep links behave; and that settings stay unconnected until #12 and the subsequent integration work. There is no configuration-persistence, real-runtime, or simulated-settings acceptance scenario in this slice.
+Revise the UI-workspace guide from this proposal before changing app code. Explain how to build, run, and inspect the scaffold; how history, search, and deep links behave; how to show sample data and what it does and does not do; and that settings stay unconnected until #12 and the subsequent integration work. There is no configuration-persistence or real-runtime acceptance scenario in this slice.
 
-After implementation, run `mise run check`. Launch with `mise run macos:run` and exercise the actual window: visit every pane from the sidebar; use back and forward from the toolbar and with ⌘[ and ⌘]; search for an item and a destination, choose results, and clear the search; open valid and invalid `pico://` links while Pico is running and while it is not; scroll away and back; use Command-Comma; resize the height and confirm the width and sidebar stay fixed and the sidebar cannot be hidden. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion. Confirm that configuration controls remain unconnected and cannot perform or simulate external actions. Record the exercised surface and any platform limitation rather than treating project generation or passing tests as visual proof.
+After implementation, run `mise run check`. Launch with `mise run macos:run` and exercise the actual window: visit every pane from the sidebar; use back and forward from the toolbar and with ⌘[ and ⌘]; search for an item and a destination, choose results, and clear the search; open valid and invalid `pico://` links while Pico is running and while it is not; scroll away and back; use Command-Comma; resize the height and confirm the width and sidebar stay fixed and the sidebar cannot be hidden. Turn sample data on and off from the View menu and launch with `-ShowsSampleData YES`; visit every pane in both modes, change the provider, model, and reasoning level, filter the catalog, and confirm that quitting discards the choices. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion. Confirm that configuration controls remain unconnected without sample data and that neither mode can perform or simulate external actions. Record the exercised surface and any platform limitation rather than treating project generation or passing tests as visual proof.
 
-Update the source-free descriptions, native command documentation, and macOS floor in the relevant existing repository documents. Revise the brief and agent contract narrowly to allow these explicit UI stubs before configuration functionality, retaining the prohibition on fake operational success. Update #18's description to distinguish this UI delivery from its original integration expectations and preserve #12 as the dependency for adding configuration functionality.
+Update the source-free descriptions, native command documentation, and macOS floor in the relevant existing repository documents. Revise the brief and agent contract narrowly to allow these explicit UI stubs before configuration functionality and the labelled sample-data mode, retaining the prohibition on fake operational success. Update #18's description to distinguish this UI delivery from its original integration expectations and preserve #12 as the dependency for adding configuration functionality.
 
 ## Compatibility
 
@@ -216,9 +240,9 @@ The prototype remains unsigned under the current project settings. No Developer 
 ## Scope
 
 - A runnable UI-only application in the existing Pico target, with single-window lifecycle, a fixed-width window and sidebar, and System Settings-style navigation.
-- Six settings-pane stubs with pane headers, static layouts, and visibly unconnected configuration controls.
+- Six settings-pane stubs with pane headers, static layouts, and visibly unconnected configuration controls, plus an in-memory sample-data mode that fills them with labelled sample values and responsive pickers and catalog filter.
 - Back/forward navigation history, sidebar search over every settings item, revealing a chosen item, and `pico://` deep links.
-- Native build/run/test tasks, a Swift Testing target for the navigation behavior, formatting/build checks, accessibility inspection, and an exercised local app preview.
+- Native build/run/test tasks, a Swift Testing target for the navigation and sample-data behavior, formatting/build checks, accessibility inspection, and an exercised local app preview.
 - A guide and focused revisions to the brief, contract, issue boundary, and current-state documentation; preserve macOS 27 and the existing version source.
 
 ### Out of scope
@@ -226,7 +250,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Issue #12's configuration contract and all settings functionality: reading/writing settings, persistence, live changes, and session precedence. The scaffold can precede #12; configuration functionality waits for it.
 - Runtime readiness detection, helper discovery or bundling, engine version inspection, credential access, provider authentication, real model catalogs, or operational diagnostic collection.
 - Sesh setup/registration, adapter behavior, process channels, network services, and changes to the user's OMP configuration or active Sesh agent.
-- Demonstration settings/state, sample accounts/catalogs, working model-catalog filters, simulated workflows, and backend abstractions.
+- Saved, imported, or exported sample data; sample values outside the panes' existing rows; sample workflows such as sign-in, registration, or diagnostic export; and backend abstractions.
 - Searching anything other than the destination and item titles and keywords defined here, such as setting values or help text; ⌘F to focus search; cross-launch restoration of history or search; any URL scheme other than `pico`, and any link form other than the three above.
 - A separate prototype target, webview, menu-bar app, custom UI framework, shipping package, signing/notarization, or release.
 - Completion of #18's original real-data General pane or the full companion app described in the brief. Those integration outcomes require their own approved intent and evidence.
@@ -236,29 +260,32 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Repository shape: native macOS app built from this branch's existing Tuist target.
 - Artifact: the actual local Debug `Pico.app` produced by `mise run macos:build` and opened by `mise run macos:run`. This is the cheapest realistic surface for visual refinement; screenshots can accompany it but do not replace it.
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
-- Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility. Configuration controls remain visibly unconnected; no demonstration workflow is exercised.
+- Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility, both unconnected and with sample data. Configuration controls remain visibly unconnected without sample data; no workflow is simulated in either mode.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the revised Debug `Pico.app` built from `e3db34d` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run` rebuilds and opens it from any checkout of the branch. It was exercised in the background with `open -g` and `pico://` links, and observed with `recon` screenshots and accessibility trees, without bringing Pico forward. Typing in search and the View menu's Back/Forward state while Pico is frontmost were not observed that way and are left for the human preview.
+- Current state: the parity implementation (`e3db34d`, with the icon refinement `6ff7d92`) was reviewed and returned for sample data. The revised preview is produced after Mark approves this revision.
 
 ## Policies and decisions checked
 
 - Formal policy records: None. `policies/` contains only its index.
 - Formal decision records: None. `decisions/` contains only its index.
 - [VISION.md](../VISION.md) keeps the companion native and leaves conversation UI in Sesh. The workspace preserves that direction but claims only UI behavior, not configured capabilities.
-- [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configuration-app) supplies the System Settings reference and destination vocabulary. This proposal explicitly revises its “no unconnected panes” staging restriction to permit UI stubs before #12-backed functionality; its real integration outcomes remain unfulfilled.
-- The agent contract's source-free and no-placeholder-source restrictions require a matching narrow revision when this proposal is implemented. The allowed deliverable is the runnable UI scaffold with visibly unconnected controls, not fake connections or actions pretending to work.
+- [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configuration-app) supplies the System Settings reference and destination vocabulary. This proposal explicitly revises its “no unconnected panes” staging restriction to permit UI stubs before #12-backed functionality, and its ban on manufactured accounts and model availability to permit the labelled sample-data mode; its real integration outcomes remain unfulfilled.
+- The agent contract's no-fabricated-capability, no-manufactured-credentials, and no-placeholder-source rules require a matching narrow revision when this proposal is implemented. The allowed deliverable is the runnable UI scaffold with visibly unconnected controls and a labelled, in-memory sample-data mode, not fake connections or actions pretending to work.
 - `Project.swift` remains the source of truth for the generated project. Mark chose macOS 27, resolving its conflict with the older floor in the prose. `Config/Version.xcconfig` remains projected from Changesets.
 - [Proposal 0002](0002-pico-homebrew-distribution.md) remains the executable's install/update contract. This UI workspace changes neither the formula nor the signing and packaging prerequisites for a future app distribution.
 
 ## Future directions
 
-After #12 is implemented, subsequent work can connect the stubbed settings through its shared configuration contract and the relevant real integrations. Visual refinement can happen before that connection. This proposal does not implement or simulate those future behaviors.
+After #12 is implemented, subsequent work can connect the stubbed settings through its shared configuration contract and the relevant real integrations. Visual refinement can happen before that connection. This proposal does not implement or simulate those future behaviors. When panes connect to real configuration, that work decides whether sample data remains as a design-review mode, moves to Xcode previews, or is removed.
 
 ## Alternatives considered
 
 - **Separate prototype target:** isolates the scaffold from the product target, but duplicates workspace setup and creates a later integration step. Mark selected the existing Pico target instead.
 - **Wait for #12 and implement a real-data General pane first:** follows #18's original boundary and avoids an unconnected UI stage, but prevents the requested workspace and visual iteration from proceeding independently. Mark explicitly chose UI-first work.
-- **Interactive demonstration app:** would add temporary settings, fixtures, filters, and simulated workflows. Mark explicitly wants UI stubs only; that behavior is unnecessary and could preempt #12's contract.
+- **Separate preview branch with sample data:** keeps invented values out of the product, but goes stale as the design moves and makes comparing the two states a branch switch. Mark chose a mode inside the app.
+- **Xcode previews with sample data:** shows populated panes in the canvas without touching the running app, but not the running window, navigation, or search. Mark chose the running app.
+- **Values-only sample data:** cheaper, but leaves every control disabled, so the working state of pickers and the catalog filter cannot be judged. Mark chose interactive controls.
+- **Sample workflows:** sign-in sheets, registration, or export flows that pretend to complete. They would predesign #12's contract and the integrations after it, so sample data only fills the existing controls.
 - **Collapsible, resizable sidebar and freely resizable window:** the first implementation's native defaults. Mark chose System Settings' fixed layout instead.
 - **Disabled search stub, or a filter over pane names:** cheaper than searching items, but neither reaches the setting the user is looking for. Mark asked for System Settings search: results for every settings item, opening the setting when chosen.
 - **In-app links only:** opening locations from search without a URL scheme. Mark chose to make every location addressable as a `pico://` link too.
@@ -267,4 +294,4 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 
 ## Open questions
 
-None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links recorded above. Implementation of this revision waits for Mark to set `awaiting-implementation`. Configuration functionality remains deferred until #12.
+None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links, and the parity implementation the same day for an interactive sample-data mode inside the app, both recorded above. Implementation of this revision waits for Mark to set `awaiting-implementation`. Configuration functionality remains deferred until #12.

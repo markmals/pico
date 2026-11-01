@@ -3,5 +3,5 @@
 // MARKETING_VERSION is a copy: `mise run version:sync` writes it from the version
 // Changesets put in package.json, so never edit it by hand. CURRENT_PROJECT_VERSION
 // is the build number, and nothing increments it yet because nothing is published.
-MARKETING_VERSION = 0.0.0
+MARKETING_VERSION = 0.1.0
 CURRENT_PROJECT_VERSION = 1

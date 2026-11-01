@@ -2,7 +2,7 @@
 id: proposal.0003
 title: Pico-Only Child Sessions
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/4
 issues: []
 supersedes: []
@@ -45,7 +45,7 @@ A supported child launch cannot select another harness through Pico’s admitted
 
 ### Remaining uncertainty
 
-Same-registration inheritance is documented by the live tool, but has not been exercised with a real Pico parent and child during proposal development. The implementation must verify it in Sesh before claiming the behavior works. No minimum Sesh version is inferred from a documentation page; an incompatible tool contract must fail visibly rather than pass through unprotected.
+Same-registration inheritance was exercised with a real Pico parent and child in Sesh 0.25.2: both reported the registered agent `pico-dev`, and the child completed its retained read/shell operations. Only that installed host version was exercised; no older-host version floor is established. An incompatible tool contract must fail visibly rather than pass through unprotected.
 
 ## Existing baseline
 
@@ -144,7 +144,7 @@ No new credentials, provider integration, service, sandbox, or private Sesh API 
 - Access: local developer checkout and a user-approved custom Pico registration through Sesh’s supported setup. Do not replace the user’s active registration or start a model-backed review during proposal development.
 - Exercise: a harmless child review in a disposable project; inspect its parent relationship, agent identity and curated policy, then attempt an override and observe the failed call with no extra child. Inspect failure/cancellation in the existing visible tool stream.
 - Completion cleanup: stop/archive disposable sessions through Sesh and remove only the implementation’s own temporary project and preview registration with the user’s permission. Leave existing registrations, credentials, and terminal sessions unchanged.
-- Current state: the implementation passes the proposal’s regression tests. Live Sesh parent/child verification is pending.
+- Current state: verified from runtime revision `5090206` in Sesh 0.25.2. Parent `f0bee81d-2766-4702-8c93-30fb6595bb5e` and child `ff5faee3-946b-44f8-ae4d-c1d696b50be9` both used `pico-dev`. The child’s read and shell calls completed; the explicit-agent and missing-project launch attempts failed with no extra child. Parent and child recorded no permission events. The temporary development launcher redirect was restored to its original bytes.
 
 ## Policies and decisions checked
 

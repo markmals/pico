@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -267,7 +267,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility, both unconnected and with sample data. Configuration controls remain visibly unconnected without sample data; no workflow is simulated in either mode.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the parity implementation (`e3db34d`, with the icon refinement `6ff7d92`) was reviewed and returned for sample data. The revised preview is produced after Mark approves this revision.
+- Current state: the Debug `Pico.app` built from `63a53c8` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run` rebuilds and opens it from any checkout of the branch. Both modes were exercised in the background with `open -g`, `-ShowsSampleData YES`, and `pico://` links, and observed with `recon` screenshots and accessibility trees without bringing Pico forward. Choosing from pickers, pressing the sample actions, typing in either search field, and toggling the View menu item need input and are left for the human preview; the sample-data rules they drive are covered by `PicoTests`.
 
 ## Policies and decisions checked
 

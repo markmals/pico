@@ -34,7 +34,7 @@ struct DiagnosticsPane: View {
                 sample == nil
                     ? Text("No diagnostics are collected, redacted, or exported here.")
                     : Text(
-                        "Diagnostic reports leave out credentials and the contents of your files."
+                        "Recent errors from Pico's sessions appear here as they happen."
                     )
             }
         }

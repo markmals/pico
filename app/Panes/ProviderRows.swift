@@ -13,6 +13,7 @@ struct ProviderPickerRow: View {
             } label: {
                 Text(SettingsItem.provider.title)
             }
+            .accessibilityLabel(Text(SettingsItem.provider.title))
             .settingsRow(.provider)
         } else {
             UnavailablePicker(item: .provider)
@@ -33,6 +34,7 @@ struct AccountPickerRow: View {
             } label: {
                 Text(SettingsItem.account.title)
             }
+            .accessibilityLabel(Text(SettingsItem.account.title))
             .settingsRow(.account)
         } else if settings != nil {
             UnavailablePicker(item: .account, reason: "Not signed in")
@@ -55,6 +57,7 @@ struct CredentialSourcePickerRow: View {
             } label: {
                 Text(SettingsItem.credentialSource.title)
             }
+            .accessibilityLabel(Text(SettingsItem.credentialSource.title))
             .settingsRow(.credentialSource)
         } else {
             UnavailablePicker(item: .credentialSource)

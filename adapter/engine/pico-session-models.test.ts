@@ -49,7 +49,7 @@ describe("proposal.0001 model selection", () => {
         );
     });
 
-    test("a selected model answers the next prompt, and nothing is persisted", async t => {
+    test("a selected model answers the next prompt, and no configuration is written", async t => {
         const { session, models, projectConfig, agentDir } = await sessionOnTestProvider(t);
         const configBefore = fs.readFileSync(projectConfig, "utf8");
         const agentFilesBefore = fs.readdirSync(agentDir).toSorted();
@@ -93,7 +93,7 @@ describe("proposal.0001 model selection", () => {
 });
 
 describe("proposal.0001 thinking level selection", () => {
-    test("a selected thinking level reaches the next request, and nothing is persisted", async t => {
+    test("a selected thinking level reaches the next request, and no configuration is written", async t => {
         const { session, models, projectConfig } = await sessionOnTestProvider(t);
         const configBefore = fs.readFileSync(projectConfig, "utf8");
         await session.selectModel(availableModel(session, "beta"));

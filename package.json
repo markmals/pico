@@ -14,5 +14,8 @@
         "oxfmt": "0.75.0",
         "oxlint": "1.90.0",
         "typescript": "7.0.2"
+    },
+    "patchedDependencies": {
+        "@oh-my-pi/pi-coding-agent@18.14.0": "patches/@oh-my-pi%2Fpi-coding-agent@18.14.0.patch"
     }
 }

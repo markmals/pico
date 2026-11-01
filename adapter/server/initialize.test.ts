@@ -41,9 +41,10 @@ describe("proposal.0001 initialize", () => {
         const response = await connect().initialize();
 
         expect(response.agentCapabilities).toEqual({
-            loadSession: false,
+            loadSession: true,
             promptCapabilities: { image: false, audio: false, embeddedContext: false },
             mcpCapabilities: { http: false, sse: false },
+            sessionCapabilities: { list: {}, resume: {} },
         });
     });
 
@@ -71,9 +72,6 @@ describe("proposal.0001 initialize", () => {
 
 describe("proposal.0001 unsupported methods", () => {
     test.each([
-        ["session/load", { sessionId: "s", cwd: "/tmp", mcpServers: [] }],
-        ["session/list", {}],
-        ["session/resume", { sessionId: "s", cwd: "/tmp", mcpServers: [] }],
         ["session/close", { sessionId: "s" }],
         ["session/set_mode", { sessionId: "s", modeId: "default" }],
         ["authenticate", { methodId: "oauth" }],

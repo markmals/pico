@@ -2,7 +2,7 @@
 id: proposal.0004
 title: Persistent Pico Sessions
 authors: [Mark Malstrom]
-status: draft
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/40
 issues: [https://github.com/markmals/pico/issues/5]
 supersedes: []
@@ -48,9 +48,9 @@ ACP is stateful: `session/prompt` supplies the new prompt and an agent session I
 
 A restored conversation has the same stable identity and correct saved context; loading shows each retained message and invocation once, and resuming adds no old transcript. Pico history, artifacts, blobs, and history metadata stay in Pico-owned storage. An unavailable model, invalid archive, contested session, failed server, or failed save is visible rather than replaced by a new conversation, another model, a silent fork, or an in-memory success.
 
-### Remaining uncertainty
+### Feasibility and verification
 
-Sesh's public documentation promises session recovery but does not specify whether it uses `session/load`, `session/resume`, or `session/list` for a custom agent. That calling pattern must be observed during implementation, not inferred from ACP support. Persistence and restoration solve restart continuity; list and load are optional client capabilities, not prerequisites merely because Sesh has sessions. All three remain specified because issue #5 requests them. This proposal introduces neither a standalone Pico session workflow nor a second client archive.
+Sesh's public documentation promises session recovery but does not specify whether it uses `session/load`, `session/resume`, or `session/list` for a custom agent. Implementation on 2026-11-01 observed Sesh 0.25.2 invoking `session/resume` after stopping Pico: a fresh process recalled a unique token, and the client-owned transcript and four prior completed/failed tool cards were unchanged. Full-load replay and listing were exercised separately by the compiled protocol smoke and compatibility kit, not claimed as live-host rendering evidence. List and load remain optional client capabilities requested by issue #5, not prerequisites merely because Sesh has sessions. This proposal introduces neither a standalone Pico session workflow nor a second client archive.
 
 Two disposable public-API probes establish feasibility, not adapter completion:
 
@@ -102,9 +102,11 @@ Use `~/Library/Application Support/Pico/sessions/` as the session root, with det
 
 At process bootstrap, resolve and retain the user's original OMP configuration directory before redirecting the public SDK directory resolver to Pico's engine directory. Pass the original directory explicitly wherever configuration, model definitions, credentials, extensions, skills, or rules are read. Continue using the original credential store in place; no credential copy or new provider configuration is introduced. Apply the runtime-storage override once per process, never as a mutable per-session switch. Audit subprocess environment and discovery paths so the override neither changes the configured engine/model sources nor reintroduces excluded tools. Do not rewrite the user's configuration or terminal-session breadcrumbs.
 
+The human approved a narrow dependency-patch exception on 2026-11-01 after a regression demonstrated that the SDK ignores the configuration-directory argument for skill discovery and the custom-directory workaround reverses project/user skill precedence. Commit a Bun-managed patch against the exact pinned SDK version that threads the explicit configuration directory through its public discovery path. Preserve native skill identities, collision handling, reload behavior and context precedence; remove the Pico workaround rather than retaining two discovery policies. Include regression coverage and remove the patch when an upstream release supplies the fix. This exception does not permit private-API calls, monkeypatching, per-session process-root switching, or unrelated SDK changes.
+
 This separates conversation storage, not every OMP filesystem write. The public directory probe confirms that SDK ownership leases still resolve through `getSessionOwnersDir()` to `~/.omp/run/session-owners`; they contain runtime lock state, not archived conversation content. Retain the public lease mechanism and existing credential behavior rather than claiming complete OMP filesystem independence or adding a second locking implementation.
 
-Create a new persistent manager through public APIs with an explicit Pico session bucket. The public `SessionManager.inMemory(cwd).persistCopy({ sessionDir, suppressBreadcrumb: true })` route provides a materialized empty journal without registering a custom session path in terminal OMP history. Open existing journals with an explicit bucket, `suppressBreadcrumb: true`, and `throwIfMissing: true`. Do not patch SDK internals or use its missing-file behavior to create a replacement session.
+Create a new persistent manager through public APIs with an explicit Pico session bucket. The public `SessionManager.inMemory(cwd).persistCopy({ sessionDir, suppressBreadcrumb: true })` route provides a materialized empty journal without registering a custom session path in terminal OMP history. Open existing journals with an explicit bucket, `suppressBreadcrumb: true`, and `throwIfMissing: true`. Do not patch SDK internals beyond the explicitly approved discovery fix or use its missing-file behavior to create a replacement session.
 
 Return the persistent manager's `getSessionId()` as the ACP `sessionId`. There is one durable agent identity, not two identifiers requiring a separate mapping database; this does not replace Sesh's client-side session identity. A journal keeps its identity across restart; `session/new` always creates a different identity, even for the same working directory. Validate identifiers before lookup, resolve only beneath the Pico session root, reject symlink escapes and duplicate identities, and require the requested identifier to match the loaded header. A client-supplied identifier is never an arbitrary file path.
 
@@ -116,7 +118,7 @@ Subscribe to the manager's public persistence-error and relocation notices. Befo
 
 `session/load` and `session/resume` share validation, ownership acquisition, engine construction, and cleanup. Require an absolute, existing, enterable `cwd` matching the journal's recorded directory after filesystem canonicalization. A removed or moved project is an explicit failure; do not silently relocate its conversation into the adapter's launch directory.
 
-Acquire exclusive ownership of the saved session before repairing or extending it. A second live attachment, including another adapter process, fails as busy without changing the file, starting another turn, or forking the identity. A repeated load or resume of an already attached identifier on the same connection also fails before replay. Use the public storage ownership mechanism and retain the claim until teardown; observe unexpected SDK relocation rather than adopting it. A dead process must not permanently prevent reopening.
+Acquire exclusive ownership of the saved session before repairing or extending it. A competing attachment on another connection or in another adapter process fails as busy without changing the file, starting another turn, or forking the identity. An idle attachment on the same connection can be loaded or resumed again: validate its requested working directory and MCP transport first, reserve its identifier, close the old attachment completely, and reconstruct it under the same identity using the new request. Refuse replacement while a turn, configuration change or another attachment operation is in progress; do not interrupt that work. Loading replays the saved conversation once per load request, whereas resuming sends no history. Use the public storage ownership mechanism and retain the claim until teardown; observe unexpected SDK relocation rather than adopting it. A dead process must not permanently prevent reopening. The human approved this idle-reattachment correction after the ACP compatibility kit exposed the earlier overstrict rejection.
 
 Construct the engine through the same `createPicoSession` path as a new session, supplying the opened manager instead of restoring into a less-restricted generic SDK session. Keep eval, built-in LSP, native task/agent/workpool delegation, extension-added tools, and unapproved indirect routes excluded. Reapply the Sesh child-launch adaptation and verify the final effective roster after MCP discovery.
 
@@ -232,4 +234,4 @@ A later proposal could define Pico's own portable history format, session export
 
 ## Open questions
 
-None about the selected storage-ownership boundary. Sesh's actual restoration calling pattern and complete runtime-storage/configuration isolation remain implementation verification requirements, not assumed capabilities. This proposal is `draft`; the human has approved its preparation, not implementation.
+None about the selected storage-ownership boundary. The human approved implementation, the narrow pinned SDK discovery patch and idle same-connection reattachment on 2026-11-01. The real Sesh restart check resolved its calling-pattern uncertainty; compiled protocol checks and configuration-source regressions cover the paths the host did not exercise.

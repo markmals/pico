@@ -18,7 +18,10 @@ exclude = List(".beads/**")
 /// Formatters and linters. `check`, `fix` and `pre-commit` all share this set, so a
 /// clean `hk check --all` in CI means a clean pre-commit locally.
 local linters = new Mapping<String, Step> {
-    ["trailing_whitespace"] = Builtins.trailing_whitespace
+    // Unified-diff context prefixes are syntax, including the space on a blank context line.
+    ["trailing_whitespace"] = (Builtins.trailing_whitespace) {
+        exclude = List("patches/*.patch")
+    }
     ["newlines"] = Builtins.newlines
     ["check_merge_conflict"] = Builtins.check_merge_conflict
 

@@ -269,10 +269,18 @@ describe("proposal.0001 a cancellation the engine does not answer", () => {
     test("an abort that stops nothing is a failed cancellation", async () => {
         const cwd = temporaryProject();
         // The engine accepts the abort but never ends the turn it was told to stop.
-        const fake = fakeSession(cwd, { abort: () => Promise.resolve() });
+        const started = Promise.withResolvers<void>();
+        const fake = fakeSession(cwd, {
+            prompt: () => {
+                started.resolve();
+                return Promise.withResolvers<boolean>().promise;
+            },
+            abort: () => Promise.resolve(),
+        });
         const connected = await connect(fake.session, cwd);
 
         const running = connected.prompt("hang");
+        await started.promise;
         await connected.client.agent.notify("session/cancel", { sessionId: connected.sessionId });
 
         expect((await running).stopReason).toBe("cancelled");

@@ -3,6 +3,7 @@
 // an Oh My Pi package supplies a scripted model, so a whole turn runs offline.
 
 import { client, ndJsonStream, type InitializeResponse } from "@agentclientprotocol/sdk";
+import { randomUUID } from "node:crypto";
 import {
     existsSync,
     mkdirSync,
@@ -19,6 +20,7 @@ import path from "node:path";
 import manifest from "../../package.json" with { type: "json" };
 import { Checklist } from "./checklist.ts";
 import { subprocessInput } from "./processes.ts";
+import { verifyRestoration } from "./restoration.ts";
 import { acpMessageProblem, inspectLines } from "./wire.ts";
 
 const REPLY = "pico verified";
@@ -26,14 +28,26 @@ const REPLY = "pico verified";
 // Loaded by `pico` at runtime from the project, as a user's extension would be. Its imports
 // resolve only through the module map compiled into `pico`: a named subpath export of
 // `@oh-my-pi/pi-ai`, and a subpath of `@oh-my-pi/pi-utils` served by its `./*` catch-all.
-const PROVIDER_EXTENSION = `import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
+function providerExtension(memoryToken: string): string {
+    return `import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
 import { getAgentDir as viaJsSpelling } from "@oh-my-pi/pi-utils/dirs.js";
 
 if (getAgentDir !== viaJsSpelling) throw new Error("@oh-my-pi/pi-utils/dirs did not load as one module");
 
+const memoryToken = ${JSON.stringify(memoryToken)};
 const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: { content: [${JSON.stringify(REPLY)}] } });
+const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: context => {
+    const users = context.messages.filter(message => message.role === "user");
+    if (users.length > 1) {
+        const remembered = users.slice(0, -1).some(message => JSON.stringify(message.content).includes(memoryToken));
+        return { content: [remembered ? "remembered:" + memoryToken : "history missing"] };
+    }
+    if (context.messages.at(-1)?.role === "user") {
+        return { content: [{ type: "toolCall", id: "verify-write", name: "write", arguments: { path: "restart-note.txt", content: memoryToken + "\\n" } }] };
+    }
+    return { content: [${JSON.stringify(REPLY)}] };
+} });
 
 export default function (pi) {
     pi.registerProvider("pico-verify", {
@@ -45,29 +59,32 @@ export default function (pi) {
     });
 }
 `;
+}
 
-/** What proposal 0001 says `initialize` claims, and nothing more. */
 const EXPECTED_CAPABILITIES = {
-    loadSession: false,
+    loadSession: true,
     promptCapabilities: { image: false, audio: false, embeddedContext: false },
     mcpCapabilities: { http: false, sse: false },
+    sessionCapabilities: { list: {}, resume: {} },
 };
 
-interface Scratch {
+export interface Scratch {
     home: string;
     project: string;
     env: Record<string, string>;
+    memoryToken: string;
 }
 
 function scratch(): Scratch {
     let root = realpathSync(mkdtempSync(path.join(tmpdir(), "pico-verify-")));
     let home = path.join(root, "home");
     let project = path.join(root, "project");
+    const memoryToken = randomUUID();
     mkdirSync(path.join(project, ".omp", "extensions"), { recursive: true });
     mkdirSync(home);
     writeFileSync(
         path.join(project, ".omp", "extensions", "verify-provider.ts"),
-        PROVIDER_EXTENSION,
+        providerExtension(memoryToken),
     );
     writeFileSync(
         path.join(project, ".omp", "config.yml"),
@@ -76,6 +93,7 @@ function scratch(): Scratch {
     return {
         home,
         project,
+        memoryToken,
         env: { HOME: home, USER: process.env.USER ?? "pico", PATH: "/usr/bin:/bin" },
     };
 }
@@ -110,7 +128,7 @@ async function checkTurn(
     executable: string,
     scratchDirs: Scratch,
     checklist: Checklist,
-): Promise<void> {
+): Promise<string | undefined> {
     let agent = Bun.spawn({
         cmd: [executable],
         cwd: scratchDirs.project,
@@ -124,6 +142,7 @@ async function checkTurn(
     let failure: string | null = null;
     let strayLines: string[] = [];
     let replyText = "";
+    let sessionId: string | undefined;
     let app = client({ name: "pico-verify" }).onNotification("session/update", ({ params }) => {
         let update = params.update;
         if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
@@ -145,7 +164,7 @@ async function checkTurn(
                 clientCapabilities: {},
             });
             checklist.record(
-                "`initialize` claims exactly proposal 0001's capabilities",
+                "`initialize` claims exactly Pico's implemented capabilities",
                 initializeProblem(initialized),
             );
 
@@ -153,6 +172,7 @@ async function checkTurn(
                 cwd: scratchDirs.project,
                 mcpServers: [],
             });
+            sessionId = session.sessionId;
             let model = session.configOptions?.find(option => option.id === "model");
             checklist.record(
                 "a session starts on the extension's model",
@@ -163,7 +183,12 @@ async function checkTurn(
 
             let turn = await context.request("session/prompt", {
                 sessionId: session.sessionId,
-                prompt: [{ type: "text", text: "hello" }],
+                prompt: [
+                    {
+                        type: "text",
+                        text: `Remember ${scratchDirs.memoryToken} for the next time this conversation opens.`,
+                    },
+                ],
             });
             checklist.record(
                 "a turn answers through the extension that imports Oh My Pi",
@@ -188,6 +213,7 @@ async function checkTurn(
         "stdout carries ACP messages only",
         strayLines.length === 0 ? null : strayLines.join("; "),
     );
+    return failure === null ? sessionId : undefined;
 }
 
 function checkDataDir(scratchDirs: Scratch, checklist: Checklist): void {
@@ -235,7 +261,8 @@ async function main(): Promise<void> {
     let checklist = new Checklist();
     try {
         checkVersion(executable, scratchDirs, checklist);
-        await checkTurn(executable, scratchDirs, checklist);
+        const sessionId = await checkTurn(executable, scratchDirs, checklist);
+        if (sessionId) await verifyRestoration(executable, scratchDirs, sessionId, checklist);
         checkDataDir(scratchDirs, checklist);
         process.stdout.write(`${checklist.report()}\n`);
         process.stdout.write(

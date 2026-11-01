@@ -30,8 +30,8 @@ describe("proposal.0001 shutdown", () => {
         const disposed: string[] = [];
         const client = connectPicoAgent({
             version: "0.0.0-test",
-            createSession: async (cwd, mcpServers): Promise<PicoSession> => {
-                const session = await engine.createSession(cwd, mcpServers);
+            createSession: async (cwd, mcpServers, sessionManager): Promise<PicoSession> => {
+                const session = await engine.createSession(cwd, mcpServers, sessionManager);
                 return {
                     engine: session.engine,
                     cwd: session.cwd,

@@ -1,0 +1,349 @@
+diff --git a/dist/types/extensibility/extensions/loader.d.ts b/dist/types/extensibility/extensions/loader.d.ts
+index 4895a2db8bbd492ac343870c648db4a051654037..e865deae55e8214b30daea047d34237ce1e6c6f8 100644
+--- a/dist/types/extensibility/extensions/loader.d.ts
++++ b/dist/types/extensibility/extensions/loader.d.ts
+@@ -74,6 +74,8 @@ export declare function bindPreparedExtensions(preparedExtensions: readonly Prep
+ export interface DiscoverExtensionPathOptions {
+     /** Include ambient native extensions, hooks, and installed plugins. */
+     ambient?: boolean;
++    /** Native user config dir scanned for user-level extensions and hooks. Default: getAgentDir() */
++    agentDir?: string;
+     /** Include ambient hook factories. Disable for read-only catalog commands. */
+     includeAmbientHooks?: boolean;
+ }
+diff --git a/dist/types/extensibility/skills.d.ts b/dist/types/extensibility/skills.d.ts
+index b263bcc57a8fcc479ae749f46c8dde9adef3c5f4..f5d1385c89b2094ae7db1f3ea26d766c0b164d17 100644
+--- a/dist/types/extensibility/skills.d.ts
++++ b/dist/types/extensibility/skills.d.ts
+@@ -61,6 +61,8 @@ export declare function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Pr
+ export interface LoadSkillsOptions extends SkillsSettings {
+     /** Working directory for project-local skills. Default: getProjectDir() */
+     cwd?: string;
++    /** Native user config dir holding user-level skills. Default: getAgentDir() */
++    agentDir?: string;
+     /** Disabled extension ids (`disabledExtensions`); `skill:<name>` entries hide those skills. */
+     disabledExtensions?: string[];
+     /**
+diff --git a/dist/types/sdk.d.ts b/dist/types/sdk.d.ts
+index d8f41efb5b8b54fc9e79bb699f1e8ab9c69359d9..d9a82f76dcb986eda58abf69d82d461a4822542a 100644
+--- a/dist/types/sdk.d.ts
++++ b/dist/types/sdk.d.ts
+@@ -559,7 +559,7 @@ export declare function resolvePrewalkTarget(patterns: readonly string[], target
+ /**
+  * Discover skills from cwd and agentDir.
+  */
+-export declare function discoverSkills(cwd?: string, _agentDir?: string, settings?: SkillsSettings & Pick<LoadSkillsOptions, "disabledExtensions">): Promise<{
++export declare function discoverSkills(cwd?: string, agentDir?: string, settings?: SkillsSettings & Pick<LoadSkillsOptions, "disabledExtensions">): Promise<{
+     skills: Skill[];
+     warnings: SkillWarning[];
+ }>;
+@@ -567,7 +567,7 @@ export declare function discoverSkills(cwd?: string, _agentDir?: string, setting
+  * Discover context files (AGENTS.md) walking up from cwd.
+  * Returns files sorted by depth (farther from cwd first, so closer files appear last/more prominent).
+  */
+-export declare function discoverContextFiles(cwd?: string, _agentDir?: string, disabledExtensions?: string[]): Promise<Array<{
++export declare function discoverContextFiles(cwd?: string, agentDir?: string, disabledExtensions?: string[]): Promise<Array<{
+     path: string;
+     content: string;
+     depth?: number;
+diff --git a/dist/types/system-prompt.d.ts b/dist/types/system-prompt.d.ts
+index 9cbbe076cccdd47769e632403762fdb07013039d..1ce0dcb1c8234c44d1d95890617d5572306c09ee 100644
+--- a/dist/types/system-prompt.d.ts
++++ b/dist/types/system-prompt.d.ts
+@@ -63,7 +63,7 @@ export interface SystemPromptOverride {
+  * and `.agent/.agents` coverage come from the capability providers, so a
+  * repo-root file wins from a nested cwd.
+  */
+-export declare function discoverSystemPromptOverride(cwd?: string): Promise<SystemPromptOverride | undefined>;
++export declare function discoverSystemPromptOverride(cwd?: string, agentDir?: string): Promise<SystemPromptOverride | undefined>;
+ /** Unlike literal prompt inputs, explicit template paths never fall back to inline text. */
+ export declare function loadSystemPromptTemplateFile(filePath: string): Promise<string>;
+ /** Resolve input as file path or literal string */
+@@ -71,6 +71,8 @@ export declare function resolvePromptInput(input: string | undefined, descriptio
+ export interface LoadContextFilesOptions {
+     /** Working directory to start walking up from. Default: getProjectDir() */
+     cwd?: string;
++    /** Native user config dir holding the user-level context file. Default: getAgentDir() */
++    agentDir?: string;
+     /** Disabled extension IDs to honor instead of the process-global settings. */
+     disabledExtensions?: string[];
+ }
+@@ -149,6 +151,8 @@ export declare function toolReadsSkillUris(tool: Pick<AgentTool, "readsSkillUris
+ /** Builds a mode-specific metadata snapshot for internal prompt assembly. */
+ export declare function projectSystemPromptToolMetadata(tools: Map<string, AgentTool>, projection: SystemPromptToolMetadataProjection): Map<string, SystemPromptToolMetadata>;
+ export interface BuildSystemPromptOptions {
++    /** Native user config dir for user-level prompt sources. Default: getAgentDir() */
++    agentDir?: string;
+     /** Custom system prompt (replaces default). */
+     customPrompt?: string;
+     /** Already-loaded custom system prompt text; bypasses path resolution. */
+diff --git a/src/discovery/builtin.ts b/src/discovery/builtin.ts
+index e68600459d5d76d36c53b82e60c155640d81bbc3..2d2b4b805eafdbba53dc37fc9a9c0a30758ceec4 100644
+--- a/src/discovery/builtin.ts
++++ b/src/discovery/builtin.ts
+@@ -291,8 +291,9 @@ async function loadSystemPrompt(ctx: LoadContext): Promise<LoadResult<SystemProm
+ 		await load(path.join(nearestProjectConfigDir.dir, "SYSTEM.md"), "project", "text");
+ 		await load(path.join(nearestProjectConfigDir.dir, "SYSTEM_TEMPLATE.md"), "project", "template");
+ 	}
+-	await load(path.join(getAgentDir(), "SYSTEM.md"), "user", "text");
+-	await load(path.join(getAgentDir(), "SYSTEM_TEMPLATE.md"), "user", "template");
++	const userDir = ctx.agentDir ?? getAgentDir();
++	await load(path.join(userDir, "SYSTEM.md"), "user", "text");
++	await load(path.join(userDir, "SYSTEM_TEMPLATE.md"), "user", "template");
+ 
+ 	return { items, warnings };
+ }
+@@ -321,9 +322,10 @@ async function loadSkills(ctx: LoadContext): Promise<LoadResult<Skill>> {
+ 		);
+ 	}
+ 
+-	// User-level scan from ~/.omp/agent/skills/
++	// User-level scan from this load's own config dir (~/.omp/agent/skills/ by
++	// default), as every other native scan resolves it through `getConfigDirs`.
+ 	const userScan = scanSkillsFromDir(ctx, {
+-		dir: path.join(getAgentDir(), "skills"),
++		dir: path.join(ctx.agentDir ?? getAgentDir(), "skills"),
+ 		providerId: PROVIDER_ID,
+ 		level: "user",
+ 		requireDescription: true,
+@@ -943,7 +945,7 @@ async function loadContextFiles(ctx: LoadContext): Promise<LoadResult<ContextFil
+ 	const items: ContextFile[] = [];
+ 	const warnings: string[] = [];
+ 
+-	const userPath = path.join(getAgentDir(), "AGENTS.md");
++	const userPath = path.join(ctx.agentDir ?? getAgentDir(), "AGENTS.md");
+ 	const userContent = await readFile(userPath);
+ 	if (userContent) {
+ 		items.push({
+diff --git a/src/discovery/omp-extension-roots.ts b/src/discovery/omp-extension-roots.ts
+index 05a5d3793eb70f5c8ed2397d710ba0c793d261b8..6f9cc37df05fd73e73613333d90b08ad94568996 100644
+--- a/src/discovery/omp-extension-roots.ts
++++ b/src/discovery/omp-extension-roots.ts
+@@ -160,7 +160,7 @@ interface ScopeDirs {
+ function scopeDirs(ctx: LoadContext): ScopeDirs {
+ 	return {
+ 		project: path.join(ctx.cwd, ".omp"),
+-		user: getAgentDir(),
++		user: ctx.agentDir ?? getAgentDir(),
+ 	};
+ }
+ 
+diff --git a/src/extensibility/extensions/loader.ts b/src/extensibility/extensions/loader.ts
+index 30c18d3d83b5820b84b75db5abb229b9ea59ed15..a1dcc2e34750cdf9dc8d876189a2f34b7e5cec6e 100644
+--- a/src/extensibility/extensions/loader.ts
++++ b/src/extensibility/extensions/loader.ts
+@@ -623,6 +623,8 @@ async function discoverHooksInPackageRoot(root: string): Promise<string[]> {
+ export interface DiscoverExtensionPathOptions {
+ 	/** Include ambient native extensions, hooks, and installed plugins. */
+ 	ambient?: boolean;
++	/** Native user config dir scanned for user-level extensions and hooks. Default: getAgentDir() */
++	agentDir?: string;
+ 	/** Include ambient hook factories. Disable for read-only catalog commands. */
+ 	includeAmbientHooks?: boolean;
+ }
+@@ -636,7 +638,9 @@ export async function discoverExtensionPaths(
+ 	const allPaths: string[] = [];
+ 	const seen = new Set<string>();
+ 	const disabled = new Set(disabledExtensionIds ?? []);
+-	const loadOptions = disabledExtensionIds ? { cwd, disabledExtensions: disabledExtensionIds } : { cwd };
++	const loadOptions = disabledExtensionIds
++		? { cwd, agentDir: options.agentDir, disabledExtensions: disabledExtensionIds }
++		: { cwd, agentDir: options.agentDir };
+ 
+ 	const isDisabledName = (name: string): boolean => disabled.has(`extension-module:${name}`);
+ 
+diff --git a/src/extensibility/skills.ts b/src/extensibility/skills.ts
+index edfc184d08a5360e0ef3fe64e0fbb8e62dc2d27d..3b419ae284e263e27e0681491c86f1514471034e 100644
+--- a/src/extensibility/skills.ts
++++ b/src/extensibility/skills.ts
+@@ -287,6 +287,8 @@ export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Prom
+ export interface LoadSkillsOptions extends SkillsSettings {
+ 	/** Working directory for project-local skills. Default: getProjectDir() */
+ 	cwd?: string;
++	/** Native user config dir holding user-level skills. Default: getAgentDir() */
++	agentDir?: string;
+ 	/** Disabled extension ids (`disabledExtensions`); `skill:<name>` entries hide those skills. */
+ 	disabledExtensions?: string[];
+ 	/**
+@@ -304,6 +306,7 @@ export interface LoadSkillsOptions extends SkillsSettings {
+ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadSkillsResult> {
+ 	const {
+ 		cwd = getProjectDir(),
++		agentDir,
+ 		enabled = true,
+ 		enableCodexUser = false,
+ 		enableClaudeUser = false,
+@@ -350,6 +353,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
+ 	// Use capability API to load all skills
+ 	const result = await loadCapability<CapabilitySkill>(skillCapability.id, {
+ 		cwd,
++		agentDir,
+ 		disabledExtensions,
+ 		extensionRoots,
+ 	});
+@@ -674,6 +678,7 @@ async function rediscoverHostSkills(host: SkillRediscoveryHost): Promise<readonl
+ 	const discovered = await loadSkills({
+ 		...cfgSkills.get(host.settings),
+ 		cwd: host.cwd,
++		agentDir: host.settings.getAgentDir(),
+ 		disabledExtensions: cfgDisabledExtensions.get(host.settings),
+ 		extensionRoots: host.extensionRoots,
+ 	});
+diff --git a/src/sdk.ts b/src/sdk.ts
+index 1c571be2e116f11687deea6838930b9a1834561d..fed4a84e660b1f789c23fe01838c4e3a8dff0ce2 100644
+--- a/src/sdk.ts
++++ b/src/sdk.ts
+@@ -1115,6 +1115,7 @@ export async function discoverSessionExtensionPaths(
+ 	return discoverExtensionPaths(configuredPaths, cwd, disabledExtensionIds, {
+ 		ambient: !explicitOnly,
+ 		includeAmbientHooks: options.includeAmbientHooks,
++		agentDir: settings.getAgentDir(),
+ 	});
+ }
+ 
+@@ -1277,12 +1278,13 @@ export async function resolvePrewalkTarget(
+  */
+ export async function discoverSkills(
+ 	cwd?: string,
+-	_agentDir?: string,
++	agentDir?: string,
+ 	settings?: SkillsSettings & Pick<LoadSkillsOptions, "disabledExtensions">,
+ ): Promise<{ skills: Skill[]; warnings: SkillWarning[] }> {
+ 	return await loadSkillsInternal({
+ 		...settings,
+ 		cwd: cwd ?? getProjectDir(),
++		agentDir,
+ 	});
+ }
+ 
+@@ -1292,11 +1294,12 @@ export async function discoverSkills(
+  */
+ export async function discoverContextFiles(
+ 	cwd?: string,
+-	_agentDir?: string,
++	agentDir?: string,
+ 	disabledExtensions?: string[],
+ ): Promise<Array<{ path: string; content: string; depth?: number }>> {
+ 	return await loadContextFilesInternal({
+ 		cwd: cwd ?? getProjectDir(),
++		agentDir,
+ 		disabledExtensions,
+ 	});
+ }
+@@ -4202,6 +4205,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			);
+ 			const defaultPrompt = await buildSystemPromptInternal({
+ 				cwd: promptCwd,
++				agentDir,
+ 				additionalWorkspaceRoots: sessionManager.getAdditionalDirectories(),
+ 				noContextFiles: options.noContextFiles,
+ 				excludeAgentsMd,
+diff --git a/src/session/session-tools.ts b/src/session/session-tools.ts
+index 753bc424ed86725219c99fb6ecc8d464e527e3bf..9c6278b925ce42d6b84e1d2be5d16eba483f9f0c 100644
+--- a/src/session/session-tools.ts
++++ b/src/session/session-tools.ts
+@@ -2041,6 +2041,7 @@ export class SessionTools {
+ 				const discovered = await loadSkills({
+ 					...skillsSettings,
+ 					cwd: this.#host.sessionManager.getCwd(),
++					agentDir: this.#host.settings.getAgentDir(),
+ 					disabledExtensions: cfgDisabledExtensions.get(this.#host.settings),
+ 					extensionRoots: this.#host.effectiveExtensionRoots(),
+ 				});
+diff --git a/src/system-prompt.ts b/src/system-prompt.ts
+index fa2b5c17fa47372c25e49f1abb3c6c4bb1e65867..e8172d454a7af5594a3460f234b4d87a67713cbe 100644
+--- a/src/system-prompt.ts
++++ b/src/system-prompt.ts
+@@ -264,9 +264,13 @@ export interface SystemPromptOverride {
+  * and `.agent/.agents` coverage come from the capability providers, so a
+  * repo-root file wins from a nested cwd.
+  */
+-export async function discoverSystemPromptOverride(cwd?: string): Promise<SystemPromptOverride | undefined> {
++export async function discoverSystemPromptOverride(
++	cwd?: string,
++	agentDir?: string,
++): Promise<SystemPromptOverride | undefined> {
+ 	const result = await loadCapability<SystemPromptFile>(systemPromptCapability.id, {
+ 		cwd: cwd ?? getProjectDir(),
++		agentDir,
+ 	});
+ 	for (const level of ["project", "user"] as const) {
+ 		const text = result.items.find(item => item.level === level && (item.kind ?? "text") === "text");
+@@ -313,6 +317,8 @@ export async function resolvePromptInput(input: string | undefined, description:
+ export interface LoadContextFilesOptions {
+ 	/** Working directory to start walking up from. Default: getProjectDir() */
+ 	cwd?: string;
++	/** Native user config dir holding the user-level context file. Default: getAgentDir() */
++	agentDir?: string;
+ 	/** Disabled extension IDs to honor instead of the process-global settings. */
+ 	disabledExtensions?: string[];
+ }
+@@ -369,6 +375,7 @@ export async function loadProjectContextFiles(
+ 
+ 	const result = await loadCapability(contextFileCapability.id, {
+ 		cwd: resolvedCwd,
++		agentDir: options.agentDir,
+ 		disabledExtensions: options.disabledExtensions,
+ 	});
+ 
+@@ -405,7 +412,10 @@ export async function loadProjectContextFiles(
+ export async function loadSystemPromptFiles(options: LoadContextFilesOptions = {}): Promise<string | null> {
+ 	const resolvedCwd = options.cwd ?? getProjectDir();
+ 
+-	const result = await loadCapability<SystemPromptFile>(systemPromptCapability.id, { cwd: resolvedCwd });
++	const result = await loadCapability<SystemPromptFile>(systemPromptCapability.id, {
++		cwd: resolvedCwd,
++		agentDir: options.agentDir,
++	});
+ 
+ 	if (result.items.length === 0) return null;
+ 
+@@ -504,6 +514,8 @@ export function projectSystemPromptToolMetadata(
+ }
+ 
+ export interface BuildSystemPromptOptions {
++	/** Native user config dir for user-level prompt sources. Default: getAgentDir() */
++	agentDir?: string;
+ 	/** Custom system prompt (replaces default). */
+ 	customPrompt?: string;
+ 	/** Already-loaded custom system prompt text; bypasses path resolution. */
+@@ -711,7 +723,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+ 		throw new Error("systemPromptTemplate cannot be combined with a literal custom system prompt");
+ 	}
+ 	if (resolvedSystemPromptTemplate === undefined && !hasExplicitCustomPrompt) {
+-		const override = await discoverSystemPromptOverride(resolvedCwd);
++		const override = await discoverSystemPromptOverride(resolvedCwd, options.agentDir);
+ 		if (override?.kind === "template" && override.content !== undefined) {
+ 			resolvedSystemPromptTemplate = override.content;
+ 		} else if (override?.content !== undefined) {
+@@ -784,11 +796,17 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+ 		hasExplicitCustomPrompt || resolvedSystemPromptTemplate !== undefined || resolvedCustomPromptInput !== undefined;
+ 	const systemPromptCustomizationPromise: Promise<string | null> = callerControlsCustomPrompt
+ 		? Promise.resolve(null)
+-		: logger.time("loadSystemPromptFiles", loadSystemPromptFiles, { cwd: resolvedCwd });
++		: logger.time("loadSystemPromptFiles", loadSystemPromptFiles, {
++				cwd: resolvedCwd,
++				agentDir: options.agentDir,
++			});
+ 	const contextFilesPromise = (async () => {
+ 		const primary = providedContextFiles
+ 			? providedContextFiles
+-			: await logger.time("loadProjectContextFiles", loadProjectContextFiles, { cwd: resolvedCwd });
++			: await logger.time("loadProjectContextFiles", loadProjectContextFiles, {
++					cwd: resolvedCwd,
++					agentDir: options.agentDir,
++				});
+ 		// Also discover context files (AGENTS.md, rules, etc.) for each additional workspace root.
+ 		const additionalRoots = additionalWorkspaceRoots.filter(d => path.resolve(d) !== path.resolve(resolvedCwd));
+ 		if (additionalRoots.length === 0 || noContextFiles) return excludeAgentsMd ? withoutAgentsMd(primary) : primary;
+@@ -826,7 +844,9 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+ 		providedSkills !== undefined
+ 			? Promise.resolve(providedSkills)
+ 			: skillsSettings?.enabled !== false
+-				? loadSkills({ ...skillsSettings, cwd: resolvedCwd }).then(result => result.skills)
++				? loadSkills({ ...skillsSettings, cwd: resolvedCwd, agentDir: options.agentDir }).then(
++						result => result.skills,
++					)
+ 				: Promise.resolve([]);
+ 	const activeRepoContextPromise =
+ 		providedActiveRepoContext !== undefined

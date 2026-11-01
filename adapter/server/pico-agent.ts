@@ -1,28 +1,19 @@
 // Derived from oh-my-pi 18.14.0 src/modes/acp/acp-agent.ts (MIT; see THIRD-PARTY-NOTICES.md).
 
-import type {
-    AgentApp,
-    AgentContext,
-    InitializeResponse,
-    McpServer,
-    McpServerStdio,
-    NewSessionRequest,
-    NewSessionResponse,
-} from "@agentclientprotocol/sdk";
+import type { AgentApp, InitializeResponse, McpServerStdio } from "@agentclientprotocol/sdk";
+import type { SessionManager } from "@oh-my-pi/pi-coding-agent";
 
-import { agent, RequestError } from "@agentclientprotocol/sdk";
-import { randomUUID } from "node:crypto";
-import { statSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { agent } from "@agentclientprotocol/sdk";
 
 import type { PicoSession } from "../engine/pico-session.ts";
 
 import { promptText } from "./prompt-content.ts";
-import { SessionRuntime } from "./session-runtime.ts";
+import { SessionRegistry } from "./session-registry.ts";
 
 export type PicoSessionFactory = (
     cwd: string,
     mcpServers: McpServerStdio[],
+    sessionManager: SessionManager,
 ) => Promise<PicoSession>;
 
 export interface PicoAgentOptions {
@@ -30,6 +21,7 @@ export interface PicoAgentOptions {
     createSession: PicoSessionFactory;
     /** Reported as `agentInfo.version`. */
     version: string;
+    dataDir: string;
 }
 
 /**
@@ -53,158 +45,43 @@ export function picoAgentShutdown(app: AgentApp): PicoAgentShutdown {
 
 /** One app serves one stdio connection: the client Sesh launches it for. */
 export function createPicoAgent(options: PicoAgentOptions): AgentApp {
-    const sessions = new Map<string, SessionRuntime>();
-    /** Session creations still running; shutdown waits for each to land or dispose itself. */
-    const starting = new Set<Promise<void>>();
-    let client: AgentContext | undefined;
-    let closed = false;
-
+    let registry: SessionRegistry | undefined;
     const app = agent({ name: "pico" });
-
     app.onConnect(connection => {
-        client = connection.client;
-        // The signal aborts as the connection tears down, before `closed` settles:
-        // a `session/new` still inside its factory has to see that straight away.
-        connection.signal.addEventListener("abort", () => {
-            closed = true;
-        });
+        const connected = new SessionRegistry(options, connection.client);
+        registry = connected;
+        connection.signal.addEventListener("abort", () => connected.stopAdmission());
         shutdowns.set(app, {
-            completed: connection.closed.then(async () => {
-                closed = true;
-                // Stopping the sessions that exist cannot wait behind a creation that
-                // may never land; one that does land disposes itself.
-                const disposals = [...sessions.values()].map(runtime => runtime.dispose());
-                await Promise.all([...starting, ...disposals]);
-                sessions.clear();
-            }),
-            outstanding: () => {
-                const steps =
-                    starting.size > 0
-                        ? ["waiting for sessions that have not finished starting"]
-                        : [];
-                for (const runtime of sessions.values()) {
-                    if (runtime.outstandingStep) steps.push(runtime.outstandingStep);
-                }
-                return steps;
-            },
+            completed: connection.closed.then(() => connected.dispose()),
+            outstanding: () => connected.outstanding(),
         });
     });
 
     app.onRequest("initialize", (): InitializeResponse => ({
         protocolVersion: 1,
         agentCapabilities: {
-            loadSession: false,
+            loadSession: true,
             promptCapabilities: { image: false, audio: false, embeddedContext: false },
             mcpCapabilities: { http: false, sse: false },
+            sessionCapabilities: { list: {}, resume: {} },
         },
         authMethods: [],
         agentInfo: { name: "pico", title: "Pico", version: options.version },
     }));
-
-    app.onRequest("session/new", ({ params, signal }): Promise<NewSessionResponse> => {
-        const started = startSession(params, signal);
-        const settled = started.then(
-            () => undefined,
-            () => undefined,
-        );
-        starting.add(settled);
-        void settled.finally(() => starting.delete(settled));
-        return started;
-    });
-
-    async function startSession(
-        params: NewSessionRequest,
-        signal: AbortSignal,
-    ): Promise<NewSessionResponse> {
-        requireExistingDirectory(params.cwd);
-        const mcpServers = params.mcpServers.map(requireStdioTransport);
-        const session = await createSession(options.createSession, params.cwd, mcpServers);
-        if (closed || signal.aborted) {
-            // Shutdown already walked the registry: registering now would leave this
-            // session, and the MCP servers it started, running with nobody to stop them.
-            await session.dispose();
-            throw RequestError.internalError(
-                undefined,
-                "the connection closed while the session was starting",
-            );
-        }
-        const sessionId = randomUUID();
-        const runtime = new SessionRuntime(sessionId, session, requireClient(client));
-        sessions.set(sessionId, runtime);
-        return { sessionId, configOptions: runtime.configOptions() };
-    }
-
-    app.onRequest("session/set_config_option", async ({ params }) => {
-        const runtime = sessions.get(params.sessionId);
-        if (!runtime) {
-            throw RequestError.invalidParams(undefined, `unknown session "${params.sessionId}"`);
-        }
-        return { configOptions: await runtime.setConfigOption(params.configId, params.value) };
-    });
-
-    app.onRequest("session/prompt", async ({ params }) => {
-        const runtime = sessions.get(params.sessionId);
-        if (!runtime) {
-            throw RequestError.invalidParams(undefined, `unknown session "${params.sessionId}"`);
-        }
-        return { stopReason: await runtime.prompt(promptText(params.prompt)) };
-    });
-
-    app.onNotification("session/cancel", ({ params }) => {
-        sessions.get(params.sessionId)?.cancel();
-    });
-
+    app.onRequest("session/new", ({ params, signal }) => registry!.start(params, signal));
+    app.onRequest("session/load", ({ params, signal }) => registry!.restore(params, signal, true));
+    app.onRequest("session/resume", ({ params, signal }) =>
+        registry!.restore(params, signal, false),
+    );
+    app.onRequest("session/list", ({ params }) => registry!.list(params));
+    app.onRequest("session/set_config_option", async ({ params }) => ({
+        configOptions: await registry!
+            .get(params.sessionId)
+            .setConfigOption(params.configId, params.value),
+    }));
+    app.onRequest("session/prompt", async ({ params }) => ({
+        stopReason: await registry!.get(params.sessionId).prompt(promptText(params.prompt)),
+    }));
+    app.onNotification("session/cancel", ({ params }) => registry!.cancel(params.sessionId));
     return app;
-}
-
-function requireExistingDirectory(cwd: string): void {
-    if (!isAbsolute(cwd)) {
-        throw RequestError.invalidParams(
-            undefined,
-            `cwd must be an absolute path, but the request sent "${cwd}"`,
-        );
-    }
-    if (!isDirectory(cwd)) {
-        throw RequestError.invalidParams(undefined, `cwd "${cwd}" is not an existing directory`);
-    }
-}
-
-function isDirectory(path: string): boolean {
-    try {
-        return statSync(path).isDirectory();
-    } catch {
-        return false;
-    }
-}
-
-function requireStdioTransport(server: McpServer): McpServerStdio {
-    if ("type" in server && (server.type === "http" || server.type === "sse")) {
-        throw RequestError.invalidParams(
-            undefined,
-            `MCP server "${server.name}" uses the ${server.type} transport; only stdio MCP servers are supported`,
-        );
-    }
-    return server;
-}
-
-async function createSession(
-    factory: PicoSessionFactory,
-    cwd: string,
-    mcpServers: McpServerStdio[],
-): Promise<PicoSession> {
-    try {
-        return await factory(cwd, mcpServers);
-    } catch (error) {
-        if (error instanceof RequestError) throw error;
-        throw RequestError.internalError(
-            undefined,
-            error instanceof Error ? error.message : String(error),
-        );
-    }
-}
-
-function requireClient(client: AgentContext | undefined): AgentContext {
-    if (!client)
-        throw RequestError.internalError(undefined, "the agent is not connected to a client");
-    return client;
 }

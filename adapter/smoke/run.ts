@@ -131,7 +131,10 @@ async function checkInitialize(context: ClientContext, checklist: Checklist): Pr
     if (response.protocolVersion !== 1) claims.push(`protocolVersion ${response.protocolVersion}`);
     if (response.agentInfo?.name !== "pico")
         claims.push(`agentInfo.name ${response.agentInfo?.name}`);
-    if (capabilities.loadSession === true) claims.push("loadSession");
+    if (capabilities.loadSession !== true) claims.push("missing loadSession");
+    if (!capabilities.sessionCapabilities?.list) claims.push("missing sessionCapabilities.list");
+    if (!capabilities.sessionCapabilities?.resume)
+        claims.push("missing sessionCapabilities.resume");
     if (prompt.image === true) claims.push("promptCapabilities.image");
     if (prompt.audio === true) claims.push("promptCapabilities.audio");
     if (prompt.embeddedContext === true) claims.push("promptCapabilities.embeddedContext");

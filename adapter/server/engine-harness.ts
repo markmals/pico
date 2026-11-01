@@ -1,10 +1,10 @@
 import type { McpServerStdio } from "@agentclientprotocol/sdk";
 import type { MockModel, MockResponseSource } from "@oh-my-pi/pi-ai/providers/mock";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent";
+import type { AuthStorage, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,7 +17,7 @@ registerMockApi();
 const temporaryDirectories: string[] = [];
 
 function temporaryDirectory(prefix: string): string {
-    const directory = mkdtempSync(join(tmpdir(), prefix));
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
     temporaryDirectories.push(directory);
     return directory;
 }
@@ -60,7 +60,11 @@ function credentials(): Promise<Credentials> {
 /** A Pico session factory backed by the real engine and a scripted model. */
 export interface MockEngine {
     readonly model: MockModel;
-    createSession(cwd: string, mcpServers: McpServerStdio[]): Promise<PicoSession>;
+    createSession(
+        cwd: string,
+        mcpServers: McpServerStdio[],
+        sessionManager?: SessionManager,
+    ): Promise<PicoSession>;
 }
 
 export async function mockEngine(responses: MockResponseSource): Promise<MockEngine> {
@@ -68,7 +72,15 @@ export async function mockEngine(responses: MockResponseSource): Promise<MockEng
     const model = createMockModel({ responses });
     return {
         model,
-        createSession: (cwd, mcpServers) =>
-            createPicoSession({ cwd, mcpServers, agentDir, dataDir, authStorage, model }),
+        createSession: (cwd, mcpServers, sessionManager) =>
+            createPicoSession({
+                cwd,
+                mcpServers,
+                agentDir,
+                dataDir,
+                authStorage,
+                model,
+                sessionManager,
+            }),
     };
 }

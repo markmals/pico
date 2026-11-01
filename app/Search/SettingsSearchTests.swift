@@ -15,6 +15,11 @@ struct SettingsSearchTests {
         #expect(SettingsSearch.results(for: "zzzz") == [])
     }
 
+    @Test("a query of only punctuation is a search with no results", arguments: ["?", " - ", "…"])
+    func punctuationQueryHasNoResults(query: String) {
+        #expect(SettingsSearch.results(for: query) == [])
+    }
+
     @Test("each query word must start a word of the title")
     func matchesWordPrefixes() throws {
         let results = try #require(SettingsSearch.results(for: "reas lev"))

@@ -67,10 +67,12 @@ final class SettingsNavigator {
     }
 
     /// Opens a `pico://` link, or records it as rejected when it names no settings location.
+    /// A link that is accepted replaces any rejection still awaiting acknowledgement.
     func handle(_ url: URL) {
         do {
-            guard let location = try SettingsLink.location(from: url) else { return }
-            open(location)
+            let location = try SettingsLink.location(from: url)
+            rejectedLink = nil
+            if let location { open(location) }
         } catch {
             rejectedLink = url
         }

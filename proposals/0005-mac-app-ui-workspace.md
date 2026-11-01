@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -238,7 +238,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility. Configuration controls remain visibly unconnected; no demonstration workflow is exercised.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the first implementation (`9dd9859`) was reviewed and returned for these revisions. The revised preview is produced after Mark approves the revision.
+- Current state: the revised Debug `Pico.app` built from `e3db34d` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run` rebuilds and opens it from any checkout of the branch. It was exercised in the background with `open -g` and `pico://` links, and observed with `recon` screenshots and accessibility trees, without bringing Pico forward. Typing in search and the View menu's Back/Forward state while Pico is frontmost were not observed that way and are left for the human preview.
 
 ## Policies and decisions checked
 

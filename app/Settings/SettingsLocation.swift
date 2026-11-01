@@ -7,10 +7,11 @@ enum SettingsLocation: Hashable, Sendable {
     case item(SettingsItem)
 
     /// Every location, as the sidebar orders them: each pane, then its items.
-    static let allInSidebarOrder: [SettingsLocation] = SettingsDestination.allCases.flatMap {
-        destination in
-        [.destination(destination)] + destination.items.map(SettingsLocation.item)
-    }
+    static let allInSidebarOrder: [SettingsLocation] = SettingsDestination.sidebarGroups
+        .flatMap(\.self)
+        .flatMap { destination in
+            [.destination(destination)] + destination.items.map(SettingsLocation.item)
+        }
 
     var destination: SettingsDestination {
         switch self {

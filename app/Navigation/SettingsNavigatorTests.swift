@@ -122,4 +122,15 @@ struct SettingsNavigatorTests {
         navigator.goBack()
         #expect(navigator.current == .general)
     }
+
+    @Test("a link that opens a location clears an earlier rejected link")
+    func validLinkClearsRejection() throws {
+        let navigator = SettingsNavigator()
+        navigator.handle(try #require(URL(string: "pico://settings/unknown")))
+
+        navigator.handle(try #require(URL(string: "pico://settings/tools/shell")))
+
+        #expect(navigator.rejectedLink == nil)
+        #expect(navigator.current == .tools)
+    }
 }

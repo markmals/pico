@@ -2,11 +2,12 @@ import Foundation
 
 /// Finds panes and settings by the words of their localized titles and keywords.
 enum SettingsSearch {
-    /// The locations matching `query` in sidebar order, or `nil` when the query has no words
-    /// and so is not a search.
+    /// The locations matching `query` in sidebar order, or `nil` when the query is empty after
+    /// trimming whitespace and so is not a search.
     static func results(for query: String) -> [SettingsLocation]? {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let queryWords = words(in: query)
-        guard !queryWords.isEmpty else { return nil }
+        guard !queryWords.isEmpty else { return [] }
         return SettingsLocation.allInSidebarOrder.filter { location in
             let candidateWords = searchableWords(of: location)
             return queryWords.allSatisfy { queryWord in

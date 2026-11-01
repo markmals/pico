@@ -12,13 +12,13 @@ supersedes: []
 
 ## Summary
 
-Make the existing Pico target a runnable macOS 27 UI workspace for refining the companion app's visual design. Build the native window, sidebar, and representative pane layouts with explicitly labelled, in-memory demonstration state. Configuration, runtime inspection, authentication, and Sesh integration remain separate work.
+Scaffold the existing Pico target's native macOS 27 window, navigation, and settings-pane layouts for visual refinement. Configuration controls remain unconnected UI stubs. Their functionality is deferred until issue #12's configuration contract exists; this proposal adds neither real configuration behavior nor an interactive demonstration model.
 
 ## Motivation
 
 Pico's native target has project metadata but no sources or window. Generating the Xcode workspace cannot answer whether its navigation, forms, sizing, or typography work in a real Mac app. Mark needs a runnable UI to iterate on before implementing the configuration contract and connecting it to the adapter.
 
-[Issue #18](https://github.com/markmals/pico/issues/18) originally combines that workspace with a General pane backed by real runtime and configuration data, making [#12](https://github.com/markmals/pico/issues/12) a prerequisite. Mark narrowed this proposal to UI scaffolding and visual iteration, selected the existing Pico target instead of a separate prototype target, and chose to retain the manifest's macOS 27 floor. This proposal deliberately changes that delivery boundary; it does not claim to deliver #18's original integration requirements.
+[Issue #18](https://github.com/markmals/pico/issues/18) originally combines that workspace with a General pane backed by real runtime and configuration data. This proposal covers only its UI scaffolding. Mark selected the existing Pico target and macOS 27, and explicitly deferred settings functionality until [#12](https://github.com/markmals/pico/issues/12) is implemented. The scaffold can proceed before #12; connecting its controls cannot.
 
 ## Domain grounding
 
@@ -33,15 +33,15 @@ Pico's native target has project metadata but no sources or window. Generating t
 
 The visual authority is macOS System Settings: native sidebar selection, a titled detail pane, grouped forms, SF Symbols, and system typography and materials. This is a local desktop utility, not a web dashboard, quota monitor, menu-bar app, or second conversation UI.
 
-A demonstration value is not a configured setting, an authenticated account, an installed engine, or an observed readiness state. The prototype must keep those concepts separate in both its UI and its implementation. A destination identifies a pane, not an adapter capability; exposing a prototype destination does not advertise that capability to Sesh.
+A pane stub is a visual layout, not a configured setting, authenticated account, installed engine, or observed readiness state. A navigation destination does not advertise an adapter capability. Unconnected controls must look unavailable rather than imply that Pico can save or apply them.
 
 ### Quality bar
 
-The workspace launches as an actual app, all six destinations have representative native layouts, and navigation and local control interactions work. It must be useful for evaluating hierarchy, spacing, scrolling, keyboard behavior, and appearance without suggesting that it has saved or applied anything. An empty view with a title is not the deliverable.
+The workspace launches as an actual app with six pane layouts and working navigation and scrolling. It supports visual refinement of hierarchy, spacing, sizing, typography, and native controls. Settings remain visibly unconnected; no demonstration behavior or data-loading layer is needed.
 
 ### Remaining uncertainty
 
-Exact spacing, symbol choices, and control density are refined against the running app during implementation and human preview. No configuration schema, credential bridge, model catalog, or Sesh registration API is assumed or selected here. Their absence does not block this UI-only workspace.
+Exact spacing, symbol choices, and control density are refined against the running app during implementation and human preview. #12 determines the later configuration contract. This proposal does not predesign that contract or assume provider, credential, runtime, or Sesh APIs.
 
 ## Existing baseline
 
@@ -55,26 +55,26 @@ The native-app section of [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configurat
 
 ## Proposed solution
 
-Use the existing Pico app target for one native settings-style window with six sidebar destinations. Give each destination a concrete grouped layout using sample content and local interaction state. Keep a persistent prototype notice visible in every destination. Do not create a separate prototype app or introduce backend protocols merely to imitate a future configuration service.
+Use the existing Pico app target for one native settings-style window with six sidebar destinations and grouped pane layouts. Configuration rows and controls are static, visibly unconnected stubs. Only window management, navigation, and scrolling work. Do not create a separate prototype target, mock configuration service, or interactive demonstration model.
 
 ```text
-Launch Pico → General → navigate and edit demonstration controls → inspect the design
-Quit and relaunch → fresh demonstration state; real Pico and OMP configuration unchanged
+Launch Pico → choose a pane → inspect and refine its unconnected UI
+After #12 is implemented → connect settings in subsequent implementation work
 ```
 
-This is a complete UI-iteration workspace, not a completed configuration app. Its capability is the running interface; future integration proposals replace the demonstration content with real behavior.
+The deliverable is the UI scaffold, not a functional configuration app. It must be runnable for visual iteration, but it need not simulate the functionality that will be added later.
 
 ## Detailed design
 
-### Prototype boundary
+### Stub boundary
 
-The shared window chrome displays a concise notice equivalent to “UI prototype — changes are not saved or applied.” It remains visible when switching destinations and is exposed to accessibility clients. Sample account, model, path, and diagnostic content is also identified as example content where it could otherwise be mistaken for information about this Mac.
+The shared window displays a concise notice equivalent to “UI scaffold — configuration not connected.” Configuration controls remain disabled or display an explicit unconnected value. Any control shown for layout must make its unavailable state clear to both sighted users and accessibility clients.
 
-Controls used to explore layout and interaction can change explicitly owned, in-memory demonstration state. They must not use `AppStorage`, a preferences file, the configuration contract, Keychain, an OMP credential store, or adapter session state. All demonstration changes reset when the process exits. UI state survives navigation within that process; there is no cross-launch restoration promise in this slice.
+Do not add editable demonstration settings, populated sample accounts or model catalogs, working search/filter behavior, simulated authentication, fake progress, or successful-looking save/apply results. Use neutral placeholders such as “Not connected” rather than inventing a configured value. A search field or picker can be present as a disabled layout stub.
 
-Actions whose meaning requires a real external effect—sign in, save or apply configuration, choose a real executable, register with Sesh, inspect a runtime, or export diagnostics—are visibly unavailable with nearby explanatory text. Do not wire them to successful-looking alerts, fake progress, empty callbacks, or fabricated connection results. Do not collect real credentials.
+The app performs no configuration read/write, persistence, credential access, provider request, runtime discovery, helper launch, diagnostic collection, or Sesh operation. Version, runtime-status, and configuration-location rows are also unconnected UI; this slice does not load their real values.
 
-The app performs no runtime discovery, helper launch, provider request, configuration read/write, or Sesh operation. Reading its own bundle metadata for the app version is permitted and must be distinguished from the example engine/version rows. No actual configuration pathname is inferred from the current Pico data directory.
+Do not define a configuration schema, backend protocol, mock service, or future integration abstraction to support these stubs. #12 remains the prerequisite for adding configuration functionality; its completion does not itself imply that every provider or Sesh workflow has been implemented.
 
 ### Window and navigation
 
@@ -82,56 +82,55 @@ The app uses a single primary SwiftUI `Window` scene, with AppKit only where a r
 
 A two-column `NavigationSplitView` contains a native sidebar list and the selected detail pane. Its destinations, in order, are General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Each row has a restrained SF Symbol and a visible selected state. The detail title identifies the active destination. No additional onboarding window, status menu, dashboard, search destination, or chat view is introduced.
 
-Use stable destination identities rather than labels or list indices for navigation state. Selection, each pane's local demonstration edits, filter text, and scroll position survive leaving a destination and returning during the current process. A pane must not borrow another pane's scroll position or lose its state because its view was recreated. Do not persist those demonstration values outside the UI process.
+Use stable destination identities rather than labels or list indices. Selection and each pane's scroll position survive navigation within the current process. There are no editable setting values or filters to retain. No cross-launch restoration or settings persistence is required.
 
-Start with a 920-by-680-point default window and a 760-by-520-point minimum. Use a sidebar with a 240-point ideal width and a 220-to-320-point range. These are initial visual-iteration dimensions, not fixed-size screenshots: resizing must keep controls reachable, wrap explanatory text and long sample values, and allow the detail content to scroll. Standard sidebar visibility controls remain available. Human visual refinements may adjust these dimensions without adding integration behavior.
+Start with a 920-by-680-point default window and a 760-by-520-point minimum. Use a sidebar with a 240-point ideal width and a 220-to-320-point range. These are initial visual-iteration dimensions, not fixed-size screenshots: resizing keeps the layout readable, wraps explanatory text, and allows the detail content to scroll. Standard sidebar visibility controls remain available. Human visual refinements may adjust these dimensions without adding configuration behavior.
 
-### Representative pane layouts
+### Pane stubs
 
 Every pane uses system text styles, grouped forms or native lists where appropriate, standard controls, and explanatory copy adjacent to the relevant rows. The same row and section conventions recur across panes; do not introduce a generic schema-driven form renderer or a custom design system for six screens.
 
-| Destination | UI material for this workspace | Truth boundary |
-| --- | --- | --- |
-| General | Runtime, version, and configuration-location sections with the layout needed for the eventual overview. Show the app version from its own bundle metadata. | Runtime and engine rows say they are not connected or checked in the UI prototype. The configuration-location row is not selected and does not assert that a settings file exists. |
-| Providers & Accounts | A small, explicitly sample provider/account list and grouped account/credential-source detail, sufficient to inspect selection and account-row density. | Sample identities are not imported accounts. Sign-in, add-account, and disconnect operations are unavailable; no API-key or password entry accepts real secrets. |
-| Models | A labelled example model list, local filtering, and demonstration model/reasoning controls to evaluate list and form composition. | The sample list is not an available-model catalog. Its choices apply only to demonstration state and define neither supported engine values nor persisted defaults. |
-| Tools & Integrations | A read-only curated-policy explanation and representative integration-detail rows, including the external `intellisense` location's eventual placement. | Any example path is labelled; it is not resolved or validated. No control enables eval, a built-in LSP, or native OMP delegation. Executable selection is unavailable. |
-| Sesh | Grouped launch-details and connection/setup rows that establish the layout of the eventual handoff. | Connection is explicitly not inspected. No registration, file picking, private API call, or change to the active Sesh agent occurs. |
-| Diagnostics & About | App identity/version, explanatory support content, and a clearly labelled example diagnostic presentation. | No real logs, account information, readiness result, or engine version is collected. Diagnostic refresh/export operations are unavailable. |
+| Destination | UI stub |
+| --- | --- |
+| General | Grouped runtime, app/engine version, and configuration-location rows with unconnected values. No readiness checks or location selection. |
+| Providers & Accounts | Provider/account section layout and disabled account/credential-source controls. No sample accounts, credential entry, sign-in flow, or provider discovery. |
+| Models | Model and reasoning-selection layout with disabled controls. A catalog/search area may be laid out, but contains no fabricated catalog or working filter. |
+| Tools & Integrations | Curated-policy explanation and unconnected integration-detail rows, including the eventual external `intellisense` location control. No executable selection or validation. |
+| Sesh | Grouped launch-details and connection/setup layout with unconnected values and disabled actions. No registration or connection inspection. |
+| Diagnostics & About | App-identity, version, and diagnostic-section layout. Version and diagnostic values are unconnected; no sample diagnostic results or collection/export behavior. |
 
-Use enough sample content to evaluate typical rows, long labels and paths, and scrolling. Keep it local and finite; it is visual material, not a second provider integration engine or a speculative configuration schema. Do not implement authentication sheets, setup flows, catalogs, or error-recovery workflows merely to populate the layouts.
+These are visual structures for refinement, not full workflow implementations. Do not add setup sheets, authentication screens, sample-data systems, loading/error state machines, or recovery flows to make the scaffold appear functional.
 
-Light and Dark appearances follow the system, as do accent color, Increase Contrast, and Reduce Motion. Sidebar navigation, local controls, and scrolling work from the keyboard. VoiceOver announces destination labels, selected state, form labels, prototype scope, and why unavailable actions are unavailable. Color or an icon alone cannot distinguish sample content or convey state.
+Light and Dark appearances follow the system, as do accent color, Increase Contrast, and Reduce Motion. Navigation and scrolling work from the keyboard. VoiceOver announces destination labels, selected state, row labels, and the unavailable status of stubbed controls. Color or an icon alone cannot convey that a control is unconnected.
 
 ### Workspace and task integration
 
-Put the app sources under `app/`, grouped by app entry/navigation and the pane they implement. Update `Project.swift` to include those sources and the native behavioral test targets; never edit the generated project. The app entry point must launch the complete UI described above, not an empty view that exists only to make the target compile.
+Put app sources under `app/`, grouped by app entry/navigation and pane. Point `Project.swift` at those sources; never edit the generated project. The entry point launches the actual navigable scaffold rather than an empty view.
 
 Add the following mise tasks with the code that makes them real:
 
 | Proposed task | Required result |
 | --- | --- |
 | `macos:build` | Generate through Tuist and compile the actual Debug app with `xcodebuild`, using `.build/macos` as the derived-data location. |
-| `macos:test` | Run native behavioral tests through `xcodebuild`, including the UI navigation/state checks below. A failure remains a failed task. |
 | `macos:run` | Build and open this checkout's `.build/macos/Build/Products/Debug/Pico.app`, not an older installed copy. |
 
-Expand `macos:fmt` and `macos:lint` to include the app and native test sources. Extend `macos:check` from manifest inspection to building the real app, retaining its non-macOS skip. Keep `mise run check` as the repository gate and run `macos:test` as the additional native behavioral gate. Do not add a package script block, second formatter, shell/Python wrapper, or placeholder release task.
+Expand `macos:fmt` and `macos:lint` to include app sources. Extend `macos:check` from manifest inspection to building the app, retaining its non-macOS skip and the existing `mise run check` entry point. Do not add a package script block, second formatter, shell/Python wrapper, or placeholder release task.
 
-Use Apple's test frameworks. Permanent tests cover consumer-visible UI boundaries: navigating away and back preserves each pane's own edits/filter and scroll position; Command-Comma targets the existing window; restarting resets demonstration edits. Do not add tests that merely count sidebar rows, match prototype wording, compare fixture copies, or assert that a view can be constructed.
+This UI-only slice adds no configuration logic or demonstration behavior to unit-test. Do not introduce native test targets or a `macos:test` task merely to test static wiring, labels, or placeholder values. Preserve the existing suites and use the running app as the layout/navigation smoke check; add native behavioral tests with the functionality that warrants them.
 
 ### Implementation evidence and documentation
 
-Derive applicable failing behavioral tests from this design before app implementation. Write the UI-workspace guide from this proposal before the app code, explaining how to build, run, inspect, and reset it and what is deliberately unconnected. There is no configuration-persistence or real-runtime acceptance scenario in this slice.
+Write the UI-workspace guide from this proposal before the app code. Explain how to build, run, and inspect the scaffold, and that settings stay unconnected until #12 and the subsequent integration work. There is no configuration-persistence, real-runtime, or simulated-settings acceptance scenario in this slice.
 
-After implementation, run `mise run check` and `mise run macos:test`. Launch with `mise run macos:run` and exercise the actual window: visit every pane, change local demonstration values, filter the sample models, scroll away and back, use Command-Comma, resize to the minimum and a larger window, and quit/relaunch to observe reset behavior. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion on the running surface. Record what was exercised and any platform or automation limitation rather than substituting a generated project or passing tests for visual proof.
+After implementation, run `mise run check`. Launch with `mise run macos:run` and exercise the actual window: visit every pane, scroll away and back, use Command-Comma, and resize to the minimum and a larger window. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion. Confirm that configuration controls remain unconnected and cannot perform or simulate external actions. Record the exercised surface and any platform limitation rather than treating project generation or passing repository tests as visual proof.
 
-Update the source-free descriptions, native command documentation, and macOS floor in the relevant existing repository documents. Revise the brief and agent contract to permit this explicitly labelled UI-only stage in the Pico target while retaining the prohibition on fake operational success. Record that real configuration, account, runtime, and Sesh behavior is not implemented. Update #18's scope/dependency description to distinguish this UI delivery from its original integration expectations; do not close the integration requirements as satisfied by sample content.
+Update the source-free descriptions, native command documentation, and macOS floor in the relevant existing repository documents. Revise the brief and agent contract narrowly to allow these explicit UI stubs before configuration functionality, retaining the prohibition on fake operational success. Update #18's description to distinguish this UI delivery from its original integration expectations and preserve #12 as the dependency for adding configuration functionality.
 
 ## Compatibility
 
 The ACP adapter, Homebrew executable, credentials, Sesh registrations, and existing sessions are unchanged. No configuration contract, storage migration, credential reuse, or compatibility bridge is introduced. The app keeps `me.malstrom.pico` and the manifest's macOS 27 floor; this proposal does not promise macOS 14 support.
 
-Demonstration choices are deliberately not migration input for future real settings. Connecting the UI later must not silently promote a sample account, path, model, or reasoning value into user configuration.
+No placeholder value becomes a saved preference or a default for later integration. Future settings behavior uses #12's contract rather than turning layout stubs into a second configuration model.
 
 ## Implications on adoption
 
@@ -142,15 +141,16 @@ The prototype remains unsigned under the current project settings. No Developer 
 ## Scope
 
 - A runnable UI-only application in the existing Pico target, with single-window lifecycle and native sidebar navigation.
-- Six representative pane layouts and explicitly labelled, process-local demonstration interactions for visual iteration.
-- Real native build/test/run tasks, behavioral coverage, accessibility checks, and an exercised local app preview.
+- Six settings-pane stubs with static layouts and visibly unconnected configuration controls.
+- Native build/run tasks, formatting/build checks, accessibility inspection, and an exercised local app preview.
 - A guide and focused revisions to the brief, contract, issue boundary, and current-state documentation; preserve macOS 27 and the existing version source.
 
 ### Out of scope
 
-- The versioned configuration contract in #12, reading or writing actual settings, persistence, live changes, and session precedence. #12 is not a dependency of this UI-only slice.
+- Issue #12's configuration contract and all settings functionality: reading/writing settings, persistence, live changes, and session precedence. The scaffold can precede #12; configuration functionality waits for it.
 - Runtime readiness detection, helper discovery or bundling, engine version inspection, credential access, provider authentication, real model catalogs, or operational diagnostic collection.
 - Sesh setup/registration, adapter behavior, process channels, network services, and changes to the user's OMP configuration or active Sesh agent.
+- Demonstration settings/state, sample accounts/catalogs, working model filters, simulated workflows, backend abstractions, and test infrastructure for those behaviors.
 - A separate prototype target, webview, menu-bar app, custom UI framework, shipping package, signing/notarization, or release.
 - Completion of #18's original real-data General pane or the full companion app described in the brief. Those integration outcomes require their own approved intent and evidence.
 
@@ -159,7 +159,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Repository shape: native macOS app built from this branch's existing Tuist target.
 - Artifact: the actual local Debug `Pico.app` produced by `mise run macos:build` and opened by `mise run macos:run`. This is the cheapest realistic surface for visual refinement; screenshots can accompany it but do not replace it.
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
-- Exercise: the native navigation, grouped pane layouts, local demonstration interactions, scrolling, resizing, appearance, and accessibility checks in Detailed design. All panes remain visibly prototype-only.
+- Exercise: native navigation, pane layouts, scrolling, resizing, appearance, and accessibility. Configuration controls remain visibly unconnected; no demonstration workflow is exercised.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
 - Current state: no app preview exists during proposal development; no app sources are added until the human approves implementation.
 
@@ -168,20 +168,21 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Formal policy records: None. `policies/` contains only its index.
 - Formal decision records: None. `decisions/` contains only its index.
 - [VISION.md](../VISION.md) keeps the companion native and leaves conversation UI in Sesh. The workspace preserves that direction but claims only UI behavior, not configured capabilities.
-- [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configuration-app) supplies the System Settings reference and destination vocabulary. This proposal explicitly revises its “no unconnected panes” staging restriction for a labelled, local UI workspace; its real integration outcomes remain unfulfilled.
-- The agent contract's source-free and no-placeholder-source restrictions require a matching narrow revision when this proposal is implemented. A completed navigable UI prototype is allowed; an empty entry point, fake connection, or inert operation pretending to work is not.
+- [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configuration-app) supplies the System Settings reference and destination vocabulary. This proposal explicitly revises its “no unconnected panes” staging restriction to permit UI stubs before #12-backed functionality; its real integration outcomes remain unfulfilled.
+- The agent contract's source-free and no-placeholder-source restrictions require a matching narrow revision when this proposal is implemented. The allowed deliverable is the runnable UI scaffold with visibly unconnected controls, not fake connections or actions pretending to work.
 - `Project.swift` remains the source of truth for the generated project. Mark chose macOS 27, resolving its conflict with the older floor in the prose. `Config/Version.xcconfig` remains projected from Changesets.
 - [Proposal 0002](0002-pico-homebrew-distribution.md) remains the executable's install/update contract. This UI workspace changes neither the formula nor the signing and packaging prerequisites for a future app distribution.
 
 ## Future directions
 
-Approved integration proposals can connect individual panes to the shared configuration contract and public SDK operations, replacing demonstration content rather than treating it as a saved preference. The visual design can be refined against this workspace before those boundaries are implemented. No future service layer, schema, or authentication flow is designed here.
+After #12 is implemented, subsequent work can connect the stubbed settings through its shared configuration contract and the relevant real integrations. Visual refinement can happen before that connection. This proposal does not implement or simulate those future behaviors.
 
 ## Alternatives considered
 
-- **Separate prototype target:** isolates demonstration content from the product target, but duplicates app/workspace setup and creates a later integration step. Mark selected the existing Pico target instead.
+- **Separate prototype target:** isolates the scaffold from the product target, but duplicates workspace setup and creates a later integration step. Mark selected the existing Pico target instead.
 - **Wait for #12 and implement a real-data General pane first:** follows #18's original boundary and avoids an unconnected UI stage, but prevents the requested workspace and visual iteration from proceeding independently. Mark explicitly chose UI-first work.
-- **Only an empty shell or SwiftUI previews:** cheaper to compile, but does not provide the full running navigation and representative pane layouts needed to assess the design. Previews can supplement the app, not replace it.
+- **Interactive demonstration app:** would add temporary settings, fixtures, filters, and simulated workflows. Mark explicitly wants UI stubs only; that behavior is unnecessary and could preempt #12's contract.
+- **Only an empty shell or SwiftUI previews:** cheaper to compile, but does not provide running sidebar navigation and pane layouts for visual refinement. Previews can supplement the scaffold, not replace it.
 
 ## Open questions
 

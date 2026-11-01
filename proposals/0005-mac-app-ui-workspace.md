@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: draft
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -186,4 +186,4 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 
 ## Open questions
 
-None about the selected scope, target, or macOS floor. Visual refinements remain part of implementation and human preview. This proposal remains `draft`; the human has not approved implementation.
+None about the selected scope, target, or macOS floor. Mark approved implementation on 2026-11-01. Visual refinements remain part of implementation and human preview; configuration functionality remains deferred until #12.

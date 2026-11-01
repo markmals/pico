@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ScaffoldNotice: View {
+    @Environment(\.sampleSettings) private var sample
+
     var body: some View {
-        Label("UI scaffold — configuration not connected", systemImage: "hammer")
+        notice
             .font(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -13,5 +15,13 @@ struct ScaffoldNotice: View {
                 Divider()
             }
             .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var notice: some View {
+        if sample == nil {
+            Label("UI scaffold — configuration not connected", systemImage: "hammer")
+        } else {
+            Label("Sample data — nothing here is saved or connected", systemImage: "theatermasks")
+        }
     }
 }

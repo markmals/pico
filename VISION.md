@@ -11,7 +11,7 @@ Pico exists to let Sesh drive an agent built on the OMP SDK over the Agent Clien
 
 OMP supplies the provider/model loop and permitted coding tools. Sesh supplies the conversation UI, host tools through MCP, workspaces, and the visible child-session tree. Pico connects those systems and enforces a selected runtime policy.
 
-The user installs and updates Pico with Homebrew and configures it in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. What exists of that app in the repository today is a UI scaffold: a window, sidebar navigation, and six settings panes whose controls are visibly unconnected. No setting, authentication flow, or diagnostic reaches anything real yet.
+The user installs and updates Pico with Homebrew and configures it in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. What exists of that app in the repository today is a UI scaffold: a window, sidebar navigation, and six settings panes whose controls are visibly unconnected, with a labelled sample-data mode for reviewing their working state. No setting, authentication flow, or diagnostic reaches anything real yet.
 
 ## Goals
 

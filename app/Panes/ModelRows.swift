@@ -12,6 +12,7 @@ struct DefaultModelPickerRow: View {
             } label: {
                 Text(SettingsItem.model.title)
             }
+            .accessibilityLabel(Text(SettingsItem.model.title))
             .settingsRow(.model)
         } else if settings != nil {
             UnavailablePicker(item: .model, reason: "None available")
@@ -42,6 +43,7 @@ struct ReasoningLevelPickerRow: View {
             } label: {
                 Text(SettingsItem.reasoningLevel.title)
             }
+            .accessibilityLabel(Text(SettingsItem.reasoningLevel.title))
             .settingsRow(.reasoningLevel)
         } else if settings != nil {
             UnavailablePicker(item: .reasoningLevel, reason: "None available")
@@ -60,6 +62,7 @@ struct CatalogSearchRow: View {
             TextField(text: $settings.catalogQuery, prompt: Text("Model or provider")) {
                 Text(SettingsItem.catalogSearch.title)
             }
+            .accessibilityLabel(Text(SettingsItem.catalogSearch.title))
             .settingsRow(.catalogSearch)
         } else {
             TextField(text: .constant(""), prompt: Text("Not connected")) {

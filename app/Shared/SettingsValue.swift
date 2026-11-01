@@ -49,7 +49,6 @@ struct SettingsValueText: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .textSelection(.enabled)
         case .status(let text, let tone):
             HStack(spacing: 4) {
                 Image(systemName: tone.symbol)

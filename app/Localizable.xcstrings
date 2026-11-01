@@ -83,9 +83,6 @@
     "Diagnostic report" : {
 
     },
-    "Diagnostic reports leave out credentials and the contents of your files." : {
-
-    },
     "Diagnostics" : {
 
     },
@@ -294,6 +291,9 @@
 
     },
     "Recent errors" : {
+
+    },
+    "Recent errors from Pico's sessions appear here as they happen." : {
 
     },
     "Register" : {

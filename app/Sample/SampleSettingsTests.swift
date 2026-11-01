@@ -68,6 +68,19 @@ struct SampleSettingsTests {
         #expect(settings.reasoningLevel == model.defaultReasoningLevel)
     }
 
+    @Test("a model whose provider needs sign-in cannot become the default")
+    func unavailableModelIsNotChosen() throws {
+        let settings = SampleSettings()
+        let original = settings.defaultModel
+        let unavailable = try #require(
+            SampleModel.catalog.first { !settings.isSignedIn($0.provider) }
+        )
+
+        settings.chooseDefaultModel(unavailable)
+
+        #expect(settings.defaultModel == original)
+    }
+
     @Test("signing out the default model's provider moves the default to the first available model")
     func signingOutMovesTheDefaultModel() throws {
         let settings = SampleSettings()
@@ -176,6 +189,17 @@ struct SampleSettingsTests {
         settings.catalogQuery = provider.name.lowercased()
 
         #expect(settings.catalogResults == SampleModel.catalog.filter { $0.provider == provider })
+    }
+
+    @Test("a catalog query must start a word, not appear inside one")
+    func catalogMatchesWordPrefixesOnly() throws {
+        let settings = SampleSettings()
+        let model = try #require(SampleModel.catalog.first)
+        let word = try #require(model.name.split(separator: " ").first { $0.count > 2 })
+
+        settings.catalogQuery = String(word.dropFirst())
+
+        #expect(!settings.catalogResults.contains(model))
     }
 
     @Test(

@@ -70,7 +70,9 @@ final class SampleSettings {
         }
     }
 
+    /// Makes `model` the default when its provider is signed in; otherwise changes nothing.
     func chooseDefaultModel(_ model: SampleModel) {
+        guard isSignedIn(model.provider) else { return }
         defaultModel = model
         if !model.reasoningLevels.contains(reasoningLevel) {
             reasoningLevel = model.defaultReasoningLevel

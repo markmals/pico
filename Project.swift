@@ -8,6 +8,9 @@ let project = Project(
             "SWIFT_VERSION": "6.0",
             "SWIFT_STRICT_CONCURRENCY": "complete",
             "SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY": "YES",
+            // The Swift compiler extracts the app's LocalizedStringResource literals
+            // into app/Localizable.xcstrings, as Xcode's own app template does.
+            "SWIFT_EMIT_LOC_STRINGS": "YES",
             // Local configuration checks do not need signing credentials.
             "CODE_SIGNING_ALLOWED": "NO",
             // Direct OMP configuration access is used for the prototype; sandbox
@@ -34,8 +37,11 @@ let project = Project(
                     "LSApplicationCategoryType": "public.app-category.productivity",
                 ]
             ),
-            // Metadata-only target; real app sources are required before building.
-            sources: []
+            // The app's own Swift, and the string catalog its localized titles and
+            // copy resolve through. Both are globs: a new file under app/ is picked
+            // up by the next generation, and the generated project is never edited.
+            sources: ["app/**/*.swift"],
+            resources: ["app/**/*.xcstrings"]
         )
     ]
 )

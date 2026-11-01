@@ -11,7 +11,7 @@ Pico exists to let Sesh drive an agent built on the OMP SDK over the Agent Clien
 
 OMP supplies the provider/model loop and permitted coding tools. Sesh supplies the conversation UI, host tools through MCP, workspaces, and the visible child-session tree. Pico connects those systems and enforces a selected runtime policy.
 
-The user configures all of that in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. What exists in the repository today is that app's project configuration. No screen, no authentication flow, and no bundled runtime has been written.
+The user installs and updates Pico with Homebrew and configures it in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. What exists of that app in the repository today is its project configuration. No screen and no authentication flow have been written.
 
 ## Goals
 
@@ -19,15 +19,15 @@ The user configures all of that in a native macOS companion app rather than a te
 - Keep agent-requested execution visible, with accurate progress, results, errors, and cancellation.
 - Use the user's preferred external `intellisense` CLI without a competing built-in LSP integration.
 - Give delegated work one visible execution backend through Sesh child sessions.
-- Let a user install, configure and update Pico from a native Mac app, without a terminal, a package manager, or a hand-edited configuration file.
+- Let a user install and update Pico with one Homebrew command (`brew install markmals/tap/pico`) and configure it from a native Mac app, without a hand-edited configuration file.
 
 ## Minimum viable product
 
-The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. The core adapter turn path exists ([proposal 0001](proposals/0001-acp-adapter-core.md)): retained tools, model and thinking-level selection, and cancellation work. Child-session launches now inherit the parent’s registered Pico agent and reject harness overrides ([proposal 0003](proposals/0003-pico-only-child-sessions.md)), with a real Pico parent/child flow exercised in Sesh. Session restoration and the broader delegation handoff, result-state and integration workflow remain follow-up work.
+The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. The core adapter turn path exists ([proposal 0001](proposals/0001-acp-adapter-core.md)): retained tools, model and thinking-level selection, and cancellation work. It ships as `pico`, a single executable installed through Homebrew ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Child-session launches now inherit the parent’s registered Pico agent and reject harness overrides ([proposal 0003](proposals/0003-pico-only-child-sessions.md)), with a real Pico parent/child flow exercised in Sesh. Session restoration and the broader delegation handoff, result-state and integration workflow remain follow-up work.
 
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
-The companion app is part of that minimum: a native macOS application that installs what Pico needs, signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Prepared so far: a Tuist project definition and the pinned toolchain that generates it.
+The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Prepared so far: a Tuist project definition and the pinned toolchain that generates it.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) supplies the implementation brief and observable acceptance scenarios. It informs Workbench proposal development and does not replace proposal approval.
 
@@ -69,3 +69,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-10-29 | Record the Pico runtime direction and preserve the template's Workbench and Beads workflow. | N/A: project preparation brief |
 | 2026-10-29 | Make the native macOS companion app Pico's configuration surface and prepare its project configuration. | N/A: project preparation brief |
 | 2026-11-01 | Record the exercised core adapter capabilities and Pico-only child-session launches. | [proposal.0001](proposals/0001-acp-adapter-core.md), [proposal.0003](proposals/0003-pico-only-child-sessions.md) |
+| 2026-11-01 | Make Homebrew Pico's install and update path, with the app as the configuration surface. | [proposal.0002](proposals/0002-pico-homebrew-distribution.md) |

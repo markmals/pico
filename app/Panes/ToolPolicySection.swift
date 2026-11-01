@@ -13,9 +13,11 @@ struct ToolPolicySection: View {
             ToolPolicyRow(name: "Built-in LSP", status: "Excluded", symbol: "stethoscope")
             ToolPolicyRow(name: "Native delegation", status: "Excluded", symbol: "person.2")
         } header: {
-            Text("Curated tool policy")
+            Text("Built-in tool policy")
         } footer: {
-            Text("The roster is fixed in the adapter and is not editable here.")
+            Text(
+                "The adapter fixes these built-in tools; each session also adds the tools Sesh supplies. Not editable here."
+            )
         }
     }
 }

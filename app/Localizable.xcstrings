@@ -16,6 +16,9 @@
     "Built-in LSP" : {
 
     },
+    "Built-in tool policy" : {
+
+    },
     "Catalog" : {
 
     },
@@ -38,9 +41,6 @@
 
     },
     "Credential status" : {
-
-    },
-    "Curated tool policy" : {
 
     },
     "Defaults" : {
@@ -187,10 +187,10 @@
     "Supported providers come from the engine; none are listed here." : {
 
     },
-    "The helper's location is not resolved while settings stay unconnected." : {
+    "The adapter fixes these built-in tools; each session also adds the tools Sesh supplies. Not editable here." : {
 
     },
-    "The roster is fixed in the adapter and is not editable here." : {
+    "The helper's location is not resolved while settings stay unconnected." : {
 
     },
     "The settings location is not read and cannot be chosen yet." : {

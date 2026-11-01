@@ -10,7 +10,11 @@
  *   --instructions <text>    return `<text>` as the server's instructions
  *   --exit-after-initialize  answer `initialize`, then exit before `tools/list`
  *   --tool <name>            advertise `<name>` instead of the default tools (repeatable)
+ *   --input-schema <json>    schema for tools selected with `--tool`
+ *   --calls-file <path>      append each received tool call as JSONL
  */
+
+import { appendFileSync } from "node:fs";
 
 interface JsonRpcRequest {
     jsonrpc: "2.0";
@@ -123,9 +127,14 @@ async function handle(
             send({ id: request.id, result: { tools } });
             return;
         }
-        case "tools/call":
+        case "tools/call": {
+            const callsFile = valuesOf(args, "--calls-file")[0];
+            if (callsFile !== undefined) {
+                appendFileSync(callsFile, `${JSON.stringify(request.params)}\n`);
+            }
             send({ id: request.id, result: callResult(args, request) });
             return;
+        }
         default:
             send({
                 id: request.id,
@@ -140,12 +149,13 @@ async function main(): Promise<void> {
     if (pidFile !== undefined) await Bun.write(pidFile, String(process.pid));
 
     const requested = valuesOf(args, "--tool");
+    const inputSchema = valuesOf(args, "--input-schema")[0];
     const tools =
         requested.length > 0
             ? requested.map(name => ({
                   name,
                   description: `Fake ${name}.`,
-                  inputSchema: NO_ARGUMENTS,
+                  inputSchema: inputSchema === undefined ? NO_ARGUMENTS : JSON.parse(inputSchema),
               }))
             : DEFAULT_TOOLS;
 

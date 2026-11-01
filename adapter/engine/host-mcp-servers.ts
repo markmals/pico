@@ -9,6 +9,7 @@ import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp";
 import { createMCPToolName } from "@oh-my-pi/pi-coding-agent/mcp/tool-bridge";
 
 import { PicoSessionError } from "./errors.ts";
+import { constrainSeshDelegation } from "./sesh-delegation.ts";
 
 export interface HostMcpServers {
     manager: MCPManager;
@@ -101,7 +102,22 @@ export async function connectHostMcpServers(
             `The MCP server ${quoted(missing)} did not report its tools before startup finished.`,
         );
     }
-    return { manager, tools: manager.getTools() };
+    try {
+        const definition = manager
+            .getConnection("sesh")
+            ?.tools?.find(tool => tool.name === "start_session");
+        const tools = manager
+            .getTools()
+            .map(tool =>
+                tool.mcpServerName === "sesh" && tool.mcpToolName === "start_session"
+                    ? constrainSeshDelegation(tool, definition?.inputSchema)
+                    : tool,
+            );
+        return { manager, tools };
+    } catch (error) {
+        await manager.disconnectAll();
+        throw error;
+    }
 }
 
 /** One tool as a server advertises it. */

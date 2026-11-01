@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsCommands: Commands {
+    @Binding var showsSampleData: Bool
     @FocusedValue(\.settingsHistory) private var history
     @Environment(\.openWindow) private var openWindow
 
@@ -24,6 +25,10 @@ struct SettingsCommands: Commands {
             }
             .keyboardShortcut("]", modifiers: .command)
             .disabled(history?.canGoForward != true)
+
+            Divider()
+
+            Toggle("Show Sample Data", isOn: $showsSampleData)
         }
     }
 }

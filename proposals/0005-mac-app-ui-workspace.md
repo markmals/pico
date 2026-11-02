@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -283,7 +283,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility, both unconnected and with sample data. Configuration controls remain visibly unconnected without sample data; no workflow is simulated in either mode.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the provider page implementation (`8e0e883`) was reviewed and returned for the provider, model, and settings-file changes above. The revised preview is produced after Mark approves this revision.
+- Current state: the Debug `Pico.app` built from `3a8e1d8` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; quit Pico, then `mise run macos:run -- --args -ShowsSampleData YES` rebuilds and opens it with sample data on. General, the provider list with logos, and Models were captured with `recon` without bringing Pico forward; a signed-out provider page and the Add Provider sheet were captured through reverted temporary builds. Opening rows, the sheet's choices, the sign-in menu, Sign Out, the policy links, Show in Finder, and Copy Path need clicks and are left for the human preview; the rules they drive are covered by `PicoTests`.
 
 ## Policies and decisions checked
 

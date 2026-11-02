@@ -2,7 +2,12 @@
 // with a scratch home, a bare PATH and no credentials. A project extension that imports
 // an Oh My Pi package supplies a scripted model, so a whole turn runs offline.
 
-import { client, ndJsonStream, type InitializeResponse } from "@agentclientprotocol/sdk";
+import {
+    client,
+    ndJsonStream,
+    type InitializeResponse,
+    type PlanEntry,
+} from "@agentclientprotocol/sdk";
 import { randomUUID } from "node:crypto";
 import {
     existsSync,
@@ -44,7 +49,10 @@ const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: con
         return { content: [remembered ? "remembered:" + memoryToken : "history missing"] };
     }
     if (context.messages.at(-1)?.role === "user") {
-        return { content: [{ type: "toolCall", id: "verify-write", name: "write", arguments: { path: "restart-note.txt", content: memoryToken + "\\n" } }] };
+        return { content: [
+            { type: "toolCall", id: "verify-write", name: "write", arguments: { path: "restart-note.txt", content: memoryToken + "\\n" } },
+            { type: "toolCall", id: "verify-todo", name: "todo", arguments: { op: "init", items: ["Remember " + memoryToken] } },
+        ] };
     }
     return { content: [${JSON.stringify(REPLY)}] };
 } });
@@ -142,12 +150,16 @@ async function checkTurn(
     let failure: string | null = null;
     let strayLines: string[] = [];
     let replyText = "";
+    let todoCards = 0;
+    let plans: PlanEntry[][] = [];
     let sessionId: string | undefined;
     let app = client({ name: "pico-verify" }).onNotification("session/update", ({ params }) => {
         let update = params.update;
         if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
             replyText += update.content.text;
         }
+        if (update.sessionUpdate === "tool_call" && update.name === "todo") todoCards++;
+        if (update.sessionUpdate === "plan") plans.push(update.entries);
     });
     let stream = ndJsonStream(
         subprocessInput(agent.stdin),
@@ -195,6 +207,19 @@ async function checkTurn(
                 turn.stopReason === "end_turn" && replyText === REPLY
                     ? null
                     : `stop reason ${turn.stopReason}, reply ${JSON.stringify(replyText)}`,
+            );
+            let expectedPlan = [
+                {
+                    content: `Remember ${scratchDirs.memoryToken}`,
+                    priority: "medium",
+                    status: "in_progress",
+                },
+            ];
+            checklist.record(
+                "a todo call reaches the client as one plan and no tool call",
+                todoCards === 0 && Bun.deepEquals(plans, [expectedPlan])
+                    ? null
+                    : `todo cards ${todoCards}, plans ${JSON.stringify(plans)}`,
             );
         });
     } catch (error) {

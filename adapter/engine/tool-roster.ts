@@ -1,5 +1,14 @@
 /** The built-in tools every Pico session carries. Everything else OMP offers is excluded or deferred. */
-export const PICO_BUILTIN_TOOLS = ["read", "grep", "glob", "edit", "write", "bash", "web_search"];
+export const PICO_BUILTIN_TOOLS = [
+    "read",
+    "grep",
+    "glob",
+    "edit",
+    "write",
+    "bash",
+    "web_search",
+    "todo",
+];
 
 /**
  * The active tools that the allowlist does not cover, each named once in the

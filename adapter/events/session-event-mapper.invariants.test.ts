@@ -261,3 +261,94 @@ describe("proposal.0001 tool call reporting invariants", () => {
         expect(mapper.closeOpenToolCalls()).toEqual([]);
     });
 });
+
+/** Each call keeps one tool name, as the engine's calls do; `todo-*` calls are todo calls. */
+const NAMED_CALLS: ReadonlyArray<readonly [string, string]> = [
+    ["todo-1", "todo"],
+    ["todo-2", "todo"],
+    ["read-1", "read"],
+];
+
+function randomTodoSequence(seed: number): AgentSessionEvent[] {
+    const next = randomSource(seed);
+    const events: AgentSessionEvent[] = [];
+    const length = 1 + next(10);
+    for (let index = 0; index < length; index++) {
+        const [toolCallId, toolName] = NAMED_CALLS[next(NAMED_CALLS.length)]!;
+        switch (next(4)) {
+            case 0:
+                events.push(toolExecutionStart({ toolCallId, toolName, args: { op: "view" } }));
+                break;
+            case 1:
+                events.push(
+                    toolExecutionUpdate({ toolCallId, toolName, partialResult: toolResult("…") }),
+                );
+                break;
+            case 2:
+                events.push(toolExecutionEnd({ toolCallId, toolName, result: toolResult("ok") }));
+                break;
+            default:
+                events.push(
+                    toolExecutionEnd({
+                        toolCallId,
+                        toolName,
+                        result: toolResult("failed"),
+                        isError: true,
+                    }),
+                );
+        }
+    }
+    return events;
+}
+
+/** How a call's first run ended: the first end after its first start, or still open. */
+function firstOutcome(
+    events: AgentSessionEvent[],
+    toolCallId: string,
+): "not started" | "completed" | "failed" | "open" {
+    const start = events.findIndex(
+        event => event.type === "tool_execution_start" && event.toolCallId === toolCallId,
+    );
+    if (start === -1) return "not started";
+    const end = events
+        .slice(start + 1)
+        .find(event => event.type === "tool_execution_end" && event.toolCallId === toolCallId);
+    if (end?.type !== "tool_execution_end") return "open";
+    return end.isError === true ? "failed" : "completed";
+}
+
+describe("proposal.0006 todo call reporting invariants", () => {
+    test("for any engine sequence a todo call is reported only when it fails or is cancelled, and then once as a failure", () => {
+        const seen = { completed: 0, failed: 0, open: 0 };
+        for (let seed = 1; seed <= 300; seed++) {
+            const mapper = new SessionEventMapper({
+                cwd: "/workspace",
+                takeChanges: () => [],
+                mcpToolIdentity: () => undefined,
+            });
+            const events = randomTodoSequence(seed);
+            const updates = events.flatMap(event => mapper.map(event));
+            updates.push(...mapper.closeOpenToolCalls());
+
+            for (const [toolCallId, toolName] of NAMED_CALLS) {
+                const context = `seed ${seed}, ${toolCallId}`;
+                const outcome = firstOutcome(events, toolCallId);
+                if (outcome !== "not started") seen[outcome]++;
+                const group = updates.filter(update => toolCallIdOf(update) === toolCallId);
+                if (toolName !== "todo") continue;
+                if (outcome === "not started" || outcome === "completed") {
+                    expect(group, context).toEqual([]);
+                    continue;
+                }
+                expect(
+                    group.map(update => update.sessionUpdate),
+                    context,
+                ).toEqual(["tool_call", "tool_call_update"]);
+                expect(group[1], context).toMatchObject({ status: "failed" });
+            }
+        }
+        expect(seen.completed, "generated completed calls").toBeGreaterThan(0);
+        expect(seen.failed, "generated failed calls").toBeGreaterThan(0);
+        expect(seen.open, "generated open calls").toBeGreaterThan(0);
+    });
+});

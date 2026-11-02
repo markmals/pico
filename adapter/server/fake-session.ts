@@ -1,5 +1,6 @@
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session-events";
+import type { TodoPhase } from "@oh-my-pi/pi-coding-agent/tools";
 
 import type { DisposalPhase, PicoSession } from "../engine/pico-session.ts";
 
@@ -21,6 +22,8 @@ export interface FakeEngine {
     writesSettled?: () => Promise<void>;
     /** The teardown step the session reports while `dispose()` is pending. */
     disposalPhase?: DisposalPhase;
+    /** The engine's current todo list. Defaults to an empty list. */
+    todoPhases?: () => TodoPhase[];
 }
 
 export interface FakeSession {
@@ -47,6 +50,7 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
         getAvailableModels: () => [model],
         getAvailableThinkingLevels: () => [],
         configuredThinkingLevel: () => undefined,
+        getTodoPhases: () => behaviour.todoPhases?.() ?? [],
         subscribe: (subscriber: (event: AgentSessionEvent) => void) => {
             listeners.add(subscriber);
             return () => {

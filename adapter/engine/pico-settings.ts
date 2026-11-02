@@ -10,7 +10,8 @@ export interface SettingsScope {
  * The user's effective OMP configuration, read-only, with Pico's policy on top:
  * the excluded subsystems are off, and nothing in the user's approval
  * configuration can gate a tool call, because Pico never asks for approval and
- * has no UI to ask with.
+ * has no UI to ask with. `todo` is always on, without the reminders that would
+ * continue a turn the model ended (proposal.0006).
  */
 export async function loadPicoSettings(scope: SettingsScope): Promise<Settings> {
     const configured = await Settings.loadReadOnly(scope);
@@ -28,5 +29,7 @@ export async function loadPicoSettings(scope: SettingsScope): Promise<Settings> 
         "tools.approvalMode": "yolo",
         "tools.approval": allowEverything,
         "tools.restrictedFolders": [],
+        "todo.enabled": true,
+        "todo.reminders": false,
     });
 }

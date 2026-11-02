@@ -30,12 +30,16 @@ const NOTHING_CHANGED: EditedFiles = { changes: [], locations: [] };
  *
  * The mapper owns the tool-call invariant: a call is reported once, nothing is
  * reported about it before that, and it settles once — whether the engine ends
- * it, repeats itself, or the turn is cancelled out from under it.
+ * it, repeats itself, or the turn is cancelled out from under it. A `todo`
+ * call's whole effect reaches the client as its plan, so it is reported only
+ * when it fails or is cancelled (proposal.0006).
  */
 export class SessionEventMapper {
     readonly #session: SessionView;
     readonly #reported = new Set<string>();
     readonly #running = new Set<string>();
+    /** Running `todo` calls, each with the `tool_call` it is reported by if it does not succeed. */
+    readonly #heldTodoCalls = new Map<string, SessionUpdate>();
 
     constructor(session: SessionView) {
         this.#session = session;
@@ -55,7 +59,8 @@ export class SessionEventMapper {
             case "tool_execution_update":
                 // A killed command still drains its output after the engine reported
                 // the end; a settled call must not come back to life.
-                return this.#running.has(event.toolCallId)
+                return this.#running.has(event.toolCallId) &&
+                    !this.#heldTodoCalls.has(event.toolCallId)
                     ? [
                           {
                               sessionUpdate: "tool_call_update",
@@ -77,13 +82,18 @@ export class SessionEventMapper {
     }
 
     closeOpenToolCalls(): SessionUpdate[] {
-        const updates = [...this.#running].map((toolCallId): SessionUpdate => ({
-            sessionUpdate: "tool_call_update",
-            toolCallId,
-            status: "failed",
-            content: [textContent("Cancelled")],
-        }));
+        const updates = [...this.#running].flatMap((toolCallId): SessionUpdate[] => {
+            const cancelled: SessionUpdate = {
+                sessionUpdate: "tool_call_update",
+                toolCallId,
+                status: "failed",
+                content: [textContent("Cancelled")],
+            };
+            const held = this.#heldTodoCalls.get(toolCallId);
+            return held ? [held, cancelled] : [cancelled];
+        });
         this.#running.clear();
+        this.#heldTodoCalls.clear();
         return updates;
     }
 
@@ -128,7 +138,9 @@ export class SessionEventMapper {
             rawInput: args,
         };
         if (locations.length > 0) update.locations = locations;
-        return [update];
+        if (toolName !== "todo") return [update];
+        this.#heldTodoCalls.set(toolCallId, update);
+        return [];
     }
 
     #endToolCall(
@@ -157,7 +169,10 @@ export class SessionEventMapper {
                 : changeContent(changed.changes, result),
         };
         if (changed.locations.length > 0) update.locations = changed.locations;
-        return [update];
+        const held = this.#heldTodoCalls.get(toolCallId);
+        if (!held) return [update];
+        this.#heldTodoCalls.delete(toolCallId);
+        return isError ? [held, update] : [];
     }
 
     #changedFiles(

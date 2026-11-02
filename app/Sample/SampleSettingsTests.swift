@@ -5,29 +5,45 @@ import Testing
 @MainActor
 @Suite("proposal.0005 sample data")
 struct SampleSettingsTests {
-    @Test("each provider keeps its own account and credential-source choices")
-    func providersKeepTheirOwnChoices() throws {
+    @Test("signing in records the chosen way for that provider alone")
+    func signInRecordsTheChosenWay() throws {
         let settings = SampleSettings()
         let added = SampleProvider.allCases.filter(settings.isAdded)
         try #require(added.count >= 2)
         let (first, second) = (added[0], added[1])
-        let firstAccount = try #require(first.accounts.first { $0 != settings.account(of: first) })
-        let firstSource = try #require(
-            CredentialSource.allCases.first { $0 != settings.credentialSource(of: first) }
-        )
-        let secondSource = try #require(
-            CredentialSource.allCases.first {
-                $0 != settings.credentialSource(of: second) && $0 != firstSource
-            }
+        let secondBefore = settings.signInMethod(of: second)
+        let method = try #require(
+            first.signInMethods.last { $0 != settings.signInMethod(of: first) }
         )
 
-        settings.setAccount(firstAccount, of: first)
-        settings.setCredentialSource(firstSource, of: first)
-        settings.setCredentialSource(secondSource, of: second)
+        settings.signIn(first, with: method)
 
-        #expect(settings.account(of: first) == firstAccount)
-        #expect(settings.credentialSource(of: first) == firstSource)
-        #expect(settings.credentialSource(of: second) == secondSource)
+        #expect(settings.isSignedIn(first))
+        #expect(settings.signInMethod(of: first) == method)
+        #expect(settings.signInMethod(of: second) == secondBefore)
+    }
+
+    @Test("a way the provider does not offer cannot sign it in")
+    func unofferedWayCannotSignIn() throws {
+        let settings = SampleSettings()
+        let provider = try #require(
+            SampleProvider.allCases.first { settings.isAdded($0) && !settings.isSignedIn($0) }
+        )
+        let unoffered = try #require(
+            SignInMethod.allCases.first { !provider.signInMethods.contains($0) }
+        )
+
+        settings.signIn(provider, with: unoffered)
+
+        #expect(!settings.isSignedIn(provider))
+        #expect(settings.signInMethod(of: provider) == nil)
+    }
+
+    @Test("every provider offers at least one way to sign in")
+    func everyProviderOffersAWay() {
+        for provider in SampleProvider.allCases {
+            #expect(!provider.signInMethods.isEmpty, "\(provider.name)")
+        }
     }
 
     @Test("the default-model choices are the catalog models of signed-in providers")
@@ -125,18 +141,18 @@ struct SampleSettingsTests {
         #expect(settings.reasoningLevels.isEmpty)
     }
 
-    @Test("signing in makes the provider's models available with its first account")
+    @Test("signing in makes the provider's models available")
     func signingInMakesModelsAvailable() throws {
         let settings = SampleSettings()
         let provider = try #require(
             SampleProvider.allCases.first { settings.isAdded($0) && !settings.isSignedIn($0) }
         )
+        let method = try #require(provider.signInMethods.first)
 
-        settings.signIn(provider)
+        settings.signIn(provider, with: method)
 
         #expect(settings.isSignedIn(provider))
         #expect(settings.availableModels.contains { $0.provider == provider })
-        #expect(settings.account(of: provider) == provider.accounts.first)
     }
 
     @Test("a provider that is not set up cannot be signed in")
@@ -144,7 +160,7 @@ struct SampleSettingsTests {
         let settings = SampleSettings()
         let provider = try #require(SampleProvider.allCases.first { !settings.isAdded($0) })
 
-        settings.signIn(provider)
+        settings.signIn(provider, with: try #require(provider.signInMethods.first))
 
         #expect(!settings.isSignedIn(provider))
     }
@@ -156,7 +172,7 @@ struct SampleSettingsTests {
             settings.signOut(provider)
         }
 
-        settings.signIn(.openAI)
+        settings.signIn(.openAI, with: try #require(SampleProvider.openAI.signInMethods.first))
 
         let model = try #require(settings.defaultModel)
         #expect(model == settings.availableModels.first)
@@ -204,7 +220,7 @@ struct SampleSettingsTests {
 
             #expect(settings.isAdded(provider))
             #expect(!settings.isSignedIn(provider))
-            #expect(settings.account(of: provider) == nil)
+            #expect(settings.signInMethod(of: provider) == nil)
             #expect(settings.listedProviders.contains(provider))
         }
     }

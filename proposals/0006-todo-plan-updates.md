@@ -41,6 +41,7 @@ OMP's ACP mode has two further defects Pico must not copy. Loading a session rep
     - `todo.enabled` defaults to on. It is checked separately from `toolNames`, so listing `todo` does not override it.
     - `todo.reminders` defaults to on. When the agent stops with open items, OMP appends a hidden developer reminder and continues the same turn, up to `todo.remindersMax` (3) times. The same setting gates a mid-run nudge.
     - `todo.eager` defaults to letting the model decide whether to create a list.
+    - `title.refreshOnReplan` defaults to on. After every `todo init`, OMP starts hidden title-model requests that rename the saved session. They go to the tiny, commit and smol title roles, falling back to the session's own model. Only the `PI_NO_TITLE` environment variable otherwise suppresses them. Found during acceptance, when CI failed (see Open questions).
     - `Settings.overlay()` changes any of these for one session without touching the user's configuration.
 - **What Sesh draws** (Sesh 0.29.0, observed on 2026-11-02 in a real session driven by OMP's ACP mode):
     - The plan appears as a collapsible **Plan · N of M** panel pinned above the composer, outside the transcript. N counts completed entries.
@@ -111,9 +112,10 @@ Sesh reopens the session             → one plan with the current list, after a
 ### Roster and settings
 
 - Add `todo` to `PICO_BUILTIN_TOOLS`. It stays subject to the existing final-roster check on new, loaded and resumed sessions.
-- Extend the overlay in `loadPicoSettings()` with `"todo.enabled": true` and `"todo.reminders": false`.
+- Extend the overlay in `loadPicoSettings()` with `"todo.enabled": true`, `"todo.reminders": false` and `"title.refreshOnReplan": false`.
     - The tool is active even when the user's OMP configuration disables it.
     - OMP neither appends stop-time reminders nor mid-run nudges, so a turn ends when the model stops.
+    - Creating a list starts no hidden title requests and leaves Pico's saved session untitled, as Pico's sessions were before; [proposal 0004](0004-session-restoration.md) omits an absent title rather than generating one with a model. Sesh names its sessions itself, so nothing changes in Sesh.
 - Pico does not pin `todo.eager` or `todo.remindersMax`; they follow the user's OMP configuration (the latter has no effect while reminders are off).
 - The overlay writes nothing to the user's configuration.
 - Ignore the engine's `todo_reminder` and `todo_auto_clear` events. Neither produces an ACP update.
@@ -148,7 +150,7 @@ A successful `todo` call is represented by the plan alone.
 - On a successful `tool_execution_end`, Pico sends no `tool_call` or `tool_call_update` and records no presentation entry, then applies the plan rule above.
 - On a failed `tool_execution_end`, Pico sends the deferred `tool_call` immediately followed by its terminal update:
     - The `tool_call` carries the original identifier, name `todo`, kind `other`, and status `in_progress`. Its title is the model's stated intent, or "Update plan" when there is none. Its raw input is the call's arguments.
-    - The `tool_call_update` has status `failed`, OMP's error text as content, and OMP's result details as raw output.
+    - The `tool_call_update` has status `failed`, OMP's error as content, and OMP's result details as raw output. A failed batch's result follows its `Errors:` line with the whole unchanged list; the call carries only the error, because the plan already shows the list.
     - Pico records the presentation as for any other tool. The failed call sends no plan of its own, because the engine discarded the batch.
 - When a turn's open calls are closed by cancellation, a `todo` call that started but has not ended is reported the same way, with "Cancelled" as its content.
 - Every other tool keeps its current reporting.
@@ -277,3 +279,5 @@ No new runtime, setup step, registration change or capability flag. Updating the
 ## Open questions
 
 None. Mark settled the status mapping, the flat list, the settings, reopen behavior and call visibility on 2026-11-02.
+
+During acceptance on 2026-11-02, Linux CI failed: OMP's `title.refreshOnReplan` retitle, which `todo init` triggers, sent hidden title requests to the tests' scripted model. Local runs had missed it because a shell started by an Oh My Pi session inherits `PI_NO_TITLE`. The real Sesh preview showed the same requests renaming Pico's saved session. Mark chose to pin the retitle off.

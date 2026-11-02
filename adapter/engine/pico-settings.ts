@@ -11,7 +11,8 @@ export interface SettingsScope {
  * the excluded subsystems are off, and nothing in the user's approval
  * configuration can gate a tool call, because Pico never asks for approval and
  * has no UI to ask with. `todo` is always on, without the reminders that would
- * continue a turn the model ended (proposal.0006).
+ * continue a turn the model ended or the hidden title requests a new list
+ * would start (proposal.0006).
  */
 export async function loadPicoSettings(scope: SettingsScope): Promise<Settings> {
     const configured = await Settings.loadReadOnly(scope);
@@ -31,5 +32,6 @@ export async function loadPicoSettings(scope: SettingsScope): Promise<Settings> 
         "tools.restrictedFolders": [],
         "todo.enabled": true,
         "todo.reminders": false,
+        "title.refreshOnReplan": false,
     });
 }

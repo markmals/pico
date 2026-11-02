@@ -15,6 +15,18 @@ import {
 
 const TODO_DISABLED = "todo:\n  enabled: false\n";
 
+/**
+ * Lets Oh My Pi title sessions for one test. A shell started by an Oh My Pi
+ * session inherits `PI_NO_TITLE`, which hides every title request; CI has none.
+ */
+function allowTitles(t: { after(cleanup: () => void): void }): void {
+    const suppressed = process.env.PI_NO_TITLE;
+    delete process.env.PI_NO_TITLE;
+    t.after(() => {
+        if (suppressed !== undefined) process.env.PI_NO_TITLE = suppressed;
+    });
+}
+
 describe("proposal.0006 todo settings", () => {
     test("todo is active even when the user's settings disable it, and their configuration is not rewritten", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t, TODO_DISABLED);
@@ -33,6 +45,7 @@ describe("proposal.0006 todo settings", () => {
     });
 
     test("a turn that stops with open todo items ends without a reminder continuing it", async t => {
+        allowTitles(t);
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const model = createMockModel({
             responses: [
@@ -70,6 +83,32 @@ describe("proposal.0006 todo settings", () => {
             ["in_progress", "pending"],
         );
         assert.equal(model.calls.length, 2, "the turn continued after the model stopped");
+    });
+
+    test("creating a todo list starts no hidden title requests and leaves the session untitled", async t => {
+        allowTitles(t);
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const model = createMockModel({
+            responses: [
+                { content: [toolCall("todo", { op: "init", items: ["Draft", "Review"] })] },
+                { content: ["Planned."] },
+            ],
+            handler: { content: ["A hidden request used the model."] },
+        });
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            dataDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model,
+        });
+        t.after(() => session.dispose());
+
+        await session.engine.prompt("plan a draft and its review");
+
+        assert.equal(model.calls.length, 2, "something besides the turn called the model");
+        assert.equal(session.engine.sessionName, undefined);
     });
 
     test("the model is told to keep one flat todo list", async t => {

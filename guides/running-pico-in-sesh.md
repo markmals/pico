@@ -47,7 +47,7 @@ For work with several steps, the agent keeps a task list with OMP's `todo` tool.
 - A successful update to the list adds nothing to the conversation; only the plan changes. An update that fails, for example one that names an item not on the list, appears in the conversation as a failed tool call titled with what the agent was doing (or "Update plan"), carrying the error, and the plan stays as it was. An update the agent was making when you pressed Stop shows as failed too, and when the turn ends the plan shows the list as the agent kept it.
 - When you reopen a conversation, the plan shows the agent's current list, even if the adapter stopped part-way through a turn.
 
-Pico always offers the task list, even if your OMP configuration turns `todo` off, and it never sends OMP's todo reminders: when the agent stops with items still open, the turn ends there. Your OMP configuration is not changed.
+Pico always offers the task list, even if your OMP configuration turns `todo` off, and it never sends OMP's todo reminders: when the agent stops with items still open, the turn ends there. Making a list also starts no background requests to rename the conversation, which OMP would otherwise send to a model. Your OMP configuration is not changed.
 
 ### Reopening a conversation
 

@@ -60,16 +60,16 @@ struct ProviderPage: View {
     private var terms: AttributedString {
         let name = provider.name
         let privacy = provider.privacyPolicy.absoluteString
-        let terms = provider.termsOfService.absoluteString
+        let terms = provider.legalTerms.absoluteString
         if provider.signInMethods.contains(.apiKey) && provider.signInMethods.count == 1 {
             return AttributedString(
                 localized:
-                    "Provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms of service](\(terms))."
+                    "Provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms](\(terms))."
             )
         }
         return AttributedString(
             localized:
-                "Sign in or provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms of service](\(terms))."
+                "Sign in or provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms](\(terms))."
         )
     }
 }

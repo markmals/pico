@@ -27,6 +27,8 @@ The useful minimum is a local executable that Sesh can launch to run an OMP SDK 
 
 Session restoration now works through ACP load, list and resume ([proposal 0004](proposals/0004-session-restoration.md)). Pico keeps its private OMP-format agent context and session-local model and thinking choices in Application Support; Sesh retains its client-owned history and conversation UI. A real Sesh stop/reopen flow verified continuation without duplicating the client transcript.
 
+The agent's task list now reaches Sesh as its plan ([proposal 0006](proposals/0006-todo-plan-updates.md)). OMP's `todo` tool reports a flat list through ACP plan updates instead of transcript rows, failed updates remain visible as failed tool calls, and a reopened session shows the current list. A real Sesh session verified the plan panel, the absence of todo rows and the restored plan after resume.
+
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
 The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, history, search and `pico://` links, and six settings panes whose controls are unconnected until the shared configuration contract exists, with a labelled, in-memory sample-data mode for reviewing their working state ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)).
@@ -35,7 +37,7 @@ The companion app is part of that minimum: a native macOS application, installed
 
 ## Design principles
 
-Every agent-requested tool execution and delegated task is visible to the client. A shell tool's subprocesses belong to that visible execution; internal engine computation does not require fabricated tool calls.
+Every agent-requested tool execution and delegated task is visible to the client. A shell tool's subprocesses belong to that visible execution; internal engine computation does not require fabricated tool calls. A call whose whole effect is plan state, such as a successful `todo` update, is visible as that plan.
 
 Capability is claimed only after it is exercised. Advertised tools perform their documented operation, and unsupported features stay out of the interaction surface.
 
@@ -74,3 +76,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-11-01 | Make Homebrew Pico's install and update path, with the app as the configuration surface. | [proposal.0002](proposals/0002-pico-homebrew-distribution.md) |
 | 2026-11-01 | Record private agent-session persistence and exercised Sesh restoration, with Sesh retaining the client transcript. | [proposal.0004](proposals/0004-session-restoration.md) |
 | 2026-11-02 | Record the accepted Mac app UI scaffold: System Settings navigation, history, search and links, six unconnected panes, and a labelled sample-data mode; configuration waits for #12. | [proposal.0005](proposals/0005-mac-app-ui-workspace.md) |
+| 2026-11-02 | Record the todo list as Sesh's plan: flat ACP plan updates, failures as tool calls, and the current plan on reopen. | [proposal.0006](proposals/0006-todo-plan-updates.md) |

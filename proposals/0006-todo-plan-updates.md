@@ -2,7 +2,7 @@
 id: proposal.0006
 title: Todo List as the Sesh Plan
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/43
 issues: [https://github.com/markmals/pico/issues/26, https://github.com/markmals/pico/issues/38]
 supersedes: []
@@ -281,3 +281,5 @@ No new runtime, setup step, registration change or capability flag. Updating the
 None. Mark settled the status mapping, the flat list, the settings, reopen behavior and call visibility on 2026-11-02.
 
 During acceptance on 2026-11-02, Linux CI failed: OMP's `title.refreshOnReplan` retitle, which `todo init` triggers, sent hidden title requests to the tests' scripted model. Local runs had missed it because a shell started by an Oh My Pi session inherits `PI_NO_TITLE`. The real Sesh preview showed the same requests renaming Pico's saved session. Mark chose to pin the retitle off.
+
+Mark accepted the implementation on 2026-11-02 and authorized merging PR #43 and cleaning up afterwards. Delivery is merge-only; no tag, package release or Homebrew publication is authorized.

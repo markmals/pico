@@ -284,12 +284,12 @@
     "Provide a Mistral API Key…" : {
 
     },
-    "Provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms of service](%@)." : {
+    "Provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms](%@)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms of service](%4$@)."
+            "value" : "Provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms](%4$@)."
           }
         }
       }
@@ -429,12 +429,12 @@
     "Sign Out…" : {
 
     },
-    "Sign in or provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms of service](%@)." : {
+    "Sign in or provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms](%@)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Sign in or provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms of service](%4$@)."
+            "value" : "Sign in or provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms](%4$@)."
           }
         }
       }

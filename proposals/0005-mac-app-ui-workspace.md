@@ -67,7 +67,7 @@ The native-app section of [PROTOTYPE.md](../PROTOTYPE.md#native-macos-configurat
 
 ## Proposed solution
 
-Use the existing Pico app target for one native settings-style window with six sidebar destinations and grouped pane layouts. Configuration rows and controls are visibly unconnected stubs by default. Window management, navigation history, search, deep links, and scrolling work. View › Show Sample Data switches the panes to in-memory sample values whose pickers and catalog filter respond. Do not create a separate prototype target, mock configuration service, or backend abstraction.
+Use the existing Pico app target for one native settings-style window with six sidebar destinations and grouped pane layouts. Configuration rows and controls are visibly unconnected stubs by default. Window management, navigation history, search, deep links, and scrolling work. View › Show Sample Data switches the panes to in-memory sample values whose pickers, provider pages, and sample actions respond. Do not create a separate prototype target, mock configuration service, or backend abstraction.
 
 ```text
 Type "reasoning" in the sidebar search → choose "Reasoning level — Models" → Models opens, scrolled to the highlighted row
@@ -83,7 +83,7 @@ The deliverable is the UI scaffold, not a functional configuration app. It must 
 
 The shared window displays a concise notice equivalent to “UI scaffold — configuration not connected.” Configuration controls remain disabled or display an explicit unconnected value. Any control shown for layout must make its unavailable state clear to both sighted users and accessibility clients.
 
-Without sample data, do not show editable settings, populated accounts or model catalogs, a working model-catalog filter, simulated authentication, fake progress, or successful-looking save/apply results. Use neutral placeholders such as “Not connected” rather than inventing a configured value. A picker or the model-catalog search field can be present as a disabled layout stub. The sidebar search in [Search](#search) is navigation, not a catalog filter.
+Without sample data, do not show editable settings, populated accounts or model catalogs, simulated authentication, fake progress, or successful-looking save/apply results. Use neutral placeholders such as “Not connected” rather than inventing a configured value. A picker can be present as a disabled layout stub. The sidebar search in [Search](#search) is navigation; no pane searches or filters its own contents.
 
 The app performs no configuration read/write, persistence, credential access, provider request, runtime discovery, helper launch, diagnostic collection, or Sesh operation, with or without sample data. Version, runtime-status, and configuration-location rows are also unconnected UI; this slice does not load their real values.
 
@@ -261,7 +261,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 ## Scope
 
 - A runnable UI-only application in the existing Pico target, with single-window lifecycle, a fixed-width window and sidebar, and System Settings-style navigation.
-- Six settings-pane stubs with pane headers, static layouts, and visibly unconnected configuration controls, plus an in-memory sample-data mode that fills them with labelled sample values and responsive pickers and catalog filter.
+- Six settings-pane stubs with pane headers, static layouts, and visibly unconnected configuration controls, plus an in-memory sample-data mode that fills them with labelled sample values, responsive pickers, provider pages, and an Add Provider sheet, which closes if sample data is turned off while it is open.
 - Back/forward navigation history, sidebar search over every settings item, revealing a chosen item, and `pico://` deep links.
 - Native build/run/test tasks, a Swift Testing target for the navigation and sample-data behavior, formatting/build checks, accessibility inspection, and an exercised local app preview.
 - A guide and focused revisions to the brief, contract, issue boundary, and current-state documentation; preserve macOS 27 and the existing version source.

@@ -10,7 +10,7 @@ enum SampleProvider: String, CaseIterable, Identifiable {
     case mistral
     case groq
 
-    /// The providers the list always shows, set up or not; the rest are added from a menu.
+    /// The providers the list always shows, signed in or not; others are listed while signed in.
     static let popular: [SampleProvider] = [.anthropic, .openAI, .google, .openRouter]
 
     var id: Self { self }

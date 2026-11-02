@@ -96,7 +96,9 @@ struct ModelCatalogRows: View {
     }
 
     @ViewBuilder private func availability(of model: SampleModel) -> some View {
-        if !settings.isSignedIn(model.provider) {
+        if !settings.isAdded(model.provider) {
+            SettingsValueText(value: .status("Not set up", .inactive))
+        } else if !settings.isSignedIn(model.provider) {
             SettingsValueText(value: .status("Needs sign-in", .attention))
         } else if model == settings.defaultModel {
             SettingsValueText(value: .text("Default"))

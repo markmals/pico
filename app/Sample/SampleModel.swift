@@ -91,5 +91,33 @@ extension SampleModel {
             reasoningLevels: [.off, .auto, .low, .high],
             defaultReasoningLevel: .auto
         ),
+        SampleModel(
+            id: "openrouter/deepseek-v3.1",
+            name: "DeepSeek V3.1",
+            provider: .openRouter,
+            reasoningLevels: [.off, .auto],
+            defaultReasoningLevel: .off
+        ),
+        SampleModel(
+            id: "xai/grok-4",
+            name: "Grok 4",
+            provider: .xAI,
+            reasoningLevels: [.auto, .high],
+            defaultReasoningLevel: .auto
+        ),
+        SampleModel(
+            id: "mistral/mistral-large",
+            name: "Mistral Large",
+            provider: .mistral,
+            reasoningLevels: [.off],
+            defaultReasoningLevel: .off
+        ),
+        SampleModel(
+            id: "groq/llama-3.3-70b",
+            name: "Llama 3.3 70B",
+            provider: .groq,
+            reasoningLevels: [.off],
+            defaultReasoningLevel: .off
+        ),
     ]
 }

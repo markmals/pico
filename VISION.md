@@ -1,6 +1,6 @@
 ---
 title: A Vision for Pico
-updated: 2026-11-01
+updated: 2026-11-02
 ---
 
 # A Vision for Pico
@@ -29,7 +29,7 @@ Session restoration now works through ACP load, list and resume ([proposal 0004]
 
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
-The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, and six settings panes whose controls are unconnected until the shared configuration contract exists ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)).
+The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, history, search and `pico://` links, and six settings panes whose controls are unconnected until the shared configuration contract exists, with a labelled, in-memory sample-data mode for reviewing their working state ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)).
 
 [`PROTOTYPE.md`](PROTOTYPE.md) supplies the implementation brief and observable acceptance scenarios. It informs Workbench proposal development and does not replace proposal approval.
 
@@ -73,4 +73,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-11-01 | Record the exercised core adapter capabilities and Pico-only child-session launches. | [proposal.0001](proposals/0001-acp-adapter-core.md), [proposal.0003](proposals/0003-pico-only-child-sessions.md) |
 | 2026-11-01 | Make Homebrew Pico's install and update path, with the app as the configuration surface. | [proposal.0002](proposals/0002-pico-homebrew-distribution.md) |
 | 2026-11-01 | Record private agent-session persistence and exercised Sesh restoration, with Sesh retaining the client transcript. | [proposal.0004](proposals/0004-session-restoration.md) |
-| 2026-11-01 | Record the Mac app's current state: a runnable UI scaffold whose six settings panes are unconnected. | [proposal.0005](proposals/0005-mac-app-ui-workspace.md) |
+| 2026-11-02 | Record the accepted Mac app UI scaffold: System Settings navigation, history, search and links, six unconnected panes, and a labelled sample-data mode; configuration waits for #12. | [proposal.0005](proposals/0005-mac-app-ui-workspace.md) |

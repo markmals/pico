@@ -14,6 +14,10 @@ struct SettingsLinkTests {
             SettingsLink.url(for: .item(.reasoningLevel)).absoluteString
                 == "pico://settings/models/reasoning-level"
         )
+        #expect(
+            SettingsLink.url(for: .item(.providerList)).absoluteString
+                == "pico://settings/providers/provider-list"
+        )
     }
 
     @Test(
@@ -78,7 +82,10 @@ struct SettingsLinkTests {
             "pico://settings/general/runtime-status",
             "pico://settings/general/engine-status",
             "pico://settings/general/engine-version",
+            "pico://settings/providers/provider",
+            "pico://settings/providers/connection-status",
             "pico://settings/providers/account",
+            "pico://settings/providers/credential-status",
             "pico://settings/providers/credential-source",
             "pico://settings/diagnostics/engine-version",
         ]

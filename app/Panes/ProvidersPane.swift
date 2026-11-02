@@ -84,6 +84,7 @@ private struct ProviderListRow: View {
                     settings.add(provider)
                     navigator.openProvider(provider.rawValue)
                 }
+                .accessibilityLabel(Text("Set Up \(provider.name)"))
             }
         }
     }

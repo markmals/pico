@@ -2,7 +2,7 @@
 id: proposal.0006
 title: Todo List as the Sesh Plan
 authors: [Mark Malstrom]
-status: draft
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/43
 issues: [https://github.com/markmals/pico/issues/26, https://github.com/markmals/pico/issues/38]
 supersedes: []

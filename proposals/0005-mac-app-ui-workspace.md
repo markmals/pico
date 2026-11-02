@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: returned-for-revisions
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -327,4 +327,4 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 
 ## Open questions
 
-None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links; the parity implementation the same day for an interactive sample-data mode inside the app; the sample-data implementation the same day for the General and Providers & Accounts changes; that implementation's provider page for the redesign above; and the redesigned page's implementation for the provider, model, and settings-file changes, all recorded here. Implementation of this revision waits for Mark to set `awaiting-implementation`. Mark's review of the remaining panes may revise them further. Configuration functionality remains deferred until #12.
+None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links; the parity implementation the same day for an interactive sample-data mode inside the app; the sample-data implementation the same day for the General and Providers & Accounts changes; that implementation's provider page for the redesign above; and the redesigned page's implementation for the provider, model, and settings-file changes, all recorded here. Mark approved this revision as written, with Sign Out only as the page's red button. Mark's review of the remaining panes may revise them further. Configuration functionality remains deferred until #12.

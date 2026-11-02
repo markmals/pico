@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: active-review
+status: returned-for-revisions
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -23,6 +23,8 @@ Pico's native target has project metadata but no sources or window. Generating t
 Mark returned the first implementation from review on 2026-11-01 with System Settings parity changes: no collapsible sidebar, a toolbar with back/forward navigation, app-icon-shaped sidebar icons, and a fixed-width window. Mark also asked for System Settings search: search every settings item, show the results in the sidebar, and take the user to the setting when a result is chosen. Each setting is also addressable from outside the app through a `pico://` URL. These are working navigation behaviors, not configuration behaviors; they need no data from #12.
 
 Mark returned the parity implementation on 2026-11-01 asking for a version with sample data, to see what the panes will look like in their working state. Mark chose a mode inside the app over a separate preview branch or Xcode previews, and chose interactive controls over values alone.
+
+Mark returned the sample-data implementation on 2026-11-01 with changes to General and Providers & Accounts, the first of a pane-by-pane review. General drops Engine status, replaces the single runtime status with a checklist, lists the Pico app, `pico`, and OMP versions separately because Pico and OMP are versioned independently, and lets the settings file be shown in Finder or copied. Providers & Accounts becomes a list of providers, like Sesh's Agents settings, whose rows open a page with that provider's configuration.
 
 ## Domain grounding
 
@@ -89,21 +91,25 @@ Sample data is off at launch. View › Show Sample Data, a checkmarked menu item
 
 While sample data is on, the window's notice reads “Sample data — nothing here is saved or connected”, with a different symbol from the unconnected notice, and is announced the same way to accessibility clients. Every row that reads “Not connected” shows a sample value instead, and the pickers and the catalog search field are enabled. A status value is a symbol and text, never color alone. The built-in tool policy rows are fixed facts and look the same in both modes.
 
-Sample data lives in memory for the life of the app. Choices made with it on survive turning it off and on again and are discarded when the app quits. It never reads or writes files or user defaults, and never touches the Keychain, the network, other processes, the pasteboard, Finder, or Sesh. It adds no rows, sheets, or flows that the unconnected layout does not have; it fills and enables the controls already there, including the two action buttons below, which the unconnected layout shows disabled. Search, history, and deep links behave identically in both modes, and search still matches titles and keywords, never sample values.
+Sample data lives in memory for the life of the app. Choices made with it on survive turning it off and on again and are discarded when the app quits. It never reads or writes configuration, credentials, or user defaults, and never touches the Keychain, the network, other processes, or Sesh. Its only effects outside the window are the two the user asks for on the settings file: Copy Path puts the shown path on the pasteboard, and Show in Finder opens Pico's Application Support folder, and is disabled when that folder does not exist. It adds no rows, sheets, or flows that the unconnected layout does not have, apart from the provider list's rows and each listed provider's page; it fills and enables the controls already there, including the action buttons below, which the unconnected layout shows disabled. Search, history, and deep links behave identically in both modes, and search still matches titles and keywords, never sample values.
 
-Each action button sits in the row whose status it changes and takes effect at once, with no sheet, progress, or delay:
+Each action takes effect at once, with no sheet, progress, or delay:
 
-- **Sign In / Sign Out**, in the Credential status row of Providers & Accounts, for the provider being shown. Signing out makes the provider need sign-in and its models unavailable; if the default model was one of them, the default becomes the first available model in catalog order, and the reasoning level follows the rule for changing models. With no provider signed in, the default model reads “None available” and the reasoning-level picker is disabled. Signing in signs the provider in with its first sample account.
+- **Set Up / Add Provider…**, on Providers & Accounts. Set Up, on a listed provider that is not set up, and choosing a provider from the Add Provider… menu both add that provider, needing sign-in, and open its page.
+- **Sign In / Sign Out**, in the Credential status row of a provider's page. Signing out makes the provider need sign-in and its models unavailable; if the default model was one of them, the default becomes the first available model in catalog order, and the reasoning level follows the rule for changing models. With no provider signed in, the default model reads “None available” and the reasoning-level picker is disabled. Signing in signs the provider in with its first sample account.
+- **Remove Provider**, at the bottom of a provider's page. Removing signs the provider out, with the same effect on the default model, and takes it off the list; a popular provider stays listed as not set up. History forgets its page, as [Window and navigation](#window-and-navigation) describes, which returns to the list.
 - **Register / Unregister**, in the Sesh custom agent row of Sesh. Unregistering shows Pico as not registered, disconnected, and not set up; registering restores the registered, connected, complete state.
+
+In Providers & Accounts, each row of the provider list shows the provider's tile, its name, and a status line: “Signed in · <account>”, “Needs sign-in”, or “Not set up”. A provider that is set up ends its row in a chevron, and choosing the row opens its page; a popular provider that is not set up shows a Set Up button instead, as Sesh's Agents settings do. Add Provider… sits below the list. A provider's page begins with a header group like a pane's: the provider's tile, name, and status line. Below it are an Account section (Account, Credential source, and Credential status with Sign In or Sign Out) and a Remove Provider button. Provider tiles are monograms in a fixed color per provider, not provider logos.
 
 | Destination | Sample content | What responds |
 | --- | --- | --- |
-| General | Runtime status “Installed”, engine status “Ready”, Pico app 0.1.0, engine 18.14.0, settings file `~/Library/Application Support/Pico/settings.json`. | Nothing; values only. |
-| Providers & Accounts | The provider picker offers Anthropic, OpenAI, and Google. Each has its own sample accounts, credential source, and statuses: Anthropic is signed in through an existing OMP account, OpenAI uses an API key in the Keychain, and Google needs sign-in. | Choosing a provider shows that provider's account, credential source, statuses, and Sign In or Sign Out. Choosing an account or credential source keeps that choice for that provider. |
+| General | Runtime: Installed ✓ `/opt/homebrew/bin/pico`, Starts ✓ “Checked just now”, Up to date ✓ “0.1.0 is the latest”. Versions: Pico app 0.1.0, `pico` 0.1.0, OMP 18.14.0. Settings file `~/Library/Application Support/Pico/settings.json`. | Show in Finder and Copy Path on the settings file. |
+| Providers & Accounts | The popular providers, Anthropic, OpenAI, Google, and OpenRouter, then any others added. Anthropic is signed in through an existing OMP account, OpenAI uses an API key in the Keychain, Google is set up but needs sign-in, and OpenRouter is not set up. Add Provider… offers xAI, Mistral, and Groq. | Set Up, Add Provider…, opening a provider's page, its Account and Credential source pickers, Sign In or Sign Out, and Remove Provider. Each provider keeps its own choices. |
 | Models | The default-model picker lists the models of signed-in providers. The reasoning-level picker lists the levels the chosen model supports, from Off, Auto, Low, Medium, and High. The catalog lists every sample model with its provider; a model whose provider needs sign-in is marked unavailable. Available models shows how many models can be chosen. | Choosing a model keeps the reasoning level when the model supports it and otherwise switches to that model's default level. The catalog search field filters the catalog by model and provider name with the sidebar search's word-prefix matching; no matches shows “No Results”. |
 | Tools & Integrations | intellisense location `/opt/homebrew/bin/intellisense`. | Nothing; values only. |
 | Sesh | Helper location `/opt/homebrew/bin/pico`, launch arguments “None”, Sesh custom agent “Pico”, connection status “Connected”, setup status “Complete”. | Register and Unregister. |
-| Diagnostics & About | App version 0.1.0, engine version 18.14.0, recent errors “None”, diagnostic report “Not created”. | Nothing; values only. |
+| Diagnostics & About | App version 0.1.0, `pico` version 0.1.0, OMP version 18.14.0, recent errors “None”, diagnostic report “Not created”. | Nothing; values only. |
 
 Sample model names follow the providers' current public naming so lengths and truncation are realistic. Sample accounts use `example.com` addresses. Sample data exists for design review in local builds; the proposal that first distributes the app decides whether it is removed or compiled out.
 
@@ -111,8 +117,9 @@ Sample model names follow the providers' current public naming so lengths and tr
 
 - **Destination:** one of the six panes. Its identity is a fixed lowercase slug, independent of its localized title.
 - **Settings item:** one labelled row in exactly one destination. Its identity is its destination slug plus its own slug. The same fact shown in two panes (the app version under General and under Diagnostics & About) is two items, because the item is a placement.
-- **Settings location:** a destination or a settings item. A search result, a deep link, and a history entry all name a location, so the app uses one type rather than separate result, link, and history models.
-- **Navigation history:** the sequence of destinations the user has navigated between. Revealing a different item on the same destination is not a history entry.
+- **Settings location:** a destination or a settings item. A search result and a deep link both name a location, so the app uses one type rather than separate result and link models.
+- **Page:** what the detail area shows: a destination's main page, or the page of one provider in Providers & Accounts. A provider page's identity is its provider's slug. It has no link and is not a search result, and the rows on it are not settings items, because they belong to whichever provider is open.
+- **Navigation history:** the sequence of pages the user has navigated between. Revealing a different item on the same page is not a history entry.
 - **Revealed item:** the single item the latest navigation pointed at. It is transient and is replaced or cleared by the next navigation.
 - **Sample data:** invented, in-memory values that stand in for configuration the scaffold cannot load. It belongs to the running app, not to a configuration, an account, or a session.
 
@@ -135,14 +142,15 @@ The sidebar has a search field at its top, then the destinations in four groups 
 
 Each sidebar row shows the destination's app-icon tile and title, with a visible selected state. An app-icon tile is a continuous-corner rounded square filled with the destination's fixed color and a white SF Symbol glyph, as in System Settings. Each destination has its own color, and the glyph stays legible in Light, Dark, and Increase Contrast. Tiles do not follow the accent color; selection does.
 
-The toolbar's leading navigation area holds a joined back/forward control, followed by the active destination's title. No other toolbar items are added. No onboarding window, status menu, dashboard, or chat view is introduced.
+The toolbar's leading navigation area holds a joined back/forward control, followed by the current page's title: the destination's title, or the provider's name on a provider page. No other toolbar items are added. No onboarding window, status menu, dashboard, or chat view is introduced.
 
 Navigation history follows browser rules:
 
-- Navigating to a destination other than the current one pushes the current destination onto the back history and clears the forward history. Navigating to the current destination changes no history.
-- Back moves to the most recent back entry and pushes the current destination onto the forward history. Forward is the mirror operation.
+- Navigating to a page other than the current one pushes the current page onto the back history and clears the forward history. Navigating to the current page changes no history.
+- Back moves to the most recent back entry and pushes the current page onto the forward history. Forward is the mirror operation.
 - Back and forward are disabled when their history is empty. The View menu has Back (⌘[) and Forward (⌘]) commands with the same availability.
-- Choosing a sidebar row, a search result, or a deep link is a navigation. Back and forward themselves do not clear the forward history.
+- Choosing a sidebar row, a search result, a deep link, or a provider row is a navigation. Choosing the current destination's sidebar row changes nothing, even on a provider page. Back and forward themselves do not clear the forward history.
+- When a provider page stops existing, because its provider is removed or sample data is turned off, history forgets it: its entries are removed, neighbouring entries that become identical merge into one, and if it was the current page, the entry before it becomes current, or the destination's main page when there is none.
 
 Use stable destination and item identities rather than labels or list indices. Selection and each pane's scroll position survive navigation within the current process, including back and forward. There are no editable setting values to retain. No cross-launch restoration or settings persistence is required.
 
@@ -160,7 +168,7 @@ Choosing a result (click, or arrow keys over the list) opens its location. The s
 
 ### Opening a location
 
-Opening a destination navigates to it. Opening a settings item navigates to its destination, scrolls the item into view, and reveals it with a highlight around its row. The highlight stays until the next navigation of any kind; it is drawn as a shape, not by color alone, and VoiceOver focus moves to the revealed row. With Reduce Motion on, the scroll is not animated.
+Opening a destination navigates to its main page. Opening a settings item navigates to its destination's main page, scrolls the item into view, and reveals it with a highlight around its row. The highlight stays until the next navigation of any kind; it is drawn as a shape, not by color alone, and VoiceOver focus moves to the revealed row. With Reduce Motion on, the scroll is not animated.
 
 ### Deep links
 
@@ -178,12 +186,14 @@ Destination slugs: `general`, `providers`, `models`, `tools`, `sesh`, `diagnosti
 
 | Destination | Item slugs (title) |
 | --- | --- |
-| `general` | `runtime-status` (Runtime status), `engine-status` (Engine status), `app-version` (Pico app), `engine-version` (Engine), `settings-file` (Settings file) |
-| `providers` | `provider` (Provider), `connection-status` (Connection status), `account` (Account), `credential-source` (Credential source), `credential-status` (Credential status) |
+| `general` | `installed` (Installed), `starts` (Starts), `up-to-date` (Up to date), `app-version` (Pico app), `pico-version` (`pico`), `omp-version` (OMP), `settings-file` (Settings file) |
+| `providers` | `provider-list` (Providers) |
 | `models` | `model` (Model), `reasoning-level` (Reasoning level), `catalog-search` (Search catalog), `available-models` (Available models) |
 | `tools` | `read` (Read), `search` (Search), `edit` (Edit), `write` (Write), `shell` (Shell), `web-search` (Web search), `eval` (Eval), `built-in-lsp` (Built-in LSP), `native-delegation` (Native delegation), `intellisense-location` (intellisense location) |
 | `sesh` | `helper-location` (Helper location), `launch-arguments` (Launch arguments), `custom-agent` (Sesh custom agent), `connection-status` (Connection status), `setup-status` (Setup status) |
-| `diagnostics` | `app-version` (App version), `engine-version` (Engine version), `recent-errors` (Recent errors), `diagnostic-report` (Diagnostic report) |
+| `diagnostics` | `app-version` (App version), `pico-version` (`pico` version), `omp-version` (OMP version), `recent-errors` (Recent errors), `diagnostic-report` (Diagnostic report) |
+
+`pico` in a title is the command's name and is shown in monospaced type wherever the title appears. These slugs replace the earlier `runtime-status`, `engine-status`, and `engine-version` items and the five per-provider items; nothing has shipped, so no old link is kept. Provider pages have no links, and searching for an account or credential term finds the Providers list.
 
 Slugs are a public contract once shipped: renaming a title does not change its slug. Pico does not register the scheme anywhere except its own `Info.plist`, and it does not change which app handles another scheme.
 
@@ -195,12 +205,12 @@ The unconnected layouts, which [Sample data](#sample-data) fills without adding 
 
 | Destination | UI stub |
 | --- | --- |
-| General | Grouped runtime, app/engine version, and configuration-location rows with unconnected values. No readiness checks or location selection. |
-| Providers & Accounts | Provider/account section layout, disabled provider, account, and credential-source pickers, and a disabled Sign In button. No credential entry, sign-in flow, or provider discovery. |
+| General | Runtime checklist rows (Installed, Starts, Up to date); Pico app, `pico`, and OMP version rows; and a settings-file row with a disabled Show in Finder button. All values are unconnected. No readiness checks or location selection. |
+| Providers & Accounts | A Providers row reading “Not connected” and a disabled Add Provider… button. No provider is listed, so no provider page can open; no credential entry, sign-in flow, or provider discovery. |
 | Models | Model and reasoning-selection layout with disabled controls. A catalog area with a disabled “Search catalog” field, an available-models row, and room for the catalog list that sample data fills. |
 | Tools & Integrations | Curated-policy explanation and unconnected integration-detail rows, including the eventual external `intellisense` location control. No executable selection or validation. |
 | Sesh | Grouped launch-details and connection/setup layout with unconnected values and a disabled Register button. No registration or connection inspection. |
-| Diagnostics & About | App-identity, version, and diagnostic-section layout with unconnected values. No diagnostic collection or export. |
+| Diagnostics & About | App-identity, version (Pico app, `pico`, OMP), and diagnostic-section layout with unconnected values. No diagnostic collection or export. |
 
 These are visual structures for refinement, not full workflow implementations. Do not add setup sheets, authentication screens, loading/error state machines, or recovery flows to make the scaffold appear functional; [Sample data](#sample-data) is the only populated state.
 
@@ -220,13 +230,13 @@ Add the following mise tasks with the code that makes them real:
 
 Expand `macos:fmt` and `macos:lint` to include app and test sources. Extend `macos:check` from manifest inspection to building the app and running `macos:test`, retaining its non-macOS skip and the existing `mise run check` entry point. Do not add a package script block, second formatter, shell/Python wrapper, or placeholder release task.
 
-History, search matching, deep-link parsing, and the sample data's choices are behavior, so they get a Swift Testing target, `PicoTests`, whose files sit beside the code they test as `*Tests.swift` and are excluded from the app target. Write each test to fail before its implementation. Cover the history rules above, including truncation and no-op navigation; search matching, keywords, normalization, ordering, and the empty query; that every item is found by each word of its own title; that every location round-trips through its link; and that each invalid-link form is rejected. For sample data, cover that each provider keeps its own account and credential-source choices; that the default-model choices exclude models whose provider needs sign-in; that changing the model keeps a supported reasoning level and otherwise switches to the model's default; that signing out moves a default model of that provider to the first available model, and that with no provider signed in no model is available; that signing in makes the provider's models available; that unregistering and registering switch the Sesh state; and the catalog filter's matching and empty query. Do not test static labels, placeholder or sample values, tile colors, or view construction.
+History, search matching, deep-link parsing, and the sample data's choices are behavior, so they get a Swift Testing target, `PicoTests`, whose files sit beside the code they test as `*Tests.swift` and are excluded from the app target. Write each test to fail before its implementation. Cover the history rules above, including truncation, no-op navigation, provider pages, and forgetting a page; search matching, keywords, normalization, ordering, and the empty query; that every item is found by each word of its own title; that every location round-trips through its link; and that each invalid-link form is rejected, including the replaced slugs. For sample data, cover that each provider keeps its own account and credential-source choices; that setting up or adding a provider lists it as needing sign-in; that removing a provider signs it out, unlists it unless it is popular, and moves a default model of that provider as signing out does; that the default-model choices exclude models whose provider is not signed in; that changing the model keeps a supported reasoning level and otherwise switches to the model's default; that signing out moves a default model of that provider to the first available model, and that with no provider signed in no model is available; that signing in makes the provider's models available; that unregistering and registering switch the Sesh state; and the catalog filter's matching and empty query. Do not test static labels, placeholder or sample values, tile colors, or view construction.
 
 ### Implementation evidence and documentation
 
 Revise the UI-workspace guide from this proposal before changing app code. Explain how to build, run, and inspect the scaffold; how history, search, and deep links behave; how to show sample data and what it does and does not do; and that settings stay unconnected until #12 and the subsequent integration work. There is no configuration-persistence or real-runtime acceptance scenario in this slice.
 
-After implementation, run `mise run check`. Launch with `mise run macos:run` and exercise the actual window: visit every pane from the sidebar; use back and forward from the toolbar and with ⌘[ and ⌘]; search for an item and a destination, choose results, and clear the search; open valid and invalid `pico://` links while Pico is running and while it is not; scroll away and back; use Command-Comma; resize the height and confirm the width and sidebar stay fixed and the sidebar cannot be hidden. Turn sample data on and off from the View menu and launch with `-ShowsSampleData YES`; visit every pane in both modes, change the provider, model, and reasoning level, sign a provider out and in, unregister and register with Sesh, filter the catalog, and confirm that quitting discards the choices. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion. Confirm that configuration controls remain unconnected without sample data and that neither mode can perform or simulate external actions. Record the exercised surface and any platform limitation rather than treating project generation or passing tests as visual proof.
+After implementation, run `mise run check`. Launch with `mise run macos:run` and exercise the actual window: visit every pane from the sidebar; use back and forward from the toolbar and with ⌘[ and ⌘]; search for an item and a destination, choose results, and clear the search; open valid and invalid `pico://` links while Pico is running and while it is not; scroll away and back; use Command-Comma; resize the height and confirm the width and sidebar stay fixed and the sidebar cannot be hidden. Turn sample data on and off from the View menu and launch with `-ShowsSampleData YES`; visit every pane in both modes; open a provider's page and return with ⌘[; set up, add, sign out, sign in, and remove a provider; change an account, credential source, model, and reasoning level; use Show in Finder and Copy Path; unregister and register with Sesh; filter the catalog; and confirm that quitting discards the choices. Inspect Light/Dark, keyboard navigation, VoiceOver, Increase Contrast, and Reduce Motion. Confirm that configuration controls remain unconnected without sample data and that neither mode can perform or simulate external actions. Record the exercised surface and any platform limitation rather than treating project generation or passing tests as visual proof.
 
 Update the source-free descriptions, native command documentation, and macOS floor in the relevant existing repository documents. Revise the brief and agent contract narrowly to allow these explicit UI stubs before configuration functionality and the labelled sample-data mode, retaining the prohibition on fake operational success. Update #18's description to distinguish this UI delivery from its original integration expectations and preserve #12 as the dependency for adding configuration functionality.
 
@@ -255,7 +265,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Issue #12's configuration contract and all settings functionality: reading/writing settings, persistence, live changes, and session precedence. The scaffold can precede #12; configuration functionality waits for it.
 - Runtime readiness detection, helper discovery or bundling, engine version inspection, credential access, provider authentication, real model catalogs, or operational diagnostic collection.
 - Sesh setup/registration, adapter behavior, process channels, network services, and changes to the user's OMP configuration or active Sesh agent.
-- Saved, imported, or exported sample data; sample values outside the panes' existing rows; sample actions other than Sign In/Sign Out and Register/Unregister; sheets, progress, or multi-step flows for any action; and backend abstractions.
+- Saved, imported, or exported sample data; sample values outside the panes' rows, the provider list, and provider pages; sample actions other than Set Up, Add Provider…, Sign In/Sign Out, Remove Provider, Register/Unregister, Show in Finder, and Copy Path; sheets, progress, or multi-step flows for any action; links to provider pages; and backend abstractions.
 - Searching anything other than the destination and item titles and keywords defined here, such as setting values or help text; ⌘F to focus search; cross-launch restoration of history or search; any URL scheme other than `pico`, and any link form other than the three above.
 - A separate prototype target, webview, menu-bar app, custom UI framework, shipping package, signing/notarization, or release.
 - Completion of #18's original real-data General pane or the full companion app described in the brief. Those integration outcomes require their own approved intent and evidence.
@@ -267,7 +277,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility, both unconnected and with sample data. Configuration controls remain visibly unconnected without sample data; no workflow is simulated in either mode.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the Debug `Pico.app` built from `63a53c8` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run` rebuilds and opens it from any checkout of the branch. Both modes were exercised in the background with `open -g`, `-ShowsSampleData YES`, and `pico://` links, and observed with `recon` screenshots and accessibility trees without bringing Pico forward. Choosing from pickers, pressing the sample actions, typing in either search field, and toggling the View menu item need input and are left for the human preview; the sample-data rules they drive are covered by `PicoTests`.
+- Current state: the sample-data implementation (`63a53c8`) was reviewed and returned for the General and Providers & Accounts changes above. The revised preview is produced after Mark approves this revision.
 
 ## Policies and decisions checked
 
@@ -290,7 +300,12 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 - **Separate preview branch with sample data:** keeps invented values out of the product, but goes stale as the design moves and makes comparing the two states a branch switch. Mark chose a mode inside the app.
 - **Xcode previews with sample data:** shows populated panes in the canvas without touching the running app, but not the running window, navigation, or search. Mark chose the running app.
 - **Values-only sample data:** cheaper, but leaves every control disabled, so the working state of pickers and the catalog filter cannot be judged. Mark chose interactive controls.
-- **Sample workflows:** sign-in sheets, registration, or export flows that pretend to complete. They would predesign #12's contract and the integrations after it. Mark chose instant sample actions on the two statuses a user acts on most, sign-in and Sesh registration, instead.
+- **Sample workflows:** sign-in sheets, registration, or export flows that pretend to complete. They would predesign #12's contract and the integrations after it. Mark chose instant sample actions instead.
+- **One provider picker:** the first sample layout showed one chosen provider at a time. Mark rejected it: macOS settings list what you have added, add more with a button, and open each one for its configuration, as Sesh's Agents settings do.
+- **Only an Add Provider… menu, or every supported provider listed:** Mark chose Sesh's middle ground, the popular providers listed and others added with a button.
+- **Provider pages outside history:** an in-pane back link, with history tracking panes only. Mark chose System Settings' behavior, where a drill-in is a history step.
+- **Runtime status with a reason:** one row summarizing readiness with what was checked. Mark chose a checklist of the separate checks.
+- **A click menu on the settings file:** Mark chose a visible Show in Finder button with Copy Path on right-click.
 - **Collapsible, resizable sidebar and freely resizable window:** the first implementation's native defaults. Mark chose System Settings' fixed layout instead.
 - **Disabled search stub, or a filter over pane names:** cheaper than searching items, but neither reaches the setting the user is looking for. Mark asked for System Settings search: results for every settings item, opening the setting when chosen.
 - **In-app links only:** opening locations from search without a URL scheme. Mark chose to make every location addressable as a `pico://` link too.
@@ -299,4 +314,4 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 
 ## Open questions
 
-None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links, and the parity implementation the same day for an interactive sample-data mode inside the app, both recorded above. Mark approved the sample-data revision with the instant Sign In/Sign Out and Register/Unregister actions. Configuration functionality remains deferred until #12.
+None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links; the parity implementation the same day for an interactive sample-data mode inside the app; and the sample-data implementation the same day for the General and Providers & Accounts changes, all recorded above. Implementation of this revision waits for Mark to set `awaiting-implementation`. Mark's review of the remaining panes may revise them further. Configuration functionality remains deferred until #12.

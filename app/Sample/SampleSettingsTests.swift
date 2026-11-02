@@ -8,22 +8,26 @@ struct SampleSettingsTests {
     @Test("each provider keeps its own account and credential-source choices")
     func providersKeepTheirOwnChoices() throws {
         let settings = SampleSettings()
-        let signedIn = SampleProvider.allCases.filter(settings.isSignedIn)
-        try #require(signedIn.count >= 2)
-        let (first, second) = (signedIn[0], signedIn[1])
+        let added = SampleProvider.allCases.filter(settings.isAdded)
+        try #require(added.count >= 2)
+        let (first, second) = (added[0], added[1])
+        let firstAccount = try #require(first.accounts.first { $0 != settings.account(of: first) })
+        let firstSource = try #require(
+            CredentialSource.allCases.first { $0 != settings.credentialSource(of: first) }
+        )
+        let secondSource = try #require(
+            CredentialSource.allCases.first {
+                $0 != settings.credentialSource(of: second) && $0 != firstSource
+            }
+        )
 
-        settings.shownProvider = first
-        let otherAccount = try #require(first.accounts.first { $0 != settings.shownAccount })
-        settings.shownAccount = otherAccount
-        settings.shownCredentialSource = .browserSignIn
-        settings.shownProvider = second
-        settings.shownCredentialSource = .apiKey
-        settings.shownProvider = first
+        settings.setAccount(firstAccount, of: first)
+        settings.setCredentialSource(firstSource, of: first)
+        settings.setCredentialSource(secondSource, of: second)
 
-        #expect(settings.shownAccount == otherAccount)
-        #expect(settings.shownCredentialSource == .browserSignIn)
-        settings.shownProvider = second
-        #expect(settings.shownCredentialSource == .apiKey)
+        #expect(settings.account(of: first) == firstAccount)
+        #expect(settings.credentialSource(of: first) == firstSource)
+        #expect(settings.credentialSource(of: second) == secondSource)
     }
 
     @Test("the default-model choices are the catalog models of signed-in providers")
@@ -124,14 +128,25 @@ struct SampleSettingsTests {
     @Test("signing in makes the provider's models available with its first account")
     func signingInMakesModelsAvailable() throws {
         let settings = SampleSettings()
-        let provider = try #require(SampleProvider.allCases.first { !settings.isSignedIn($0) })
+        let provider = try #require(
+            SampleProvider.allCases.first { settings.isAdded($0) && !settings.isSignedIn($0) }
+        )
 
         settings.signIn(provider)
-        settings.shownProvider = provider
 
         #expect(settings.isSignedIn(provider))
         #expect(settings.availableModels.contains { $0.provider == provider })
-        #expect(settings.shownAccount == provider.accounts.first)
+        #expect(settings.account(of: provider) == provider.accounts.first)
+    }
+
+    @Test("a provider that is not set up cannot be signed in")
+    func signingInNeedsSetUp() throws {
+        let settings = SampleSettings()
+        let provider = try #require(SampleProvider.allCases.first { !settings.isAdded($0) })
+
+        settings.signIn(provider)
+
+        #expect(!settings.isSignedIn(provider))
     }
 
     @Test("signing in when no model is available makes its first model the default")
@@ -158,6 +173,70 @@ struct SampleSettingsTests {
 
         settings.registerWithSesh()
         #expect(settings.isRegisteredWithSesh)
+    }
+
+    @Test("the popular providers are always listed, then the others in the order added")
+    func listedProvidersKeepTheirOrder() throws {
+        let settings = SampleSettings()
+        let others = settings.providersToAdd
+        try #require(others.count >= 2)
+
+        #expect(settings.listedProviders == SampleProvider.popular)
+        #expect(Set(others) == Set(SampleProvider.allCases).subtracting(SampleProvider.popular))
+
+        settings.add(others[1])
+        settings.add(others[0])
+
+        #expect(settings.listedProviders == SampleProvider.popular + [others[1], others[0]])
+        #expect(!settings.providersToAdd.contains(others[0]))
+        #expect(!settings.providersToAdd.contains(others[1]))
+    }
+
+    @Test("setting up or adding a provider leaves it needing sign-in")
+    func addedProvidersNeedSignIn() throws {
+        let settings = SampleSettings()
+        let notSetUp = SampleProvider.allCases.filter { !settings.isAdded($0) }
+        try #require(notSetUp.contains { SampleProvider.popular.contains($0) })
+        try #require(notSetUp.contains { !SampleProvider.popular.contains($0) })
+
+        for provider in notSetUp {
+            settings.add(provider)
+
+            #expect(settings.isAdded(provider))
+            #expect(!settings.isSignedIn(provider))
+            #expect(settings.account(of: provider) == nil)
+            #expect(settings.listedProviders.contains(provider))
+        }
+    }
+
+    @Test("removing a provider signs it out and unlists it unless it is popular")
+    func removingAProvider() throws {
+        let settings = SampleSettings()
+        let other = try #require(settings.providersToAdd.first)
+        let popular = try #require(SampleProvider.popular.first { settings.isSignedIn($0) })
+        settings.add(other)
+
+        settings.remove(other)
+        settings.remove(popular)
+
+        #expect(!settings.isAdded(other))
+        #expect(!settings.listedProviders.contains(other))
+        #expect(settings.providersToAdd.contains(other))
+        #expect(!settings.isAdded(popular))
+        #expect(!settings.isSignedIn(popular))
+        #expect(settings.listedProviders.contains(popular))
+    }
+
+    @Test("removing the default model's provider moves the default as signing out does")
+    func removingMovesTheDefaultModel() throws {
+        let settings = SampleSettings()
+        let provider = try #require(settings.defaultModel?.provider)
+
+        settings.remove(provider)
+
+        #expect(settings.defaultModel != nil)
+        #expect(settings.defaultModel == settings.availableModels.first)
+        #expect(settings.defaultModel?.provider != provider)
     }
 
     @Test("a blank catalog query shows the whole catalog", arguments: ["", "  "])

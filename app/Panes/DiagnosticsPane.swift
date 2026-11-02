@@ -14,8 +14,12 @@ struct DiagnosticsPane: View {
                     value: sampleValue(.verbatim(SampleFacts.appVersion))
                 )
                 SettingsValueRow(
-                    item: .diagnosticsEngineVersion,
-                    value: sampleValue(.verbatim(SampleFacts.engineVersion))
+                    item: .diagnosticsPicoVersion,
+                    value: sampleValue(.verbatim(SampleFacts.picoVersion))
+                )
+                SettingsValueRow(
+                    item: .diagnosticsOMPVersion,
+                    value: sampleValue(.verbatim(SampleFacts.ompVersion))
                 )
             } header: {
                 Text("About")

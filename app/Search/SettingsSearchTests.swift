@@ -44,6 +44,14 @@ struct SettingsSearchTests {
         #expect(SettingsSearch.results(for: "terminal")?.contains(.item(.shell)) == true)
     }
 
+    @Test(
+        "account and credential terms find the provider list",
+        arguments: ["API key", "sign in", "credential", "OAuth", "Keychain"]
+    )
+    func credentialTermsFindProviders(query: String) {
+        #expect(SettingsSearch.results(for: query)?.contains(.item(.providerList)) == true)
+    }
+
     @Test("a destination's title finds the destination")
     func destinationsMatch() {
         #expect(SettingsSearch.results(for: "diagnostics")?.first == .destination(.diagnostics))

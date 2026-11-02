@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@" : {
+
+    },
+    "%@ is the latest" : {
+
+    },
     "%lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -21,6 +27,9 @@
 
     },
     "Account" : {
+
+    },
+    "Add Provider…" : {
 
     },
     "App version" : {
@@ -47,6 +56,9 @@
     "Catalog" : {
 
     },
+    "Checked just now" : {
+
+    },
     "Choices come from the connected account's catalog, not from here." : {
 
     },
@@ -66,6 +78,9 @@
 
     },
     "Connection status" : {
+
+    },
+    "Copy Path" : {
 
     },
     "Credential source" : {
@@ -95,15 +110,6 @@
     "Edit" : {
 
     },
-    "Engine" : {
-
-    },
-    "Engine status" : {
-
-    },
-    "Engine version" : {
-
-    },
     "Eval" : {
 
     },
@@ -111,6 +117,9 @@
 
     },
     "Existing OMP account" : {
+
+    },
+    "Finder" : {
 
     },
     "Forward" : {
@@ -128,6 +137,9 @@
     "High" : {
 
     },
+    "Homebrew" : {
+
+    },
     "How Sesh launches Pico as a custom agent." : {
 
     },
@@ -140,7 +152,7 @@
     "Installed" : {
 
     },
-    "Installed app and engine versions are not read here." : {
+    "Installed versions are not read here." : {
 
     },
     "Installed versions are not read while settings stay unconnected." : {
@@ -200,9 +212,6 @@
     "No Results" : {
 
     },
-    "No account is read, imported, or signed in from this scaffold." : {
-
-    },
     "No catalog is loaded, so the search field filters nothing." : {
 
     },
@@ -239,7 +248,16 @@
     "OK" : {
 
     },
+    "OMP" : {
+
+    },
+    "OMP version" : {
+
+    },
     "Off" : {
+
+    },
+    "Oh My Pi" : {
 
     },
     "Pico" : {
@@ -254,16 +272,10 @@
     "Pico keeps its settings here, apart from your OMP configuration." : {
 
     },
-    "Pico's sessions can use the models of every connected provider." : {
+    "Pico's sessions can use the models of every signed-in provider." : {
 
     },
     "Pico's sessions run intellisense through the shell for code intelligence." : {
-
-    },
-    "Pico's sessions use this engine version." : {
-
-    },
-    "Provider" : {
 
     },
     "Provider accounts, and where their credentials come from." : {
@@ -284,9 +296,6 @@
     "Readiness is not inspected while settings stay unconnected." : {
 
     },
-    "Ready" : {
-
-    },
     "Reasoning level" : {
 
     },
@@ -302,13 +311,13 @@
     "Registering adds Pico to Sesh as a custom agent." : {
 
     },
+    "Remove Provider" : {
+
+    },
     "Runtime" : {
 
     },
     "Runtime readiness, installed versions, and where Pico keeps its settings." : {
-
-    },
-    "Runtime status" : {
 
     },
     "Sample data — nothing here is saved or connected" : {
@@ -326,7 +335,13 @@
     "Sesh custom agent" : {
 
     },
+    "Sesh launches `pico` for every Pico session." : {
+
+    },
     "Sesh starts Pico with these details." : {
+
+    },
+    "Set Up" : {
 
     },
     "Settings file" : {
@@ -347,6 +362,9 @@
     "Show Sample Data" : {
 
     },
+    "Show in Finder" : {
+
+    },
     "Sign In" : {
 
     },
@@ -356,7 +374,13 @@
     "Signed in" : {
 
     },
+    "Signed in · %@" : {
+
+    },
     "Signing out here doesn't sign you out of OMP in Terminal." : {
+
+    },
+    "Starts" : {
 
     },
     "Supported providers come from the engine; none are listed here." : {
@@ -369,9 +393,6 @@
 
     },
     "The helper's location is not resolved while settings stay unconnected." : {
-
-    },
-    "The runtime and engine that Sesh launches for Pico sessions." : {
 
     },
     "The settings location is not read and cannot be chosen yet." : {
@@ -389,6 +410,9 @@
     "Unregister" : {
 
     },
+    "Up to date" : {
+
+    },
     "Versions" : {
 
     },
@@ -401,7 +425,16 @@
     "Write" : {
 
     },
-    "authentication" : {
+    "`pico`" : {
+
+    },
+    "`pico` is built on this version of OMP; each has its own version number." : {
+
+    },
+    "`pico` version" : {
+
+    },
+    "account" : {
 
     },
     "bash" : {
@@ -419,10 +452,16 @@
     "configuration" : {
 
     },
+    "credential" : {
+
+    },
     "default" : {
 
     },
     "effort" : {
+
+    },
+    "engine" : {
 
     },
     "executable" : {
@@ -449,6 +488,9 @@
     "language server" : {
 
     },
+    "launch" : {
+
+    },
     "location" : {
 
     },
@@ -461,6 +503,9 @@
     "path" : {
 
     },
+    "pico" : {
+
+    },
     "problems" : {
 
     },
@@ -468,6 +513,9 @@
 
     },
     "register" : {
+
+    },
+    "runtime" : {
 
     },
     "sign in" : {
@@ -489,6 +537,9 @@
 
     },
     "token" : {
+
+    },
+    "update" : {
 
     },
     "version" : {

@@ -76,7 +76,7 @@ Proposed navigation groups:
 
 | Pane | Configuration job |
 | --- | --- |
-| General | Show runtime readiness, installed app/engine versions, and the selected configuration location. |
+| General | Show runtime readiness as a checklist, the installed Pico app, `pico`, and OMP versions (Pico and OMP are versioned independently), and the selected configuration location. |
 | Providers & Accounts | Enable supported providers, reuse an existing OMP account by explicit choice, add supported API-key/OAuth/device-flow credentials, and show connection state. |
 | Models | Choose the default available model and supported reasoning level from the actual engine catalog; identify provider/account requirements and unavailable selections. |
 | Tools & Integrations | Explain the curated profile, choose/check the external `intellisense` executable through GUI controls, and expose only genuinely supported editable settings. Eval, built-in LSP, and native OMP delegation remain excluded. |

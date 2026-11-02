@@ -19,7 +19,7 @@ struct SettingsValueRow<Action: View>: View {
                 action
             }
         } label: {
-            Text(item.title)
+            Text(item.displayTitle)
         }
         .settingsRow(item)
     }

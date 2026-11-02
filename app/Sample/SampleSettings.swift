@@ -4,10 +4,10 @@ import Observation
 /// The in-memory state behind sample data. It lasts as long as the app and is never saved.
 ///
 /// The default model is always one of `availableModels`, or `nil` when no model is available.
+/// A provider is signed in only while it is added.
 @MainActor
 @Observable
 final class SampleSettings {
-    var shownProvider: SampleProvider = .anthropic
     private(set) var defaultModel: SampleModel? = .claudeSonnet
     var reasoningLevel: ReasoningLevel = .auto
     var catalogQuery = ""
@@ -16,15 +16,17 @@ final class SampleSettings {
     private var providerStates = Dictionary(
         uniqueKeysWithValues: SampleProvider.allCases.map { ($0, $0.initialState) }
     )
+    /// Added providers that are not popular, in the order they were added.
+    private var addedOthers: [SampleProvider] = []
 
-    var shownAccount: String? {
-        get { state(of: shownProvider).account }
-        set { providerStates[shownProvider]?.account = newValue }
+    /// The popular providers, then the others added, in the order they were added.
+    var listedProviders: [SampleProvider] {
+        SampleProvider.popular + addedOthers
     }
 
-    var shownCredentialSource: CredentialSource {
-        get { state(of: shownProvider).credentialSource }
-        set { providerStates[shownProvider]?.credentialSource = newValue }
+    /// The providers Add Provider… offers: the others not yet added.
+    var providersToAdd: [SampleProvider] {
+        SampleProvider.allCases.filter { !SampleProvider.popular.contains($0) && !isAdded($0) }
     }
 
     var availableModels: [SampleModel] {
@@ -47,11 +49,48 @@ final class SampleSettings {
         }
     }
 
+    func isAdded(_ provider: SampleProvider) -> Bool {
+        state(of: provider).isAdded
+    }
+
     func isSignedIn(_ provider: SampleProvider) -> Bool {
         state(of: provider).isSignedIn
     }
 
+    func account(of provider: SampleProvider) -> String? {
+        state(of: provider).account
+    }
+
+    func setAccount(_ account: String?, of provider: SampleProvider) {
+        providerStates[provider]?.account = account
+    }
+
+    func credentialSource(of provider: SampleProvider) -> CredentialSource {
+        state(of: provider).credentialSource
+    }
+
+    func setCredentialSource(_ source: CredentialSource, of provider: SampleProvider) {
+        providerStates[provider]?.credentialSource = source
+    }
+
+    /// Sets a provider up, needing sign-in.
+    func add(_ provider: SampleProvider) {
+        guard !isAdded(provider) else { return }
+        providerStates[provider]?.isAdded = true
+        if !SampleProvider.popular.contains(provider) {
+            addedOthers.append(provider)
+        }
+    }
+
+    /// Signs a provider out and takes it off the list; a popular provider stays listed.
+    func remove(_ provider: SampleProvider) {
+        signOut(provider)
+        providerStates[provider]?.isAdded = false
+        addedOthers.removeAll { $0 == provider }
+    }
+
     func signIn(_ provider: SampleProvider) {
+        guard isAdded(provider) else { return }
         providerStates[provider]?.isSignedIn = true
         providerStates[provider]?.account = provider.accounts.first
         if defaultModel == nil, let model = availableModels.first {

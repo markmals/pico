@@ -23,11 +23,11 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         switch self {
         case .general:
             [
-                .runtimeStatus, .engineStatus, .generalAppVersion, .generalEngineVersion,
-                .settingsFile,
+                .installed, .starts, .upToDate, .generalAppVersion, .generalPicoVersion,
+                .generalOMPVersion, .settingsFile,
             ]
         case .providers:
-            [.provider, .providerConnectionStatus, .account, .credentialSource, .credentialStatus]
+            [.providerList]
         case .models:
             [.model, .reasoningLevel, .catalogSearch, .availableModels]
         case .tools:
@@ -38,7 +38,10 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         case .sesh:
             [.helperLocation, .launchArguments, .customAgent, .seshConnectionStatus, .setupStatus]
         case .diagnostics:
-            [.diagnosticsAppVersion, .diagnosticsEngineVersion, .recentErrors, .diagnosticReport]
+            [
+                .diagnosticsAppVersion, .diagnosticsPicoVersion, .diagnosticsOMPVersion,
+                .recentErrors, .diagnosticReport,
+            ]
         }
     }
 

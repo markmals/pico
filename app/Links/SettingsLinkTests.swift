@@ -49,12 +49,12 @@ struct SettingsLinkTests {
     @Test("an item slug is resolved within the named destination")
     func itemSlugsAreScopedToTheirDestination() throws {
         #expect(
-            try SettingsLink.location(from: Self.url("pico://settings/providers/connection-status"))
-                == .item(.providerConnectionStatus)
+            try SettingsLink.location(from: Self.url("pico://settings/general/pico-version"))
+                == .item(.generalPicoVersion)
         )
         #expect(
-            try SettingsLink.location(from: Self.url("pico://settings/sesh/connection-status"))
-                == .item(.seshConnectionStatus)
+            try SettingsLink.location(from: Self.url("pico://settings/diagnostics/pico-version"))
+                == .item(.diagnosticsPicoVersion)
         )
     }
 
@@ -75,6 +75,12 @@ struct SettingsLinkTests {
             "pico://user@settings/models",
             "pico://settings:8080/models",
             "pico://settings/mod%65ls",
+            "pico://settings/general/runtime-status",
+            "pico://settings/general/engine-status",
+            "pico://settings/general/engine-version",
+            "pico://settings/providers/account",
+            "pico://settings/providers/credential-source",
+            "pico://settings/diagnostics/engine-version",
         ]
     )
     func invalidLinksAreRejected(link: String) throws {

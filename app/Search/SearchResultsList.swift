@@ -30,7 +30,7 @@ private struct SearchResultRow: View {
                 case .destination(let destination):
                     Text(destination.title)
                 case .item(let item):
-                    Text(item.title)
+                    Text(item.displayTitle)
                     Text(item.destination.title)
                         .foregroundStyle(.secondary)
                 }

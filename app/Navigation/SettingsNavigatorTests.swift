@@ -10,7 +10,7 @@ struct SettingsNavigatorTests {
     func startsOnGeneral() {
         let navigator = SettingsNavigator()
 
-        #expect(navigator.current == .general)
+        #expect(navigator.page == .main(.general))
         #expect(navigator.revealedItem == nil)
         #expect(navigator.rejectedLink == nil)
         #expect(!navigator.canGoBack)
@@ -24,7 +24,7 @@ struct SettingsNavigatorTests {
         navigator.selectedDestination = .sesh
         navigator.goBack()
 
-        #expect(navigator.current == .general)
+        #expect(navigator.destination == .general)
         #expect(navigator.canGoForward)
     }
 
@@ -34,7 +34,7 @@ struct SettingsNavigatorTests {
 
         navigator.open(.item(.reasoningLevel))
 
-        #expect(navigator.current == .models)
+        #expect(navigator.page == .main(.models))
         #expect(navigator.revealedItem == .reasoningLevel)
         #expect(navigator.openedLocation == .item(.reasoningLevel))
         #expect(navigator.canGoBack)
@@ -46,11 +46,11 @@ struct SettingsNavigatorTests {
         navigator.open(.item(.reasoningLevel))
 
         navigator.open(.item(.model))
-        #expect(navigator.current == .models)
+        #expect(navigator.destination == .models)
         #expect(navigator.revealedItem == .model)
 
         navigator.goBack()
-        #expect(navigator.current == .general)
+        #expect(navigator.destination == .general)
         #expect(!navigator.canGoBack)
     }
 
@@ -71,17 +71,88 @@ struct SettingsNavigatorTests {
         navigator.open(.destination(.tools))
         #expect(navigator.revealedItem == nil)
         #expect(navigator.openedLocation == .destination(.tools))
+
+        navigator.open(.item(.providerList))
+        navigator.openProvider("anthropic")
+        #expect(navigator.revealedItem == nil)
     }
 
     @Test("choosing a search result opens its location")
     func searchSelectionOpens() {
         let navigator = SettingsNavigator()
 
-        navigator.searchSelection = .item(.credentialSource)
+        navigator.searchSelection = .item(.providerList)
 
-        #expect(navigator.current == .providers)
-        #expect(navigator.revealedItem == .credentialSource)
-        #expect(navigator.searchSelection == .item(.credentialSource))
+        #expect(navigator.page == .main(.providers))
+        #expect(navigator.revealedItem == .providerList)
+        #expect(navigator.searchSelection == .item(.providerList))
+    }
+
+    @Test("opening a provider page is a history step that back returns from")
+    func providerPageIsAHistoryStep() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+
+        navigator.openProvider("anthropic")
+        #expect(navigator.page == .provider("anthropic"))
+        #expect(navigator.destination == .providers)
+        #expect(navigator.selectedDestination == .providers)
+
+        navigator.goBack()
+        #expect(navigator.page == .main(.providers))
+    }
+
+    @Test("choosing the current destination in the sidebar keeps a provider page open")
+    func sidebarCurrentDestinationKeepsProviderPage() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+        navigator.openProvider("openAI")
+
+        navigator.selectedDestination = .providers
+
+        #expect(navigator.page == .provider("openAI"))
+    }
+
+    @Test("opening an item from a provider page goes to its destination's main page")
+    func openingAnItemLeavesTheProviderPage() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+        navigator.openProvider("google")
+
+        navigator.open(.item(.providerList))
+
+        #expect(navigator.page == .main(.providers))
+        #expect(navigator.revealedItem == .providerList)
+        navigator.goBack()
+        #expect(navigator.page == .provider("google"))
+    }
+
+    @Test("forgetting a provider's page returns to the provider list")
+    func forgettingAProviderPage() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+        navigator.openProvider("anthropic")
+
+        navigator.forgetProviderPage("anthropic")
+
+        #expect(navigator.page == .main(.providers))
+        #expect(!navigator.canGoForward)
+    }
+
+    @Test("forgetting every provider page keeps the other pages")
+    func forgettingAllProviderPages() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+        navigator.openProvider("anthropic")
+        navigator.goBack()
+        navigator.openProvider("openAI")
+
+        navigator.forgetProviderPages()
+
+        #expect(navigator.page == .main(.providers))
+        navigator.goBack()
+        #expect(navigator.page == .main(.general))
+        #expect(!navigator.canGoBack)
     }
 
     @Test("a valid link opens its location")
@@ -90,7 +161,7 @@ struct SettingsNavigatorTests {
 
         navigator.handle(try #require(URL(string: "pico://settings/tools/shell")))
 
-        #expect(navigator.current == .tools)
+        #expect(navigator.destination == .tools)
         #expect(navigator.revealedItem == .shell)
         #expect(navigator.rejectedLink == nil)
     }
@@ -102,10 +173,10 @@ struct SettingsNavigatorTests {
 
         navigator.handle(try #require(URL(string: "pico://settings")))
 
-        #expect(navigator.current == .models)
+        #expect(navigator.destination == .models)
         #expect(navigator.rejectedLink == nil)
         navigator.goBack()
-        #expect(navigator.current == .general)
+        #expect(navigator.destination == .general)
     }
 
     @Test("an invalid link is rejected without changing the pane or history")
@@ -117,10 +188,10 @@ struct SettingsNavigatorTests {
         navigator.handle(link)
 
         #expect(navigator.rejectedLink == link)
-        #expect(navigator.current == .models)
+        #expect(navigator.destination == .models)
         #expect(navigator.revealedItem == .reasoningLevel)
         navigator.goBack()
-        #expect(navigator.current == .general)
+        #expect(navigator.destination == .general)
     }
 
     @Test("a link that opens a location clears an earlier rejected link")
@@ -131,6 +202,6 @@ struct SettingsNavigatorTests {
         navigator.handle(try #require(URL(string: "pico://settings/tools/shell")))
 
         #expect(navigator.rejectedLink == nil)
-        #expect(navigator.current == .tools)
+        #expect(navigator.destination == .tools)
     }
 }

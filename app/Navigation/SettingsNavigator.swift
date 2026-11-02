@@ -14,13 +14,17 @@ final class SettingsNavigator {
     /// A link that named no settings location, awaiting the user's acknowledgement.
     var rejectedLink: URL?
 
-    private var history = NavigationHistory(start: .general)
+    private var history = NavigationHistory(start: .main(.general))
 
     var canGoBack: Bool { history.canGoBack }
 
     var canGoForward: Bool { history.canGoForward }
 
-    var current: SettingsDestination { history.current }
+    /// The page the detail area shows.
+    var page: SettingsPage { history.current }
+
+    /// The pane the current page belongs to, which the sidebar shows as selected.
+    var destination: SettingsDestination { history.current.destination }
 
     /// Whether the rejected-link alert is showing; dismissing it acknowledges the link.
     var isShowingRejectedLink: Bool {
@@ -44,13 +48,14 @@ final class SettingsNavigator {
         }
     }
 
-    /// The selected sidebar destination: choosing one navigates to it.
+    /// The selected sidebar destination: choosing one navigates to its main page. Choosing the
+    /// current destination changes nothing, even on a provider page.
     var selectedDestination: SettingsDestination {
-        get { current }
+        get { destination }
         set {
-            guard newValue != current else { return }
+            guard newValue != destination else { return }
             openedLocation = nil
-            history.navigate(to: newValue)
+            history.navigate(to: .main(newValue))
         }
     }
 
@@ -79,8 +84,26 @@ final class SettingsNavigator {
     }
 
     func open(_ location: SettingsLocation) {
-        history.navigate(to: location.destination)
+        history.navigate(to: .main(location.destination))
         openedLocation = location
         openCount += 1
+    }
+
+    /// Opens a provider's page inside Providers & Accounts.
+    func openProvider(_ slug: String) {
+        openedLocation = nil
+        history.navigate(to: .provider(slug))
+    }
+
+    /// Forgets a removed provider's page; if it is showing, the page before it returns.
+    func forgetProviderPage(_ slug: String) {
+        history.forget { $0 == .provider(slug) }
+    }
+
+    /// Forgets every provider page, as when sample data is turned off.
+    func forgetProviderPages() {
+        history.forget { page in
+            if case .provider = page { true } else { false }
+        }
     }
 }

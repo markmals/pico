@@ -3,55 +3,56 @@ import Foundation
 // Every row label in the panes comes from here, and so does every search match, so a row and
 // its search result cannot disagree. Slugs are a public link contract (proposal 0005).
 extension SettingsItem {
-    static let runtimeStatus = SettingsItem(
+    static let installed = SettingsItem(
         .general,
-        "runtime-status",
-        title: "Runtime status",
-        keywords: ["readiness"]
+        "installed",
+        title: "Installed",
+        keywords: ["runtime", "readiness", "pico", "Homebrew"]
     )
-    static let engineStatus = SettingsItem(.general, "engine-status", title: "Engine status")
+    static let starts = SettingsItem(
+        .general,
+        "starts",
+        title: "Starts",
+        keywords: ["runtime", "readiness", "launch"]
+    )
+    static let upToDate = SettingsItem(
+        .general,
+        "up-to-date",
+        title: "Up to date",
+        keywords: ["runtime", "update", "version"]
+    )
     static let generalAppVersion = SettingsItem(
         .general,
         "app-version",
         title: "Pico app",
         keywords: ["version"]
     )
-    static let generalEngineVersion = SettingsItem(
+    static let generalPicoVersion = SettingsItem(
         .general,
-        "engine-version",
-        title: "Engine",
-        keywords: ["version"]
+        "pico-version",
+        title: "`pico`",
+        keywords: ["version", "runtime"]
+    )
+    static let generalOMPVersion = SettingsItem(
+        .general,
+        "omp-version",
+        title: "OMP",
+        keywords: ["version", "Oh My Pi", "engine"]
     )
     static let settingsFile = SettingsItem(
         .general,
         "settings-file",
         title: "Settings file",
-        keywords: ["configuration", "location", "path"]
+        keywords: ["configuration", "location", "path", "Finder"]
     )
 
-    static let provider = SettingsItem(.providers, "provider", title: "Provider")
-    static let providerConnectionStatus = SettingsItem(
+    static let providerList = SettingsItem(
         .providers,
-        "connection-status",
-        title: "Connection status"
-    )
-    static let account = SettingsItem(
-        .providers,
-        "account",
-        title: "Account",
-        keywords: ["sign in", "login"]
-    )
-    static let credentialSource = SettingsItem(
-        .providers,
-        "credential-source",
-        title: "Credential source",
-        keywords: ["API key", "OAuth", "token", "Keychain"]
-    )
-    static let credentialStatus = SettingsItem(
-        .providers,
-        "credential-status",
-        title: "Credential status",
-        keywords: ["sign in", "authentication"]
+        "provider-list",
+        title: "Providers",
+        keywords: [
+            "account", "sign in", "login", "credential", "API key", "OAuth", "token", "Keychain",
+        ]
     )
 
     static let model = SettingsItem(.models, "model", title: "Model", keywords: ["default"])
@@ -140,10 +141,16 @@ extension SettingsItem {
         "app-version",
         title: "App version"
     )
-    static let diagnosticsEngineVersion = SettingsItem(
+    static let diagnosticsPicoVersion = SettingsItem(
         .diagnostics,
-        "engine-version",
-        title: "Engine version"
+        "pico-version",
+        title: "`pico` version"
+    )
+    static let diagnosticsOMPVersion = SettingsItem(
+        .diagnostics,
+        "omp-version",
+        title: "OMP version",
+        keywords: ["Oh My Pi", "engine"]
     )
     static let recentErrors = SettingsItem(
         .diagnostics,

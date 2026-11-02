@@ -9,10 +9,10 @@ struct UnavailablePicker: View {
         Picker(selection: .constant(0)) {
             Text(reason).tag(0)
         } label: {
-            Text(item.title)
+            Text(item.displayTitle)
         }
         .disabled(true)
-        .accessibilityLabel(Text(item.title))
+        .accessibilityLabel(Text(item.displayTitle))
         .settingsRow(item)
     }
 }

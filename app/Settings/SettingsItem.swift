@@ -38,3 +38,11 @@ extension SettingsItem: Hashable {
 extension SettingsItem: Identifiable {
     var id: Self { self }
 }
+
+extension SettingsItem {
+    /// The title as rows and search results show it. Markdown in the title applies, so a
+    /// command name written as `pico` appears in code style.
+    var displayTitle: AttributedString {
+        AttributedString(localized: title)
+    }
+}

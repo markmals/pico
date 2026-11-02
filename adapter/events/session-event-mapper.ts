@@ -8,6 +8,7 @@ import type { EditedFiles } from "./tool-call-translation.ts";
 
 import {
     editedFiles,
+    failureText,
     resultDetails,
     resultText,
     startLocations,
@@ -165,7 +166,7 @@ export class SessionEventMapper {
             status: isError ? "failed" : "completed",
             rawOutput: details,
             content: isError
-                ? [textContent(resultText(result))]
+                ? [textContent(failureText(toolName, result))]
                 : changeContent(changed.changes, result),
         };
         if (changed.locations.length > 0) update.locations = changed.locations;

@@ -10,6 +10,7 @@ import { after, describe, test } from "node:test";
 import { picoWorkspace, useAsProcessAgentDir } from "../engine/testing/session-fixture.ts";
 import { connectPicoAgent } from "./agent-harness.ts";
 import { mockEngine, removeTemporaryDirectories } from "./engine-harness.ts";
+import { fakeSession } from "./fake-session.ts";
 import { picoAgentShutdown } from "./pico-agent.ts";
 
 after(removeTemporaryDirectories);
@@ -221,5 +222,85 @@ describe("proposal.0006 the plan when a session reopens", () => {
         const updates = await reopen(history, manager, "session/resume");
 
         assert.deepEqual(updates, [{ sessionUpdate: "plan", entries: [] }]);
+    });
+
+    test("load replays a failed todo call carrying only its error", async t => {
+        const history = await savedHistory(t);
+        const manager = await history.create();
+        manager.appendMessage({ role: "user", content: "finish Z", timestamp: 1 });
+        manager.appendMessage(toolUse([{ id: "todo-1", name: "todo" }]));
+        manager.appendMessage({
+            role: "toolResult",
+            toolCallId: "todo-1",
+            toolName: "todo",
+            content: [
+                {
+                    type: "text",
+                    text: 'Errors: Task "Z" not found\nRemaining items (1):\n  - Draft [pending] (Tasks)',
+                },
+            ],
+            details: { phases: [], storage: "session" },
+            isError: true,
+            timestamp: 2,
+        });
+
+        const updates = await reopen(history, manager, "session/load");
+
+        const failed = updates.find(
+            update => update.sessionUpdate === "tool_call_update" && update.toolCallId === "todo-1",
+        );
+        assert.deepEqual(failed, {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "todo-1",
+            status: "failed",
+            rawOutput: { phases: [], storage: "session" },
+            content: [
+                { type: "content", content: { type: "text", text: 'Errors: Task "Z" not found' } },
+            ],
+        });
+    });
+
+    test("a resume cancelled before its plan is sent sends no plan", async t => {
+        const history = await savedHistory(t);
+        const manager = await history.create();
+        manager.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+        const sessionId = manager.getSessionId();
+        await manager.close();
+        const cancellation = new AbortController();
+        const client = connectPicoAgent({
+            version: "0.0.0-test",
+            dataDir: history.dataDir,
+            createSession: async (cwd, _servers, opened) => {
+                // The attachment's first flush is the last wait before its plan goes out.
+                const flush = opened.flush.bind(opened);
+                opened.flush = async () => {
+                    await flush();
+                    cancellation.abort();
+                    const delivered = Promise.withResolvers<void>();
+                    setImmediate(delivered.resolve);
+                    await delivered.promise;
+                };
+                return fakeSession(cwd).session;
+            },
+        });
+        try {
+            await client.initialize();
+            const resumed = await client.agent
+                .request(
+                    "session/resume",
+                    { sessionId, cwd: history.cwd },
+                    { cancellationSignal: cancellation.signal },
+                )
+                .then(
+                    () => "resumed",
+                    () => "refused",
+                );
+
+            assert.equal(resumed, "refused");
+            assert.deepEqual(client.updatesFor(sessionId), []);
+        } finally {
+            await client.close();
+            await picoAgentShutdown(client.app).completed;
+        }
     });
 });

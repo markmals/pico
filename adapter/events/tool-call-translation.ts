@@ -183,6 +183,18 @@ export function resultText(result: unknown): string {
     return content.map(block => stringProperty(block, "text") ?? "").join("");
 }
 
+/**
+ * What a failed call shows. A failed `todo` batch follows its `Errors:` line
+ * with the whole unchanged list (Oh My Pi 18.14.0's `formatSummary`); the plan
+ * already shows that list, so the call carries only the error (proposal.0006).
+ */
+export function failureText(toolName: string, result: unknown): string {
+    const text = resultText(result);
+    if (toolName !== "todo" || !text.startsWith("Errors: ")) return text;
+    const list = text.indexOf("\nRemaining items");
+    return list === -1 ? text : text.slice(0, list);
+}
+
 export function resultDetails(result: unknown): unknown {
     return property(result, "details");
 }

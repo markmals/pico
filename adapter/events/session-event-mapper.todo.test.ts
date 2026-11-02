@@ -49,9 +49,16 @@ describe("proposal.0006 the todo call in the transcript", () => {
         expect(events.closeOpenToolCalls()).toEqual([]);
     });
 
-    test("a failed todo call is reported once, when it ends, as a failed call with the engine's error", () => {
+    test("a failed todo call is reported once, when it ends, as a failed call carrying only the engine's error", () => {
         const events = mapper();
         const details = { phases: [], storage: "session" };
+        // OMP follows a failed batch's errors with the whole unchanged list.
+        const engineText = [
+            'Errors: Task "Z" not found; Task "Y" not found',
+            "Remaining items (1):",
+            "  - Draft [in_progress] (Tasks)",
+            "Overall: 0/1 done, 1 open.",
+        ].join("\n");
 
         const started = events.map(
             toolExecutionStart({
@@ -65,7 +72,7 @@ describe("proposal.0006 the todo call in the transcript", () => {
             toolExecutionEnd({
                 toolCallId: "todo-1",
                 toolName: "todo",
-                result: toolResult('Errors: Task "Z" not found', details),
+                result: toolResult(engineText, details),
                 isError: true,
             }),
         );
@@ -89,12 +96,34 @@ describe("proposal.0006 the todo call in the transcript", () => {
                 content: [
                     {
                         type: "content",
-                        content: { type: "text", text: 'Errors: Task "Z" not found' },
+                        content: {
+                            type: "text",
+                            text: 'Errors: Task "Z" not found; Task "Y" not found',
+                        },
                     },
                 ],
             },
         ]);
         expect(events.closeOpenToolCalls()).toEqual([]);
+    });
+
+    test("a failure the engine reports without a list keeps its whole text", () => {
+        const events = mapper();
+        events.map(toolExecutionStart({ toolCallId: "todo-1", toolName: "todo", args: {} }));
+        const text = "Missing op: expected one of init, start, done\nSee the tool description.";
+
+        const ended = events.map(
+            toolExecutionEnd({
+                toolCallId: "todo-1",
+                toolName: "todo",
+                result: toolResult(text),
+                isError: true,
+            }),
+        );
+
+        expect(ended[1]).toMatchObject({
+            content: [{ type: "content", content: { type: "text", text } }],
+        });
     });
 
     test("a todo call without a stated intent is titled Update plan", () => {

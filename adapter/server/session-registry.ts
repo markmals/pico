@@ -169,7 +169,10 @@ export class SessionRegistry {
             runtime = new SessionRuntime(stored.sessionId, session, this.#client, stored);
             await runtime.flushPersistence();
             if (replay) await runtime.replay(signal);
-            if (!fresh) await runtime.sendCurrentPlan();
+            if (!fresh) {
+                this.#requireOpen(signal);
+                await runtime.sendCurrentPlan();
+            }
             this.#requireOpen(signal);
             this.#sessions.set(stored.sessionId, runtime);
             return runtime;

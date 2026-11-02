@@ -4,6 +4,7 @@ import type { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import type { ToolPresentation } from "./tool-presentation.ts";
 
 import {
+    failureText,
     resultDetails,
     resultText,
     startLocations,
@@ -97,7 +98,11 @@ export function* replayHistory(
         if (!message.isError && saved?.end?.status === "completed") {
             yield saved.end;
         } else {
-            const content = [textContent(resultText(message))];
+            const content = [
+                textContent(
+                    message.isError ? failureText(message.toolName, message) : resultText(message),
+                ),
+            ];
             if (!message.isError && (message.toolName === "write" || message.toolName === "edit")) {
                 content.push(
                     textContent(

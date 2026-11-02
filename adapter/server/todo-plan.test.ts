@@ -79,8 +79,18 @@ describe("proposal.0006 the plan during a turn", () => {
             "tool_call_update",
         ]);
         expect(failed[0]).toMatchObject({ name: "todo", kind: "other" });
-        expect(failed[1]).toMatchObject({ status: "failed" });
-        expect(JSON.stringify(failed[1])).toContain("not found");
+        expect(failed[1]).toMatchObject({
+            status: "failed",
+            content: [
+                {
+                    type: "content",
+                    content: {
+                        type: "text",
+                        text: 'Errors: Task "Something not on the list" not found',
+                    },
+                },
+            ],
+        });
     }, 30_000);
 
     test("dropped items leave the plan and blocked items are labelled pending", async () => {

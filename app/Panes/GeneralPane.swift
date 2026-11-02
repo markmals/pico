@@ -9,16 +9,23 @@ struct GeneralPane: View {
 
             Section {
                 SettingsValueRow(
-                    item: .runtimeStatus,
-                    value: sampleValue(.status("Installed", .ready))
+                    item: .installed,
+                    value: sampleValue(.status("\(SampleFacts.helperLocation)", .ready))
                 )
-                SettingsValueRow(item: .engineStatus, value: sampleValue(.status("Ready", .ready)))
+                SettingsValueRow(
+                    item: .starts,
+                    value: sampleValue(.status("Checked just now", .ready))
+                )
+                SettingsValueRow(
+                    item: .upToDate,
+                    value: sampleValue(.status("\(SampleFacts.picoVersion) is the latest", .ready))
+                )
             } header: {
                 Text("Runtime")
             } footer: {
                 sample == nil
                     ? Text("Readiness is not inspected while settings stay unconnected.")
-                    : Text("The runtime and engine that Sesh launches for Pico sessions.")
+                    : Text("Sesh launches `pico` for every Pico session.")
             }
 
             Section {
@@ -27,22 +34,25 @@ struct GeneralPane: View {
                     value: sampleValue(.verbatim(SampleFacts.appVersion))
                 )
                 SettingsValueRow(
-                    item: .generalEngineVersion,
-                    value: sampleValue(.verbatim(SampleFacts.engineVersion))
+                    item: .generalPicoVersion,
+                    value: sampleValue(.verbatim(SampleFacts.picoVersion))
+                )
+                SettingsValueRow(
+                    item: .generalOMPVersion,
+                    value: sampleValue(.verbatim(SampleFacts.ompVersion))
                 )
             } header: {
                 Text("Versions")
             } footer: {
                 sample == nil
-                    ? Text("Installed app and engine versions are not read here.")
-                    : Text("Pico's sessions use this engine version.")
+                    ? Text("Installed versions are not read here.")
+                    : Text(
+                        "`pico` is built on this version of OMP; each has its own version number."
+                    )
             }
 
             Section {
-                SettingsValueRow(
-                    item: .settingsFile,
-                    value: sampleValue(.verbatim(SampleFacts.settingsFile))
-                )
+                SettingsFileRow(path: sample == nil ? nil : SampleFacts.settingsFile)
             } header: {
                 Text("Configuration")
             } footer: {

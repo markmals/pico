@@ -5,6 +5,13 @@ enum SampleProvider: String, CaseIterable, Identifiable {
     case anthropic
     case openAI
     case google
+    case openRouter
+    case xAI
+    case mistral
+    case groq
+
+    /// The providers the list always shows, set up or not; the rest are added from a menu.
+    static let popular: [SampleProvider] = [.anthropic, .openAI, .google, .openRouter]
 
     var id: Self { self }
 
@@ -14,13 +21,17 @@ enum SampleProvider: String, CaseIterable, Identifiable {
         case .anthropic: "Anthropic"
         case .openAI: "OpenAI"
         case .google: "Google"
+        case .openRouter: "OpenRouter"
+        case .xAI: "xAI"
+        case .mistral: "Mistral"
+        case .groq: "Groq"
         }
     }
 
     var accounts: [String] {
         switch self {
         case .anthropic: ["mark@example.com", "work@example.com"]
-        case .openAI, .google: ["mark@example.com"]
+        default: ["mark@example.com"]
         }
     }
 
@@ -28,23 +39,39 @@ enum SampleProvider: String, CaseIterable, Identifiable {
         switch self {
         case .anthropic:
             SampleProviderState(
+                isAdded: true,
                 isSignedIn: true,
                 account: accounts.first,
                 credentialSource: .existingOMPAccount
             )
         case .openAI:
             SampleProviderState(
+                isAdded: true,
                 isSignedIn: true,
                 account: accounts.first,
                 credentialSource: .apiKey
             )
         case .google:
-            SampleProviderState(isSignedIn: false, account: nil, credentialSource: .browserSignIn)
+            SampleProviderState(
+                isAdded: true,
+                isSignedIn: false,
+                account: nil,
+                credentialSource: .browserSignIn
+            )
+        default:
+            SampleProviderState(
+                isAdded: false,
+                isSignedIn: false,
+                account: nil,
+                credentialSource: .apiKey
+            )
         }
     }
 }
 
+/// One provider's sample configuration. A provider is signed in only while it is added.
 struct SampleProviderState: Equatable {
+    var isAdded: Bool
     var isSignedIn: Bool
     var account: String?
     var credentialSource: CredentialSource

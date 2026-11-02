@@ -34,8 +34,9 @@ Each pane keeps its scroll position while the app runs, including when you retur
 
 The toolbar's back and forward buttons work like a browser's. View > Back (⌘[) and View > Forward (⌘]) do the same.
 
-- Opening a different pane adds the pane you left to the back history and clears the forward history. Choosing the pane you are already on changes nothing.
-- Back returns to the previous pane; forward undoes back.
+- Opening a different page adds the page you left to the back history and clears the forward history. A page is a pane, or a provider's page inside Providers & Accounts. Choosing the pane you are already on in the sidebar changes nothing, even from a provider's page.
+- Back returns to the previous page; forward undoes back.
+- When a provider's page goes away, because you removed the provider or turned sample data off, the history forgets it, and if you were on it you return to the page before it.
 - A button and its menu command are unavailable when there is nothing to go back or forward to.
 
 ### Search
@@ -58,24 +59,25 @@ Every pane and setting has a link:
 
 Open a link from Terminal with `open`, from a browser, or from another app. If Pico is not running, the link launches it. A link Pico does not recognize shows an alert naming the link and leaves the window where it was.
 
-Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `diagnostics`. The setting names for each pane are listed in [proposal 0005](../proposals/0005-mac-app-ui-workspace.md#deep-links); a setting keeps its link name even if its label changes.
+Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `diagnostics`. The setting names for each pane are listed in [proposal 0005](../proposals/0005-mac-app-ui-workspace.md#deep-links); a setting keeps its link name even if its label changes. A provider's page has no link.
 
 ### Sample data
 
-Choose View > Show Sample Data to see every pane filled in as if Pico were set up. Choose it again to return to the unconnected panes. Sample data is off whenever Pico starts; to start with it on, for a screenshot or a script, launch the app with an argument:
+Choose View > Show Sample Data to see every pane filled in as if Pico were set up. Choose it again to return to the unconnected panes. Sample data is off whenever Pico starts; to start with it on, for a screenshot or a script, quit Pico and launch it with an argument:
 
 ```sh
-open .build/macos/Build/Products/Debug/Pico.app --args -ShowsSampleData YES
+mise run macos:run -- --args -ShowsSampleData YES
 ```
 
-While it is on, the notice at the bottom of every pane reads “Sample data — nothing here is saved or connected”. Every value is invented. The rows are the same as without sample data, but now they have values, the pickers and the catalog search field work, and two buttons work:
+While it is on, the notice at the bottom of every pane reads “Sample data — nothing here is saved or connected”. Every value is invented. The panes have the same rows as without sample data, now with values, and the pickers, the catalog search field, and these buttons work:
 
-- **Providers & Accounts:** choose Anthropic, OpenAI, or Google to see that provider's account, credential source, and status. Anthropic and OpenAI are signed in; Google needs sign-in. Sign Out and Sign In change the shown provider's status at once, with no sign-in window.
-- **Models:** the default-model picker offers only signed-in providers' models, and the reasoning-level picker offers only the levels the chosen model supports. Choosing a model that doesn't support the current level switches to that model's default level. The catalog lists every sample model and marks models of providers that need sign-in as unavailable; type in Search catalog to filter it by model or provider name. If you sign out the provider of the default model, the default moves to the first model still available; with every provider signed out, the default model reads “None available”.
+- **General:** the Runtime checklist shows `pico` installed at `/opt/homebrew/bin/pico`, starting, and up to date. Versions lists the Pico app, `pico`, and the OMP version that `pico` is built on; Pico and OMP have their own version numbers. Show in Finder, on the Settings file row, opens Pico's folder in Application Support if it exists; right-click the row and choose Copy Path to copy the path.
+- **Providers & Accounts:** the list shows Anthropic and OpenAI signed in, Google needing sign-in, and OpenRouter not set up. Choose a set-up provider to open its page, with its account, credential source, and credential status; ⌘[ or the back button returns to the list. On a provider's page, Sign Out and Sign In change its status at once, with no sign-in window, and Remove Provider takes it off the list. Set Up, on OpenRouter, and Add Provider…, which offers xAI, Mistral, and Groq, add a provider that needs sign-in and open its page.
+- **Models:** the default-model picker offers only signed-in providers' models, and the reasoning-level picker offers only the levels the chosen model supports. Choosing a model that doesn't support the current level switches to that model's default level. The catalog lists every sample model and marks models of providers that aren't signed in as unavailable; type in Search catalog to filter it by model or provider name. If you sign out or remove the provider of the default model, the default moves to the first model still available; with every provider signed out, the default model reads “None available”.
 - **Sesh:** Unregister and Register switch between a registered, connected Pico and an unregistered one.
-- **Other panes:** sample versions, paths, and statuses to read; nothing to change.
+- **Tools & Integrations and Diagnostics & About:** sample paths, versions, and statuses to read; nothing to change.
 
-Your choices stay while Pico runs, even if you turn sample data off and on, and are gone when it quits. Nothing is written to disk, the Keychain, or your defaults, and nothing contacts a provider, Sesh, or another app. Search, back and forward, and links work the same with sample data on; search matches setting names, never sample values.
+Your choices stay while Pico runs, even if you turn sample data off and on, and are gone when it quits. Nothing is written to disk, the Keychain, or your defaults, and nothing contacts a provider, Sesh, or another app; the only things that leave the window are the path Copy Path puts on the clipboard and the Finder window Show in Finder opens. Search, back and forward, and links work the same with sample data on; search matches setting names, never sample values, and an account or credential term such as “API key” finds the Providers list.
 
 ## Worked example
 

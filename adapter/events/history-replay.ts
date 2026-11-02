@@ -20,6 +20,8 @@ export function* replayHistory(
     const opened = new Set<string>();
     const settled = new Set<string>();
     const names = new Map<string, string>();
+    /** `todo` calls replay as they were reported live: only when they did not succeed (proposal.0006). */
+    const heldTodoCalls = new Map<string, SessionUpdate>();
     const transcript = manager.buildSessionContext({ transcript: true }).messages;
     for (const message of transcript) {
         if (message.role === "user") {
@@ -51,11 +53,21 @@ export function* replayHistory(
                         sessionUpdate: "agent_thought_chunk",
                         content: { type: "text", text: block.thinking },
                     };
-                } else if (block.type === "toolCall" && !opened.has(block.id)) {
-                    opened.add(block.id);
+                } else if (
+                    block.type === "toolCall" &&
+                    !opened.has(block.id) &&
+                    !heldTodoCalls.has(block.id)
+                ) {
                     names.set(block.id, block.name);
                     const saved = presentations.get(block.id);
-                    yield saved?.start ?? toolStart(block.id, block.name, block.arguments, cwd);
+                    const start =
+                        saved?.start ?? toolStart(block.id, block.name, block.arguments, cwd);
+                    if (block.name === "todo") {
+                        heldTodoCalls.set(block.id, start);
+                        continue;
+                    }
+                    opened.add(block.id);
+                    yield start;
                 }
             }
             continue;
@@ -63,6 +75,18 @@ export function* replayHistory(
         if (message.role !== "toolResult" || settled.has(message.toolCallId)) continue;
         const id = message.toolCallId;
         const saved = presentations.get(id);
+        if (message.toolName === "todo" && !opened.has(id)) {
+            const held =
+                heldTodoCalls.get(id) ?? saved?.start ?? toolStart(id, "todo", undefined, cwd);
+            heldTodoCalls.delete(id);
+            if (!message.isError) {
+                settled.add(id);
+                continue;
+            }
+            opened.add(id);
+            names.set(id, "todo");
+            yield held;
+        }
         if (!opened.has(id)) {
             opened.add(id);
             names.set(id, message.toolName);
@@ -90,8 +114,10 @@ export function* replayHistory(
             };
         }
     }
-    for (const id of opened) {
+    for (const id of [...opened, ...heldTodoCalls.keys()]) {
         if (settled.has(id)) continue;
+        const held = heldTodoCalls.get(id);
+        if (held) yield held;
         yield {
             sessionUpdate: "tool_call_update",
             toolCallId: id,

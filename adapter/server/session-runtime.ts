@@ -18,6 +18,7 @@ import type { StoredSession } from "../history/session-store.ts";
 import { attempt } from "../engine/errors.ts";
 import { replayHistory } from "../events/history-replay.ts";
 import { SessionEventMapper } from "../events/session-event-mapper.ts";
+import { PlanReporter } from "../events/todo-plan.ts";
 import { readToolPresentations, recordToolPresentation } from "../events/tool-presentation.ts";
 import { applyConfigOption, configOptionsOf } from "./config-options.ts";
 import { UpdateQueue } from "./update-queue.ts";
@@ -59,6 +60,8 @@ export class SessionRuntime {
     /** The menus as the client last received them, so each change reaches it once. */
     #reportedOptions: string;
     readonly #stopWatchingModel: () => void;
+    /** The plan this attachment's client last received. */
+    readonly #plan = new PlanReporter();
 
     constructor(
         sessionId: string,
@@ -124,6 +127,19 @@ export class SessionRuntime {
             await this.#queue.drained();
         }
         if (signal.aborted) throw RequestError.requestCancelled();
+    }
+
+    /** Sends the engine's current todo list, whatever the client holds: a reopened client's copy may be stale. */
+    async sendCurrentPlan(): Promise<void> {
+        this.#queue.push(this.#plan.current(this.#session.engine.getTodoPhases()));
+        await this.#queue.drained();
+    }
+
+    /** Sends the engine's todo list when it differs from the plan the client holds. */
+    #reportPlanChanges(): void {
+        for (const update of this.#plan.changes(this.#session.engine.getTodoPhases())) {
+            this.#queue.push(update);
+        }
     }
 
     #publish(update: SessionUpdate): void {
@@ -200,6 +216,9 @@ export class SessionRuntime {
                 lastAssistantMessage = event.message;
             }
             for (const update of mapper.map(event)) this.#publish(update);
+            if (event.type === "tool_execution_end" && event.toolName === "todo") {
+                this.#reportPlanChanges();
+            }
         });
 
         try {
@@ -227,6 +246,8 @@ export class SessionRuntime {
             }
             unsubscribe();
             for (const update of mapper.closeOpenToolCalls()) this.#publish(update);
+            // A cancellation can close a todo call whose change the engine still kept.
+            this.#reportPlanChanges();
             // A cancel can still arrive while the last update is in flight, so the
             // turn is only free once nothing is draining and none is pending.
             let joined: Promise<void> | undefined;

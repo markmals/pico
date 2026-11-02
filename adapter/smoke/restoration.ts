@@ -63,6 +63,14 @@ export async function verifyRestoration(
                 "load does not repeat the old write",
                 readFileSync(file, "utf8") === changed ? null : "loading changed the project file",
             );
+            const plans = updates.filter(update => update.sessionUpdate === "plan");
+            checklist.record(
+                "load ends with the saved todo list as one plan",
+                Bun.deepEquals(plans, [currentPlan(scratch)]) &&
+                    updates.at(-1)?.sessionUpdate === "plan"
+                    ? null
+                    : JSON.stringify(plans),
+            );
             updates.length = 0;
             await recall(context, sessionId);
             checklist.record(
@@ -75,9 +83,10 @@ export async function verifyRestoration(
         await inProcess(executable, scratch, async (context, updates) => {
             await context.request("session/resume", { sessionId, cwd: scratch.project });
             checklist.record(
-                "resume emits no historical transcript",
-                updates.length === 0 ? null : JSON.stringify(updates),
+                "resume emits no historical transcript, only the saved todo list as one plan",
+                Bun.deepEquals(updates, [currentPlan(scratch)]) ? null : JSON.stringify(updates),
             );
+            updates.length = 0;
             await recall(context, sessionId);
             checklist.record(
                 "a resumed session continues with its saved context",
@@ -106,6 +115,20 @@ export async function verifyRestoration(
             error instanceof Error ? error.message : String(error),
         );
     }
+}
+
+/** The plan the first turn's `todo` call left behind. */
+function currentPlan(scratch: Scratch): SessionUpdate {
+    return {
+        sessionUpdate: "plan",
+        entries: [
+            {
+                content: `Remember ${scratch.memoryToken}`,
+                priority: "medium",
+                status: "in_progress",
+            },
+        ],
+    };
 }
 
 async function recall(context: ClientContext, sessionId: string): Promise<void> {

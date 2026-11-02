@@ -142,7 +142,7 @@ describe("proposal.0004 agent continuation", () => {
             resumed.configOptions?.find(option => option.id === "thinking")?.currentValue,
             "high",
         );
-        assert.deepEqual(second.updatesFor(sessionId), []);
+        assert.deepEqual(second.updatesFor(sessionId), [{ sessionUpdate: "plan", entries: [] }]);
         await prompt(second, sessionId, "What was the recovery word?");
         const received = JSON.stringify(f.models.beta.calls.at(-1)?.context.messages);
         assert.match(received, /copper-kingfisher/);
@@ -422,7 +422,7 @@ describe("proposal.0004 agent continuation", () => {
                     ]);
                     assert.deepEqual(texts(replay, "agent_message_chunk"), ["from alpha"]);
                 } else {
-                    assert.deepEqual(replay, []);
+                    assert.deepEqual(replay, [{ sessionUpdate: "plan", entries: [] }]);
                 }
                 const session = f.engines.at(-1)!;
                 const servers = new Set(

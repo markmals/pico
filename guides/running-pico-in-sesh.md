@@ -1,7 +1,7 @@
 ---
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
-describes: [proposal.0001, proposal.0002, proposal.0003, proposal.0004]
+describes: [proposal.0001, proposal.0002, proposal.0003, proposal.0004, proposal.0006]
 ---
 
 # Running Pico in Sesh
@@ -11,9 +11,10 @@ describes: [proposal.0001, proposal.0002, proposal.0003, proposal.0004]
 Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session gets an Oh My Pi (OMP) agent that uses your existing OMP configuration, credentials and default model, with a fixed set of tools:
 
 - **Files and commands:** `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`.
+- **A task list:** `todo`, which Sesh shows as the session's plan (see [The task list](#the-task-list)).
 - **Sesh's own tools,** when Sesh provides them: asking you questions, notifications, artifacts, session information and renaming, and starting and following other sessions. They appear as `mcp__sesh_ask_user`, `mcp__sesh_notify` and so on, titled like `sesh: ask_user`.
 
-Every tool the agent runs appears in the Sesh conversation as its own tool call, with a title, its output, and whether it succeeded or failed. Reads, writes and edits also show the files they work on, and a search shows the folder it searched when the agent named one. A successful edit or write shows a diff of each file it changed.
+Every tool the agent runs appears in the Sesh conversation as its own tool call, with a title, its output, and whether it succeeded or failed. The one exception is a successful update to the task list, which appears only as the plan. Reads, writes and edits also show the files they work on, and a search shows the folder it searched when the agent named one. A successful edit or write shows a diff of each file it changed.
 
 Pico never asks for approval. Tool calls do not wait for a permission decision; invalid requests can still fail validation before execution.
 
@@ -36,13 +37,27 @@ Pico runs on Apple silicon Macs with macOS 14 or later, and installs with Homebr
 
 Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` yourself in a terminal prints `usage: pico [--version]` and a reminder that Sesh launches it, then exits; `pico` with any argument other than `--version` prints the usage line and exits with status 2.
 
+### The task list
+
+For work with several steps, the agent keeps a task list with OMP's `todo` tool. Sesh shows it as the session's plan, in the **Plan** panel pinned above the message box, with a count such as "Plan · 1 of 3" of the items completed:
+
+- The plan is one flat list, in the agent's order. The agent is asked to keep a single list; if it groups items into phases anyway, the phase names don't appear.
+- Each item is completed, in progress or pending. An item the agent drops leaves the plan, and the count shrinks. An item the agent marks blocked shows as pending, with "(blocked: …)" and its reason, or "(blocked)" when it gave none.
+- When the agent clears the list, the panel disappears.
+- A successful update to the list adds nothing to the conversation; only the plan changes. An update that fails, for example one that names an item not on the list, appears in the conversation as a failed tool call titled with what the agent was doing (or "Update plan"), carrying the error, and the plan stays as it was. An update the agent was making when you pressed Stop shows as failed too, and when the turn ends the plan shows the list as the agent kept it.
+- When you reopen a conversation, the plan shows the agent's current list, even if the adapter stopped part-way through a turn.
+
+Pico always offers the task list, even if your OMP configuration turns `todo` off, and it never sends OMP's todo reminders: when the agent stops with items still open, the turn ends there. Your OMP configuration is not changed.
+
 ### Reopening a conversation
 
 When Sesh reconnects to an existing Pico session after the adapter stops, Pico restores the agent's saved context instead of starting another conversation. Sesh still owns the conversation UI and workspace; Pico's saved state lets the agent remember earlier messages, tool results and its session-local model and thinking choices. Starting a new Sesh session creates a different agent conversation, even in the same project.
 
 The project must still exist at the same directory. A moved or removed worktree, unavailable saved model, unusable credentials, damaged history, or another process already using that agent session produces an error rather than a new empty conversation or a substituted model. Pico never imports your terminal OMP sessions.
 
-An ACP client can resume without receiving old messages, or load the full saved conversation when it needs history replay. Loading includes messages retained before compaction, one card per tool invocation, and the saved final results and captured diffs rather than a reconstruction from today's files. A tool interrupted by the previous process is shown as failed with an unknown outcome when its result was not recorded; loading never runs it again or promises that its side effects were undone. Transient output that was not committed before a crash may be missing, and a missing saved diff says so.
+An ACP client can resume without receiving old messages, or load the full saved conversation when it needs history replay. Loading includes messages retained before compaction, one card per tool invocation, and the saved final results and captured diffs rather than a reconstruction from today's files. Successful task-list updates have no card, as when they happened, and no earlier plan is replayed. A tool interrupted by the previous process is shown as failed with an unknown outcome when its result was not recorded; loading never runs it again or promises that its side effects were undone. Transient output that was not committed before a crash may be missing, and a missing saved diff says so.
+
+Both loading and resuming end by sending the conversation's current plan once, even when it has no items. Resuming sends nothing else.
 
 An ACP client can also load or resume an idle session again on the same connection, keeping its identifier and saved choices. Each explicit load returns one full replay; resume returns none. A request made while a turn, model/thinking change or another reattachment is in progress is refused as busy without interrupting that work. Invalid working-directory or MCP transport parameters leave the existing attachment alone; another connection or process cannot take over a live attachment.
 
@@ -99,6 +114,12 @@ The conversation shows:
 
 Then ask it to run `exit 3` with the bash tool: that tool call shows as failed, with the message `Command exited with code 3`.
 
+To see the task list, send:
+
+> Use the todo tool to make a task list with three items: Draft, Review, Publish. Then mark Draft done and stop.
+
+The Plan panel appears above the message box showing "Plan · 1 of 3": Draft completed, Review in progress, Publish pending. The conversation shows the agent's text but no `todo` tool calls. Ask the agent to mark an item named "Translate" done, and a failed tool call appears saying that task was not found, while the plan stays the same. Ask it to clear the task list, and the panel disappears.
+
 ## Delegating reviews and other work
 
 Start the parent session with your registered Pico agent. Pico is instructed to use Sesh’s `start_session` tool for reviews and other delegation when Sesh supplies it. The child appears under the parent in Sesh and uses the same registered Pico agent, with Pico’s curated tools and approval-free policy. Your registration does not have to be named `pico`.
@@ -115,7 +136,7 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 
 - **No Python or JavaScript eval** and **no built-in language server.** For code intelligence, the agent runs your `intellisense` CLI through `bash`, like any other command. Edits get no automatic diagnostics or formatting.
 - **No OMP subagents** (`task`, or OMP's worker sessions). To split work up, the agent starts real Sesh sessions with Sesh's own tools. If it tries a tool it doesn't have, that tool call shows as failed and nothing runs.
-- **Not available yet:** OMP's `ask`, `todo`, `find`, `wait`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, its memory tools, and tools added by OMP extensions. Your extensions' hooks still run; an extension that fails to load is skipped, and the session starts without it.
+- **Not available yet:** OMP's `ask`, `find`, `wait`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, its memory tools, and tools added by OMP extensions. Your extensions' hooks still run; an extension that fails to load is skipped, and the session starts without it.
 - **Questions to you** go through Sesh's `ask_user` tool, so you can answer them from your phone.
 
 ## Limits and edge cases

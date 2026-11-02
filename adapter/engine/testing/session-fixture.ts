@@ -33,8 +33,8 @@ export function createReasoningMockModel(options: MockModelOptions = {}): Model<
     });
 }
 
-/** The built-in tools proposal.0001 puts in every Pico session. */
-export const PICO_ROSTER = ["read", "grep", "glob", "edit", "write", "bash", "web_search"];
+/** The built-in tools proposal.0001 puts in every Pico session, with `todo` returned by proposal.0006. */
+export const PICO_ROSTER = ["read", "grep", "glob", "edit", "write", "bash", "web_search", "todo"];
 
 /** Tools proposal.0001 excludes or defers; none of them may ever be active. */
 export const EXCLUDED_TOOL_NAMES = [
@@ -42,7 +42,6 @@ export const EXCLUDED_TOOL_NAMES = [
     "lsp",
     "task",
     "ask",
-    "todo",
     "find",
     "wait",
     "ast_grep",

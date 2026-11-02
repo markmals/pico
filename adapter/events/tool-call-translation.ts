@@ -55,6 +55,7 @@ export function toolTitle(
     }
     const statedIntent = intent?.trim();
     if (statedIntent) return statedIntent;
+    if (toolName === "todo") return "Update plan";
 
     const subject =
         stringProperty(args, "path") ??

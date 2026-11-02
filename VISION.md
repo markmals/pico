@@ -23,7 +23,9 @@ The user installs and updates Pico with Homebrew and configures it in a native m
 
 ## Minimum viable product
 
-The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. The core adapter turn path exists ([proposal 0001](proposals/0001-acp-adapter-core.md)): retained tools, model and thinking-level selection, and cancellation work. It ships as `pico`, a single executable installed through Homebrew ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Child-session launches now inherit the parent’s registered Pico agent and reject harness overrides ([proposal 0003](proposals/0003-pico-only-child-sessions.md)), with a real Pico parent/child flow exercised in Sesh. Session restoration and the broader delegation handoff, result-state and integration workflow remain follow-up work.
+The useful minimum is a local executable that Sesh can launch to run an OMP SDK session, perform the selected coding operations, use Sesh MCP tools, and delegate through real Sesh child sessions. The core adapter turn path exists ([proposal 0001](proposals/0001-acp-adapter-core.md)): retained tools, model and thinking-level selection, and cancellation work. It ships as `pico`, a single executable installed through Homebrew ([proposal 0002](proposals/0002-pico-homebrew-distribution.md)). Child-session launches now inherit the parent’s registered Pico agent and reject harness overrides ([proposal 0003](proposals/0003-pico-only-child-sessions.md)), with a real Pico parent/child flow exercised in Sesh. The broader delegation handoff, result-state and integration workflow remain follow-up work.
+
+Session restoration now works through ACP load, list and resume ([proposal 0004](proposals/0004-session-restoration.md)). Pico keeps its private OMP-format agent context and session-local model and thinking choices in Application Support; Sesh retains its client-owned history and conversation UI. A real Sesh stop/reopen flow verified continuation without duplicating the client transcript.
 
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
@@ -70,3 +72,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-10-29 | Make the native macOS companion app Pico's configuration surface and prepare its project configuration. | N/A: project preparation brief |
 | 2026-11-01 | Record the exercised core adapter capabilities and Pico-only child-session launches. | [proposal.0001](proposals/0001-acp-adapter-core.md), [proposal.0003](proposals/0003-pico-only-child-sessions.md) |
 | 2026-11-01 | Make Homebrew Pico's install and update path, with the app as the configuration surface. | [proposal.0002](proposals/0002-pico-homebrew-distribution.md) |
+| 2026-11-01 | Record private agent-session persistence and exercised Sesh restoration, with Sesh retaining the client transcript. | [proposal.0004](proposals/0004-session-restoration.md) |

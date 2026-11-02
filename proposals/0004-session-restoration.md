@@ -2,7 +2,7 @@
 id: proposal.0004
 title: Persistent Pico Sessions
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/40
 issues: [https://github.com/markmals/pico/issues/5]
 supersedes: []
@@ -235,3 +235,5 @@ A later proposal could define Pico's own portable history format, session export
 ## Open questions
 
 None about the selected storage-ownership boundary. The human approved implementation, the narrow pinned SDK discovery patch and idle same-connection reattachment on 2026-11-01. The real Sesh restart check resolved its calling-pattern uncertainty; compiled protocol checks and configuration-source regressions cover the paths the host did not exercise.
+
+The human accepted the implementation on 2026-11-01 and explicitly authorized merging PR #40 and cleaning up afterwards. Merge-only integration and feature-owned preview teardown are authorized; no tag, package release, Homebrew publication or deployment is authorized.

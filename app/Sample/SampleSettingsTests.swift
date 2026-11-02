@@ -46,6 +46,18 @@ struct SampleSettingsTests {
         }
     }
 
+    @Test(
+        "each way a provider offers shows its own account",
+        arguments: SampleProvider.allCases
+    )
+    func eachWayShowsItsOwnAccount(provider: SampleProvider) {
+        let accounts = provider.signInMethods.map {
+            String(localized: provider.accountLabel(for: $0))
+        }
+
+        #expect(Set(accounts).count == accounts.count, "\(provider.name): \(accounts)")
+    }
+
     @Test("the default-model choices are the catalog models of signed-in providers")
     func availableModelsExcludeProvidersNeedingSignIn() throws {
         let settings = SampleSettings()

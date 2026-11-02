@@ -35,13 +35,16 @@ extension SampleProvider {
         }
     }
 
-    var termsOfService: URL {
+    /// The provider's page of legal terms. It lists every set of terms the provider publishes,
+    /// because which applies depends on how it is signed in: Anthropic and OpenAI, for
+    /// example, apply different terms to API keys than to consumer accounts.
+    var legalTerms: URL {
         switch self {
-        case .anthropic: URL(string: "https://www.anthropic.com/legal/consumer-terms")!
-        case .openAI: URL(string: "https://openai.com/policies/terms-of-use/")!
-        case .google: URL(string: "https://ai.google.dev/gemini-api/terms")!
+        case .anthropic: URL(string: "https://www.anthropic.com/legal")!
+        case .openAI: URL(string: "https://openai.com/policies/")!
+        case .google: URL(string: "https://policies.google.com/terms")!
         case .openRouter: URL(string: "https://openrouter.ai/terms")!
-        case .xAI: URL(string: "https://x.ai/legal/terms-of-service")!
+        case .xAI: URL(string: "https://x.ai/legal")!
         case .mistral: URL(string: "https://legal.mistral.ai/terms")!
         case .groq: URL(string: "https://groq.com/terms-of-use")!
         }

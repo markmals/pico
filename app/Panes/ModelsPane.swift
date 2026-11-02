@@ -19,25 +19,24 @@ struct ModelsPane: View {
             }
 
             Section {
-                CatalogSearchRow(settings: sample)
-                SettingsValueRow(item: .availableModels, value: availableModels)
                 if let sample {
-                    ModelCatalogRows(settings: sample)
+                    AvailableModelRows(settings: sample)
+                } else {
+                    SettingsValueRow(item: .availableModels, value: nil)
                 }
             } header: {
-                Text("Catalog")
+                if sample == nil {
+                    Text(SettingsItem.availableModels.displayTitle)
+                } else {
+                    Text(SettingsItem.availableModels.displayTitle)
+                        .settingsRow(.availableModels)
+                }
             } footer: {
                 sample == nil
-                    ? Text("No catalog is loaded, so the search field filters nothing.")
-                    : Text("Models of providers that need sign-in can't be chosen.")
+                    ? Text("No catalog is loaded while settings stay unconnected.")
+                    : Text("Sign in to more providers in Providers & Accounts to use their models.")
             }
         }
         .formStyle(.grouped)
-    }
-
-    private var availableModels: SettingsValue? {
-        sample.map {
-            .text("\($0.availableModels.count) of \(SampleModel.catalog.count)")
-        }
     }
 }

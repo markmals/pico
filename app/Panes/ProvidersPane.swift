@@ -6,7 +6,7 @@ struct ProvidersPane: View {
     @Environment(SettingsNavigator.self) private var navigator
 
     var body: some View {
-        if let sample, let provider = openProvider, sample.isAdded(provider) {
+        if let sample, let provider = openProvider {
             ProviderPage(provider: provider, settings: sample)
         } else {
             ProviderList(settings: sample)
@@ -21,6 +21,8 @@ struct ProvidersPane: View {
 
 private struct ProviderList: View {
     let settings: SampleSettings?
+
+    @State private var isAddingProvider = false
 
     var body: some View {
         Form {
@@ -47,14 +49,21 @@ private struct ProviderList: View {
                         ? Text("Supported providers come from the engine; none are listed here.")
                         : Text("Pico's sessions can use the models of every signed-in provider.")
                     Spacer()
-                    AddProviderMenu(settings: settings)
+                    Button("Add Provider…") { isAddingProvider = true }
+                        .disabled(settings == nil)
                 }
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $isAddingProvider) {
+            if let settings {
+                AddProviderSheet(settings: settings)
+            }
+        }
     }
 }
 
+/// A provider's row: its logo, name, and how it is signed in. Choosing it opens its page.
 private struct ProviderListRow: View {
     let provider: SampleProvider
     let settings: SampleSettings
@@ -62,39 +71,33 @@ private struct ProviderListRow: View {
     @Environment(SettingsNavigator.self) private var navigator
 
     var body: some View {
-        if settings.isAdded(provider) {
-            Button {
-                navigator.openProvider(provider.rawValue)
-            } label: {
-                HStack {
-                    summary
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-        } else {
+        Button {
+            navigator.openProvider(provider.rawValue)
+        } label: {
             HStack {
-                summary
+                ProviderSummary(provider: provider, subtitle: settings.statusLine(of: provider))
                 Spacer()
-                Button("Set Up") {
-                    settings.add(provider)
-                    navigator.openProvider(provider.rawValue)
-                }
-                .accessibilityLabel(Text("Set Up \(provider.name)"))
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
     }
+}
 
-    private var summary: some View {
+/// A provider's logo tile beside its name and a secondary line.
+private struct ProviderSummary: View {
+    let provider: SampleProvider
+    let subtitle: Text
+
+    var body: some View {
         HStack(spacing: 10) {
             ProviderTile(provider: provider, size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: provider.name)
-                settings.statusLine(of: provider)
+                subtitle
                     .foregroundStyle(.secondary)
             }
         }
@@ -102,22 +105,46 @@ private struct ProviderListRow: View {
     }
 }
 
-/// Adds a provider that is not listed yet and opens its page; unavailable without sample data.
-private struct AddProviderMenu: View {
-    let settings: SampleSettings?
+/// Every provider, to choose one and open its page. Choosing closes the sheet.
+private struct AddProviderSheet: View {
+    let settings: SampleSettings
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(SettingsNavigator.self) private var navigator
 
     var body: some View {
-        Menu("Add Provider…") {
-            ForEach(settings?.providersToAdd ?? []) { provider in
-                Button(provider.name) {
-                    settings?.add(provider)
-                    navigator.openProvider(provider.rawValue)
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    ForEach(SampleProvider.allCases) { provider in
+                        Button {
+                            dismiss()
+                            navigator.openProvider(provider.rawValue)
+                        } label: {
+                            HStack {
+                                ProviderSummary(
+                                    provider: provider,
+                                    subtitle: Text(provider.requirement)
+                                )
+                                Spacer()
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("Choose a Provider")
                 }
             }
+            .formStyle(.grouped)
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
         }
-        .fixedSize()
-        .disabled(settings?.providersToAdd.isEmpty ?? true)
+        .frame(width: 480, height: 520)
     }
 }

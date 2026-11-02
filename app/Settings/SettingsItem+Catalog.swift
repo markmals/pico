@@ -62,7 +62,6 @@ extension SettingsItem {
         title: "Reasoning level",
         keywords: ["thinking", "effort"]
     )
-    static let catalogSearch = SettingsItem(.models, "catalog-search", title: "Search catalog")
     static let availableModels = SettingsItem(
         .models,
         "available-models",

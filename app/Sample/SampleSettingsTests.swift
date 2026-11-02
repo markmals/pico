@@ -8,9 +8,7 @@ struct SampleSettingsTests {
     @Test("signing in records the chosen way for that provider alone")
     func signInRecordsTheChosenWay() throws {
         let settings = SampleSettings()
-        let added = SampleProvider.allCases.filter(settings.isAdded)
-        try #require(added.count >= 2)
-        let (first, second) = (added[0], added[1])
+        let (first, second) = (SampleProvider.popular[0], SampleProvider.popular[1])
         let secondBefore = settings.signInMethod(of: second)
         let method = try #require(
             first.signInMethods.last { $0 != settings.signInMethod(of: first) }
@@ -27,7 +25,9 @@ struct SampleSettingsTests {
     func unofferedWayCannotSignIn() throws {
         let settings = SampleSettings()
         let provider = try #require(
-            SampleProvider.allCases.first { settings.isAdded($0) && !settings.isSignedIn($0) }
+            SampleProvider.allCases.first {
+                !settings.isSignedIn($0) && $0.signInMethods.count < SignInMethod.allCases.count
+            }
         )
         let unoffered = try #require(
             SignInMethod.allCases.first { !provider.signInMethods.contains($0) }
@@ -157,7 +157,10 @@ struct SampleSettingsTests {
     func signingInMakesModelsAvailable() throws {
         let settings = SampleSettings()
         let provider = try #require(
-            SampleProvider.allCases.first { settings.isAdded($0) && !settings.isSignedIn($0) }
+            SampleProvider.allCases.first { candidate in
+                !settings.isSignedIn(candidate)
+                    && SampleModel.catalog.contains { $0.provider == candidate }
+            }
         )
         let method = try #require(provider.signInMethods.first)
 
@@ -165,16 +168,6 @@ struct SampleSettingsTests {
 
         #expect(settings.isSignedIn(provider))
         #expect(settings.availableModels.contains { $0.provider == provider })
-    }
-
-    @Test("a provider that is not set up cannot be signed in")
-    func signingInNeedsSetUp() throws {
-        let settings = SampleSettings()
-        let provider = try #require(SampleProvider.allCases.first { !settings.isAdded($0) })
-
-        settings.signIn(provider, with: try #require(provider.signInMethods.first))
-
-        #expect(!settings.isSignedIn(provider))
     }
 
     @Test("signing in when no model is available makes its first model the default")
@@ -203,121 +196,44 @@ struct SampleSettingsTests {
         #expect(settings.isRegisteredWithSesh)
     }
 
-    @Test("the popular providers are always listed, then the others in the order added")
-    func listedProvidersKeepTheirOrder() throws {
+    @Test("the list shows the popular providers, then others while they are signed in, in order")
+    func listedProvidersFollowSignIn() throws {
         let settings = SampleSettings()
-        let others = settings.providersToAdd
+        let others = SampleProvider.allCases.filter { !SampleProvider.popular.contains($0) }
         try #require(others.count >= 2)
+        #expect(settings.listedProviders == SampleProvider.popular)
+
+        settings.signIn(others[1], with: try #require(others[1].signInMethods.first))
+        settings.signIn(others[0], with: try #require(others[0].signInMethods.first))
+        #expect(settings.listedProviders == SampleProvider.popular + [others[1], others[0]])
+
+        settings.signOut(others[1])
+        #expect(settings.listedProviders == SampleProvider.popular + [others[0]])
+    }
+
+    @Test("signing a popular provider out keeps it listed")
+    func popularProvidersStayListed() throws {
+        let settings = SampleSettings()
+        let provider = try #require(SampleProvider.popular.first(where: settings.isSignedIn))
+
+        settings.signOut(provider)
 
         #expect(settings.listedProviders == SampleProvider.popular)
-        #expect(Set(others) == Set(SampleProvider.allCases).subtracting(SampleProvider.popular))
-
-        settings.add(others[1])
-        settings.add(others[0])
-
-        #expect(settings.listedProviders == SampleProvider.popular + [others[1], others[0]])
-        #expect(!settings.providersToAdd.contains(others[0]))
-        #expect(!settings.providersToAdd.contains(others[1]))
     }
 
-    @Test("setting up or adding a provider leaves it needing sign-in")
-    func addedProvidersNeedSignIn() throws {
+    @Test("signing in again lists a provider once")
+    func signingInAgainListsOnce() throws {
         let settings = SampleSettings()
-        let notSetUp = SampleProvider.allCases.filter { !settings.isAdded($0) }
-        try #require(notSetUp.contains { SampleProvider.popular.contains($0) })
-        try #require(notSetUp.contains { !SampleProvider.popular.contains($0) })
+        let provider = try #require(
+            SampleProvider.allCases.first {
+                !SampleProvider.popular.contains($0) && $0.signInMethods.count == 1
+            }
+        )
+        let method = try #require(provider.signInMethods.first)
 
-        for provider in notSetUp {
-            settings.add(provider)
+        settings.signIn(provider, with: method)
+        settings.signIn(provider, with: method)
 
-            #expect(settings.isAdded(provider))
-            #expect(!settings.isSignedIn(provider))
-            #expect(settings.signInMethod(of: provider) == nil)
-            #expect(settings.listedProviders.contains(provider))
-        }
-    }
-
-    @Test("removing a provider signs it out and unlists it unless it is popular")
-    func removingAProvider() throws {
-        let settings = SampleSettings()
-        let other = try #require(settings.providersToAdd.first)
-        let popular = try #require(SampleProvider.popular.first { settings.isSignedIn($0) })
-        settings.add(other)
-
-        settings.remove(other)
-        settings.remove(popular)
-
-        #expect(!settings.isAdded(other))
-        #expect(!settings.listedProviders.contains(other))
-        #expect(settings.providersToAdd.contains(other))
-        #expect(!settings.isAdded(popular))
-        #expect(!settings.isSignedIn(popular))
-        #expect(settings.listedProviders.contains(popular))
-    }
-
-    @Test("removing the default model's provider moves the default as signing out does")
-    func removingMovesTheDefaultModel() throws {
-        let settings = SampleSettings()
-        let provider = try #require(settings.defaultModel?.provider)
-
-        settings.remove(provider)
-
-        #expect(settings.defaultModel != nil)
-        #expect(settings.defaultModel == settings.availableModels.first)
-        #expect(settings.defaultModel?.provider != provider)
-    }
-
-    @Test("a blank catalog query shows the whole catalog", arguments: ["", "  "])
-    func blankCatalogQueryShowsEverything(query: String) {
-        let settings = SampleSettings()
-
-        settings.catalogQuery = query
-
-        #expect(settings.catalogResults == SampleModel.catalog)
-    }
-
-    @Test(
-        "the catalog filter finds every model by each word of its name",
-        arguments: SampleModel.catalog
-    )
-    func catalogFindsEachModelByName(model: SampleModel) {
-        let settings = SampleSettings()
-
-        for word in model.name.split(separator: " ") {
-            settings.catalogQuery = word.uppercased()
-            #expect(settings.catalogResults.contains(model), "“\(word)” did not find \(model.id)")
-        }
-    }
-
-    @Test("a provider's name filters the catalog to its models", arguments: SampleProvider.allCases)
-    func catalogFiltersByProvider(provider: SampleProvider) {
-        let settings = SampleSettings()
-
-        settings.catalogQuery = provider.name.lowercased()
-
-        #expect(settings.catalogResults == SampleModel.catalog.filter { $0.provider == provider })
-    }
-
-    @Test("a catalog query must start a word, not appear inside one")
-    func catalogMatchesWordPrefixesOnly() throws {
-        let settings = SampleSettings()
-        let model = try #require(SampleModel.catalog.first)
-        let word = try #require(model.name.split(separator: " ").first { $0.count > 2 })
-
-        settings.catalogQuery = String(word.dropFirst())
-
-        #expect(!settings.catalogResults.contains(model))
-    }
-
-    @Test(
-        "a catalog query with no match, or of only punctuation, shows no results",
-        arguments: ["zzzz", "?"]
-    )
-    func unmatchedCatalogQueryShowsNothing(query: String) {
-        let settings = SampleSettings()
-
-        settings.catalogQuery = query
-
-        #expect(settings.catalogResults.isEmpty)
+        #expect(settings.listedProviders.filter { $0 == provider }.count == 1)
     }
 }

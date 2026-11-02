@@ -127,18 +127,6 @@ struct SettingsNavigatorTests {
         #expect(navigator.page == .provider("google"))
     }
 
-    @Test("forgetting a provider's page returns to the provider list")
-    func forgettingAProviderPage() {
-        let navigator = SettingsNavigator()
-        navigator.selectedDestination = .providers
-        navigator.openProvider("anthropic")
-
-        navigator.forgetProviderPage("anthropic")
-
-        #expect(navigator.page == .main(.providers))
-        #expect(!navigator.canGoForward)
-    }
-
     @Test("forgetting every provider page keeps the other pages")
     func forgettingAllProviderPages() {
         let navigator = SettingsNavigator()

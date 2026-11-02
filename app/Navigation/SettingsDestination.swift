@@ -29,7 +29,7 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         case .providers:
             [.providerList]
         case .models:
-            [.model, .reasoningLevel, .catalogSearch, .availableModels]
+            [.model, .reasoningLevel, .availableModels]
         case .tools:
             [
                 .read, .search, .edit, .write, .shell, .webSearch, .eval, .builtInLSP,

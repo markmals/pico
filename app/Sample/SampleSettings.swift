@@ -4,29 +4,25 @@ import Observation
 /// The in-memory state behind sample data. It lasts as long as the app and is never saved.
 ///
 /// The default model is always one of `availableModels`, or `nil` when no model is available.
-/// A provider is signed in only while it is added.
 @MainActor
 @Observable
 final class SampleSettings {
     private(set) var defaultModel: SampleModel? = .claudeSonnet
     var reasoningLevel: ReasoningLevel = .auto
-    var catalogQuery = ""
     private(set) var isRegisteredWithSesh = true
 
-    private var providerStates = Dictionary(
-        uniqueKeysWithValues: SampleProvider.allCases.map { ($0, $0.initialState) }
+    /// How each signed-in provider is signed in; a provider without an entry is signed out.
+    private var signIns: [SampleProvider: SignInMethod] = Dictionary(
+        uniqueKeysWithValues: SampleProvider.allCases.compactMap { provider in
+            provider.initialSignInMethod.map { (provider, $0) }
+        }
     )
-    /// Added providers that are not popular, in the order they were added.
-    private var addedOthers: [SampleProvider] = []
+    /// Signed-in providers that are not popular, in the order they were signed in to.
+    private var signedInOthers: [SampleProvider] = []
 
-    /// The popular providers, then the others added, in the order they were added.
+    /// The popular providers, then any other provider while it is signed in.
     var listedProviders: [SampleProvider] {
-        SampleProvider.popular + addedOthers
-    }
-
-    /// The providers Add Provider… offers: the others not yet added.
-    var providersToAdd: [SampleProvider] {
-        SampleProvider.allCases.filter { !SampleProvider.popular.contains($0) && !isAdded($0) }
+        SampleProvider.popular + signedInOthers
     }
 
     var availableModels: [SampleModel] {
@@ -37,58 +33,30 @@ final class SampleSettings {
         defaultModel?.reasoningLevels ?? []
     }
 
-    var catalogResults: [SampleModel] {
-        guard !catalogQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return SampleModel.catalog
-        }
-        let queryWords = SettingsSearch.words(in: catalogQuery)
-        guard !queryWords.isEmpty else { return [] }
-        return SampleModel.catalog.filter { model in
-            let modelWords = SettingsSearch.words(in: "\(model.name) \(model.provider.name)")
-            return SettingsSearch.matches(queryWords, modelWords)
-        }
-    }
-
-    func isAdded(_ provider: SampleProvider) -> Bool {
-        state(of: provider).isAdded
-    }
-
     func isSignedIn(_ provider: SampleProvider) -> Bool {
-        state(of: provider).signInMethod != nil
+        signIns[provider] != nil
     }
 
     /// How a provider is signed in, or `nil` when it is not.
     func signInMethod(of provider: SampleProvider) -> SignInMethod? {
-        state(of: provider).signInMethod
+        signIns[provider]
     }
 
-    /// Sets a provider up, needing sign-in.
-    func add(_ provider: SampleProvider) {
-        guard !isAdded(provider) else { return }
-        providerStates[provider]?.isAdded = true
-        if !SampleProvider.popular.contains(provider) {
-            addedOthers.append(provider)
-        }
-    }
-
-    /// Signs a provider out and takes it off the list; a popular provider stays listed.
-    func remove(_ provider: SampleProvider) {
-        signOut(provider)
-        providerStates[provider]?.isAdded = false
-        addedOthers.removeAll { $0 == provider }
-    }
-
-    /// Signs a set-up provider in with one of the ways it offers; otherwise changes nothing.
+    /// Signs a provider in with one of the ways it offers; otherwise changes nothing.
     func signIn(_ provider: SampleProvider, with method: SignInMethod) {
-        guard isAdded(provider), provider.signInMethods.contains(method) else { return }
-        providerStates[provider]?.signInMethod = method
+        guard provider.signInMethods.contains(method) else { return }
+        signIns[provider] = method
+        if !SampleProvider.popular.contains(provider), !signedInOthers.contains(provider) {
+            signedInOthers.append(provider)
+        }
         if defaultModel == nil, let model = availableModels.first {
             chooseDefaultModel(model)
         }
     }
 
     func signOut(_ provider: SampleProvider) {
-        providerStates[provider]?.signInMethod = nil
+        signIns[provider] = nil
+        signedInOthers.removeAll { $0 == provider }
         guard defaultModel?.provider == provider else { return }
         if let model = availableModels.first {
             chooseDefaultModel(model)
@@ -112,9 +80,5 @@ final class SampleSettings {
 
     func unregisterFromSesh() {
         isRegisteredWithSesh = false
-    }
-
-    private func state(of provider: SampleProvider) -> SampleProviderState {
-        providerStates[provider] ?? provider.initialState
     }
 }

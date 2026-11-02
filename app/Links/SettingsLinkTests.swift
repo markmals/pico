@@ -88,6 +88,7 @@ struct SettingsLinkTests {
             "pico://settings/providers/credential-status",
             "pico://settings/providers/credential-source",
             "pico://settings/diagnostics/engine-version",
+            "pico://settings/models/catalog-search",
         ]
     )
     func invalidLinksAreRejected(link: String) throws {

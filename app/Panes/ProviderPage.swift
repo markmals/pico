@@ -1,12 +1,11 @@
 import SwiftUI
 
 /// One provider's page in sample data, laid out like Sesh's agent page: what the provider
-/// requires, how it is signed in with a menu of ways to sign in, its privacy terms, and Remove.
+/// requires, how it is signed in with a menu of ways to sign in, its privacy terms, and
+/// Sign Out.
 struct ProviderPage: View {
     let provider: SampleProvider
     let settings: SampleSettings
-
-    @Environment(SettingsNavigator.self) private var navigator
 
     var body: some View {
         Form {
@@ -37,12 +36,12 @@ struct ProviderPage: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } footer: {
-                Button("Remove Provider", role: .destructive) {
-                    settings.remove(provider)
-                    navigator.forgetProviderPage(provider.rawValue)
+                Button("Sign Out", role: .destructive) {
+                    settings.signOut(provider)
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
+                .disabled(!settings.isSignedIn(provider))
                 .padding(.top, 8)
             }
         }
@@ -74,8 +73,7 @@ struct ProviderPage: View {
     }
 }
 
-/// The ⋯ menu on a provider's Account row: each way the provider offers to sign in, then
-/// Sign Out…, which is unavailable while it is signed out.
+/// The ⋯ menu on a provider's Account row: each way the provider offers to sign in.
 private struct SignInMenu: View {
     let provider: SampleProvider
     let settings: SampleSettings
@@ -89,11 +87,6 @@ private struct SignInMenu: View {
                     Text(provider.menuTitle(for: method))
                 }
             }
-            Divider()
-            Button("Sign Out…") {
-                settings.signOut(provider)
-            }
-            .disabled(!settings.isSignedIn(provider))
         } label: {
             Label {
                 Text("Sign-in options for \(provider.name)")

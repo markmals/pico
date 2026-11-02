@@ -7,16 +7,6 @@
     "%@ is the latest" : {
 
     },
-    "%lld of %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld"
-          }
-        }
-      }
-    },
     "ACP" : {
 
     },
@@ -56,7 +46,7 @@
     "Built-in tool policy" : {
 
     },
-    "Catalog" : {
+    "Cancel" : {
 
     },
     "ChatGPT Pro · mark@example.com" : {
@@ -66,6 +56,9 @@
 
     },
     "Choices come from the connected account's catalog, not from here." : {
+
+    },
+    "Choose a Provider" : {
 
     },
     "Choosing or checking the intellisense program is not available here." : {
@@ -182,22 +175,13 @@
     "Model" : {
 
     },
-    "Model or provider" : {
-
-    },
     "Models" : {
-
-    },
-    "Models of providers that need sign-in can't be chosen." : {
 
     },
     "Native configuration for the Pico ACP adapter." : {
 
     },
     "Native delegation" : {
-
-    },
-    "Needs sign-in" : {
 
     },
     "New Sesh sessions can use Pico once setup is complete." : {
@@ -209,7 +193,7 @@
     "No Results" : {
 
     },
-    "No catalog is loaded, so the search field filters nothing." : {
+    "No catalog is loaded while settings stay unconnected." : {
 
     },
     "No diagnostics are collected, redacted, or exported here." : {
@@ -234,6 +218,9 @@
 
     },
     "Not set up" : {
+
+    },
+    "Not signed in" : {
 
     },
     "Nothing is read from Sesh, and no registration is inspected." : {
@@ -339,9 +326,6 @@
     "Registering adds Pico to Sesh as a custom agent." : {
 
     },
-    "Remove Provider" : {
-
-    },
     "Requires a ChatGPT account or API key" : {
 
     },
@@ -369,9 +353,6 @@
     "Search" : {
 
     },
-    "Search catalog" : {
-
-    },
     "Sesh" : {
 
     },
@@ -382,12 +363,6 @@
 
     },
     "Sesh starts Pico with these details." : {
-
-    },
-    "Set Up" : {
-
-    },
-    "Set Up %@" : {
 
     },
     "Settings file" : {
@@ -426,7 +401,7 @@
     "Sign In With an Anthropic Console Account…" : {
 
     },
-    "Sign Out…" : {
+    "Sign Out" : {
 
     },
     "Sign in or provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms](%@)." : {
@@ -438,6 +413,9 @@
           }
         }
       }
+    },
+    "Sign in to more providers in Providers & Accounts to use their models." : {
+
     },
     "Sign-in options for %@" : {
 

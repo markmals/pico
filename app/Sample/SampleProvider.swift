@@ -28,21 +28,14 @@ enum SampleProvider: String, CaseIterable, Identifiable {
         }
     }
 
-    var initialState: SampleProviderState {
+    /// How the provider is signed in when sample data starts, or `nil` when it is signed out.
+    var initialSignInMethod: SignInMethod? {
         switch self {
-        case .anthropic: SampleProviderState(isAdded: true, signInMethod: .account)
-        case .openAI: SampleProviderState(isAdded: true, signInMethod: .apiKey)
-        case .google: SampleProviderState(isAdded: true, signInMethod: nil)
-        default: SampleProviderState(isAdded: false, signInMethod: nil)
+        case .anthropic: .account
+        case .openAI: .apiKey
+        default: nil
         }
     }
-}
-
-/// One provider's sample configuration. A provider is signed in only while it is added.
-struct SampleProviderState: Equatable {
-    var isAdded: Bool
-    /// How the provider is signed in, or `nil` when it is not.
-    var signInMethod: SignInMethod?
 }
 
 /// A way to sign in to a provider. Which ways a provider offers, and what each is called for

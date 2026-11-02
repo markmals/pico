@@ -95,11 +95,6 @@ final class SettingsNavigator {
         history.navigate(to: .provider(slug))
     }
 
-    /// Forgets a removed provider's page; if it is showing, the page before it returns.
-    func forgetProviderPage(_ slug: String) {
-        history.forget { $0 == .provider(slug) }
-    }
-
     /// Forgets every provider page, as when sample data is turned off.
     func forgetProviderPages() {
         history.forget { page in

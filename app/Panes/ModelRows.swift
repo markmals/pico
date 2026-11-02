@@ -53,55 +53,30 @@ struct ReasoningLevelPickerRow: View {
     }
 }
 
-struct CatalogSearchRow: View {
-    let settings: SampleSettings?
-
-    var body: some View {
-        if let settings {
-            @Bindable var settings = settings
-            TextField(text: $settings.catalogQuery, prompt: Text("Model or provider")) {
-                Text(SettingsItem.catalogSearch.title)
-            }
-            .accessibilityLabel(Text(SettingsItem.catalogSearch.title))
-            .settingsRow(.catalogSearch)
-        } else {
-            TextField(text: .constant(""), prompt: Text("Not connected")) {
-                Text(SettingsItem.catalogSearch.title)
-            }
-            .disabled(true)
-            .accessibilityLabel(Text(SettingsItem.catalogSearch.title))
-            .settingsRow(.catalogSearch)
-        }
-    }
-}
-
-/// The sample catalog's models that match the catalog search, each with its provider.
-struct ModelCatalogRows: View {
+/// The models of signed-in providers, each with its provider; the default is marked.
+struct AvailableModelRows: View {
     let settings: SampleSettings
 
     var body: some View {
-        if settings.catalogResults.isEmpty {
-            Text("No Results")
+        if settings.availableModels.isEmpty {
+            Text("None available")
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
         }
-        ForEach(settings.catalogResults) { model in
+        ForEach(settings.availableModels) { model in
             LabeledContent {
-                availability(of: model)
+                if model == settings.defaultModel {
+                    SettingsValueText(value: .text("Default"))
+                }
             } label: {
-                Text(verbatim: model.name)
-                Text(verbatim: model.provider.name)
+                HStack(spacing: 10) {
+                    ProviderTile(provider: model.provider, size: 24)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(verbatim: model.name)
+                        Text(verbatim: model.provider.name)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-        }
-    }
-
-    @ViewBuilder private func availability(of model: SampleModel) -> some View {
-        if !settings.isAdded(model.provider) {
-            SettingsValueText(value: .status("Not set up", .inactive))
-        } else if !settings.isSignedIn(model.provider) {
-            SettingsValueText(value: .status("Needs sign-in", .attention))
-        } else if model == settings.defaultModel {
-            SettingsValueText(value: .text("Default"))
         }
     }
 }

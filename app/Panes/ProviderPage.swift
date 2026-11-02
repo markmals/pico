@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// One provider's page in sample data: its account, credential source and status, and Remove.
+/// One provider's page in sample data, laid out like Sesh's agent page: what the provider
+/// requires, how it is signed in with a menu of ways to sign in, its privacy terms, and Remove.
 struct ProviderPage: View {
     let provider: SampleProvider
     let settings: SampleSettings
@@ -10,97 +11,99 @@ struct ProviderPage: View {
     var body: some View {
         Form {
             Section {
-                HStack(alignment: .top, spacing: 12) {
-                    ProviderTile(provider: provider, size: 32)
-                    VStack(alignment: .leading, spacing: 2) {
+                LabeledContent {
+                    Text(provider.requirement)
+                        .foregroundStyle(.secondary)
+                } label: {
+                    HStack(spacing: 12) {
+                        ProviderTile(provider: provider, size: 32)
                         Text(verbatim: provider.name)
-                            .font(.headline)
-                        settings.statusLine(of: provider)
-                            .foregroundStyle(.secondary)
+                            .accessibilityAddTraits(.isHeader)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
             }
 
             Section {
-                accountPicker
-                credentialSourcePicker
                 LabeledContent {
-                    HStack(spacing: 12) {
-                        SettingsValueText(value: credentialStatus)
-                        signInButton
+                    HStack(spacing: 8) {
+                        accountValue
+                            .foregroundStyle(.secondary)
+                        SignInMenu(provider: provider, settings: settings)
                     }
                 } label: {
-                    Text("Credential status")
+                    Text("Account")
                 }
-            } header: {
-                Text("Account")
+                Text(terms)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } footer: {
-                Text("Signing out here doesn't sign you out of OMP in Terminal.")
-            }
-
-            Section {
                 Button("Remove Provider", role: .destructive) {
                     settings.remove(provider)
                     navigator.forgetProviderPage(provider.rawValue)
                 }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .padding(.top, 8)
             }
         }
         .formStyle(.grouped)
     }
 
-    @ViewBuilder private var accountPicker: some View {
-        if settings.isSignedIn(provider) {
-            Picker("Account", selection: account) {
-                ForEach(provider.accounts, id: \.self) { account in
-                    Text(verbatim: account).tag(Optional(account))
+    private var accountValue: Text {
+        guard let method = settings.signInMethod(of: provider) else {
+            return Text("Not Signed In")
+        }
+        // Verbatim, so the account's address is not turned into a mail link.
+        return Text(verbatim: String(localized: provider.accountLabel(for: method)))
+    }
+    /// How to sign in, and the provider's privacy policy and terms, linked to its own pages.
+    private var terms: AttributedString {
+        let name = provider.name
+        let privacy = provider.privacyPolicy.absoluteString
+        let terms = provider.termsOfService.absoluteString
+        if provider.signInMethods.contains(.apiKey) && provider.signInMethods.count == 1 {
+            return AttributedString(
+                localized:
+                    "Provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms of service](\(terms))."
+            )
+        }
+        return AttributedString(
+            localized:
+                "Sign in or provide an API key to use \(name)'s models in Pico's sessions. Your requests are subject to \(name)'s [privacy policy](\(privacy)) and [terms of service](\(terms))."
+        )
+    }
+}
+
+/// The ⋯ menu on a provider's Account row: each way the provider offers to sign in, then
+/// Sign Out…, which is unavailable while it is signed out.
+private struct SignInMenu: View {
+    let provider: SampleProvider
+    let settings: SampleSettings
+
+    var body: some View {
+        Menu {
+            ForEach(provider.signInMethods) { method in
+                Button {
+                    settings.signIn(provider, with: method)
+                } label: {
+                    Text(provider.menuTitle(for: method))
                 }
             }
-        } else {
-            Picker("Account", selection: .constant(0)) {
-                Text("Not signed in").tag(0)
+            Divider()
+            Button("Sign Out…") {
+                settings.signOut(provider)
             }
-            .disabled(true)
-        }
-    }
-
-    private var credentialSourcePicker: some View {
-        Picker("Credential source", selection: credentialSource) {
-            ForEach(CredentialSource.allCases) { source in
-                Text(source.title).tag(source)
+            .disabled(!settings.isSignedIn(provider))
+        } label: {
+            Label {
+                Text("Sign-in options for \(provider.name)")
+            } icon: {
+                Image(systemName: "ellipsis")
             }
+            .labelStyle(.iconOnly)
         }
-    }
-
-    @ViewBuilder private var signInButton: some View {
-        if settings.isSignedIn(provider) {
-            Button("Sign Out") { settings.signOut(provider) }
-        } else {
-            Button("Sign In") { settings.signIn(provider) }
-        }
-    }
-
-    private var credentialStatus: SettingsValue {
-        guard settings.isSignedIn(provider) else { return .status("Not signed in", .attention) }
-        return settings.credentialSource(of: provider) == .apiKey
-            ? .status("Key in Keychain", .ready) : .status("Signed in", .ready)
-    }
-
-    private var account: Binding<String?> {
-        Binding {
-            settings.account(of: provider)
-        } set: { account in
-            settings.setAccount(account, of: provider)
-        }
-    }
-
-    private var credentialSource: Binding<CredentialSource> {
-        Binding {
-            settings.credentialSource(of: provider)
-        } set: { source in
-            settings.setCredentialSource(source, of: provider)
-        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }

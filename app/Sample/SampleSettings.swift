@@ -54,23 +54,12 @@ final class SampleSettings {
     }
 
     func isSignedIn(_ provider: SampleProvider) -> Bool {
-        state(of: provider).isSignedIn
+        state(of: provider).signInMethod != nil
     }
 
-    func account(of provider: SampleProvider) -> String? {
-        state(of: provider).account
-    }
-
-    func setAccount(_ account: String?, of provider: SampleProvider) {
-        providerStates[provider]?.account = account
-    }
-
-    func credentialSource(of provider: SampleProvider) -> CredentialSource {
-        state(of: provider).credentialSource
-    }
-
-    func setCredentialSource(_ source: CredentialSource, of provider: SampleProvider) {
-        providerStates[provider]?.credentialSource = source
+    /// How a provider is signed in, or `nil` when it is not.
+    func signInMethod(of provider: SampleProvider) -> SignInMethod? {
+        state(of: provider).signInMethod
     }
 
     /// Sets a provider up, needing sign-in.
@@ -89,18 +78,17 @@ final class SampleSettings {
         addedOthers.removeAll { $0 == provider }
     }
 
-    func signIn(_ provider: SampleProvider) {
-        guard isAdded(provider) else { return }
-        providerStates[provider]?.isSignedIn = true
-        providerStates[provider]?.account = provider.accounts.first
+    /// Signs a set-up provider in with one of the ways it offers; otherwise changes nothing.
+    func signIn(_ provider: SampleProvider, with method: SignInMethod) {
+        guard isAdded(provider), provider.signInMethods.contains(method) else { return }
+        providerStates[provider]?.signInMethod = method
         if defaultModel == nil, let model = availableModels.first {
             chooseDefaultModel(model)
         }
     }
 
     func signOut(_ provider: SampleProvider) {
-        providerStates[provider]?.isSignedIn = false
-        providerStates[provider]?.account = nil
+        providerStates[provider]?.signInMethod = nil
         guard defaultModel?.provider == provider else { return }
         if let model = availableModels.first {
             chooseDefaultModel(model)

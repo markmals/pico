@@ -37,9 +37,8 @@ extension SampleSettings {
     /// A provider's one-line status, as its list row and page header show it.
     func statusLine(of provider: SampleProvider) -> Text {
         guard isAdded(provider) else { return Text("Not set up") }
-        guard isSignedIn(provider), let account = account(of: provider) else {
-            return Text("Needs sign-in")
-        }
-        return Text("Signed in · \(account)")
+        guard let method = signInMethod(of: provider) else { return Text("Needs sign-in") }
+        // Verbatim, so the account's address is not turned into a mail link.
+        return Text(verbatim: String(localized: provider.accountLabel(for: method)))
     }
 }

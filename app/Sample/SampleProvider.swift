@@ -28,43 +28,12 @@ enum SampleProvider: String, CaseIterable, Identifiable {
         }
     }
 
-    var accounts: [String] {
-        switch self {
-        case .anthropic: ["mark@example.com", "work@example.com"]
-        default: ["mark@example.com"]
-        }
-    }
-
     var initialState: SampleProviderState {
         switch self {
-        case .anthropic:
-            SampleProviderState(
-                isAdded: true,
-                isSignedIn: true,
-                account: accounts.first,
-                credentialSource: .existingOMPAccount
-            )
-        case .openAI:
-            SampleProviderState(
-                isAdded: true,
-                isSignedIn: true,
-                account: accounts.first,
-                credentialSource: .apiKey
-            )
-        case .google:
-            SampleProviderState(
-                isAdded: true,
-                isSignedIn: false,
-                account: nil,
-                credentialSource: .browserSignIn
-            )
-        default:
-            SampleProviderState(
-                isAdded: false,
-                isSignedIn: false,
-                account: nil,
-                credentialSource: .apiKey
-            )
+        case .anthropic: SampleProviderState(isAdded: true, signInMethod: .account)
+        case .openAI: SampleProviderState(isAdded: true, signInMethod: .apiKey)
+        case .google: SampleProviderState(isAdded: true, signInMethod: nil)
+        default: SampleProviderState(isAdded: false, signInMethod: nil)
         }
     }
 }
@@ -72,23 +41,18 @@ enum SampleProvider: String, CaseIterable, Identifiable {
 /// One provider's sample configuration. A provider is signed in only while it is added.
 struct SampleProviderState: Equatable {
     var isAdded: Bool
-    var isSignedIn: Bool
-    var account: String?
-    var credentialSource: CredentialSource
+    /// How the provider is signed in, or `nil` when it is not.
+    var signInMethod: SignInMethod?
 }
 
-enum CredentialSource: CaseIterable, Identifiable {
-    case existingOMPAccount
+/// A way to sign in to a provider. Which ways a provider offers, and what each is called for
+/// that provider, are in `SampleProvider+SignIn.swift`.
+enum SignInMethod: CaseIterable, Identifiable {
+    /// The provider's consumer account, such as a Claude or ChatGPT subscription.
+    case account
+    /// A developer console account, offered by providers that have one.
+    case consoleAccount
     case apiKey
-    case browserSignIn
 
     var id: Self { self }
-
-    var title: LocalizedStringResource {
-        switch self {
-        case .existingOMPAccount: "Existing OMP account"
-        case .apiKey: "API key"
-        case .browserSignIn: "Browser sign-in"
-        }
-    }
 }

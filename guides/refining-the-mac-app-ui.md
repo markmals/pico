@@ -36,7 +36,7 @@ The toolbar's back and forward buttons work like a browser's. View > Back (⌘[)
 
 - Opening a different page adds the page you left to the back history and clears the forward history. A page is a pane, or a provider's page inside Providers & Accounts. Choosing the pane you are already on in the sidebar changes nothing, even from a provider's page.
 - Back returns to the previous page; forward undoes back.
-- When a provider's page goes away, because you removed the provider or turned sample data off, the history forgets it, and if you were on it you return to the page before it.
+- When you turn sample data off, the history forgets every provider's page, and if you were on one you return to the page before it. An open Add Provider sheet closes too.
 - A button and its menu command are unavailable when there is nothing to go back or forward to.
 
 ### Search

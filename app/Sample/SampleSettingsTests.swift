@@ -21,22 +21,25 @@ struct SampleSettingsTests {
         #expect(settings.signInMethod(of: second) == secondBefore)
     }
 
-    @Test("a way the provider does not offer cannot sign it in")
+    @Test("a way the provider does not offer neither signs it in nor lists it")
     func unofferedWayCannotSignIn() throws {
         let settings = SampleSettings()
         let provider = try #require(
             SampleProvider.allCases.first {
-                !settings.isSignedIn($0) && $0.signInMethods.count < SignInMethod.allCases.count
+                !SampleProvider.popular.contains($0)
+                    && $0.signInMethods.count < SignInMethod.allCases.count
             }
         )
         let unoffered = try #require(
             SignInMethod.allCases.first { !provider.signInMethods.contains($0) }
         )
+        let listedBefore = settings.listedProviders
 
         settings.signIn(provider, with: unoffered)
 
         #expect(!settings.isSignedIn(provider))
         #expect(settings.signInMethod(of: provider) == nil)
+        #expect(settings.listedProviders == listedBefore)
     }
 
     @Test("every provider offers at least one way to sign in")

@@ -60,6 +60,9 @@ private struct ProviderList: View {
                 AddProviderSheet(settings: settings)
             }
         }
+        .onChange(of: settings == nil) { _, sampleDataIsOff in
+            if sampleDataIsOff { isAddingProvider = false }
+        }
     }
 }
 

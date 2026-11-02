@@ -2,7 +2,7 @@
 id: proposal.0005
 title: Mac App UI Workspace
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/41
 issues: [https://github.com/markmals/pico/issues/18]
 supersedes: []
@@ -277,7 +277,7 @@ The prototype remains unsigned under the current project settings. No Developer 
 - Access: the local checkout and generated `.app`, without publication, installation over another app, or a provider/Sesh connection. The unsigned local build is not represented as distribution-ready.
 - Exercise: native navigation, back/forward history, search, deep links, pane layouts, scrolling, resizing, appearance, and accessibility, both unconnected and with sample data. Configuration controls remain visibly unconnected without sample data; no workflow is simulated in either mode.
 - Completion cleanup: quit this branch's app and remove only implementation-owned temporary captures and test data. Keep normal ignored build output available for review. No external account, registration, service, or secret needs cleanup.
-- Current state: the sample-data implementation (`63a53c8`) was reviewed and returned for the General and Providers & Accounts changes above. The revised preview is produced after Mark approves this revision.
+- Current state: the Debug `Pico.app` built from `cccb493` is at `.build/macos/Build/Products/Debug/Pico.app` in the PR #41 worktree; `mise run macos:run -- --args -ShowsSampleData YES` rebuilds and opens it with sample data on. General, the provider list, Diagnostics, and both modes were exercised in the background with `open -g` and `pico://` links and observed with `recon` without bringing Pico forward; a provider page was captured once through a reverted temporary start page. Opening a provider row, Set Up, Add Provider…, Sign In/Out, Remove Provider, Show in Finder, and Copy Path need clicks and are left for the human preview; the rules they drive are covered by `PicoTests`.
 
 ## Policies and decisions checked
 
@@ -314,4 +314,4 @@ After #12 is implemented, subsequent work can connect the stubbed settings throu
 
 ## Open questions
 
-None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links; the parity implementation the same day for an interactive sample-data mode inside the app; and the sample-data implementation the same day for the General and Providers & Accounts changes, all recorded above. Implementation of this revision waits for Mark to set `awaiting-implementation`. Mark's review of the remaining panes may revise them further. Configuration functionality remains deferred until #12.
+None. Mark returned the first implementation on 2026-11-01 with the parity changes, search behavior, fixed window width, and `pico://` links; the parity implementation the same day for an interactive sample-data mode inside the app; and the sample-data implementation the same day for the General and Providers & Accounts changes, all recorded above. Mark approved this revision as written. Mark's review of the remaining panes may revise them further. Configuration functionality remains deferred until #12.

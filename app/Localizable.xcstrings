@@ -20,6 +20,9 @@
     "ACP" : {
 
     },
+    "API Key" : {
+
+    },
     "API key" : {
 
     },
@@ -30,6 +33,9 @@
 
     },
     "Add Provider…" : {
+
+    },
+    "Anthropic Console · mark@example.com" : {
 
     },
     "App version" : {
@@ -44,9 +50,6 @@
     "Back" : {
 
     },
-    "Browser sign-in" : {
-
-    },
     "Built-in LSP" : {
 
     },
@@ -56,6 +59,9 @@
     "Catalog" : {
 
     },
+    "ChatGPT Pro · mark@example.com" : {
+
+    },
     "Checked just now" : {
 
     },
@@ -63,6 +69,9 @@
 
     },
     "Choosing or checking the intellisense program is not available here." : {
+
+    },
+    "Claude Max · mark@example.com" : {
 
     },
     "Complete" : {
@@ -81,12 +90,6 @@
 
     },
     "Copy Path" : {
-
-    },
-    "Credential source" : {
-
-    },
-    "Credential status" : {
 
     },
     "Default" : {
@@ -114,9 +117,6 @@
 
     },
     "Excluded" : {
-
-    },
-    "Existing OMP account" : {
 
     },
     "Finder" : {
@@ -162,9 +162,6 @@
 
     },
     "JavaScript" : {
-
-    },
-    "Key in Keychain" : {
 
     },
     "Keychain" : {
@@ -224,6 +221,9 @@
     "None available" : {
 
     },
+    "Not Signed In" : {
+
+    },
     "Not connected" : {
 
     },
@@ -234,9 +234,6 @@
 
     },
     "Not set up" : {
-
-    },
-    "Not signed in" : {
 
     },
     "Nothing is read from Sesh, and no registration is inspected." : {
@@ -278,6 +275,37 @@
     "Pico's sessions run intellisense through the shell for code intelligence." : {
 
     },
+    "Provide a Gemini API Key…" : {
+
+    },
+    "Provide a Groq API Key…" : {
+
+    },
+    "Provide a Mistral API Key…" : {
+
+    },
+    "Provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms of service](%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms of service](%4$@)."
+          }
+        }
+      }
+    },
+    "Provide an Anthropic API Key…" : {
+
+    },
+    "Provide an OpenAI API Key…" : {
+
+    },
+    "Provide an OpenRouter API Key…" : {
+
+    },
+    "Provide an xAI API Key…" : {
+
+    },
     "Provider accounts, and where their credentials come from." : {
 
     },
@@ -312,6 +340,21 @@
 
     },
     "Remove Provider" : {
+
+    },
+    "Requires a ChatGPT account or API key" : {
+
+    },
+    "Requires a Claude account or API key" : {
+
+    },
+    "Requires a Google account or API key" : {
+
+    },
+    "Requires an API key" : {
+
+    },
+    "Requires an OpenRouter account or API key" : {
 
     },
     "Runtime" : {
@@ -368,19 +411,35 @@
     "Show in Finder" : {
 
     },
-    "Sign In" : {
+    "Sign In With OpenRouter…" : {
 
     },
-    "Sign Out" : {
+    "Sign In With a ChatGPT Account…" : {
 
     },
-    "Signed in" : {
+    "Sign In With a Claude Account…" : {
 
     },
-    "Signed in · %@" : {
+    "Sign In With a Google Account…" : {
 
     },
-    "Signing out here doesn't sign you out of OMP in Terminal." : {
+    "Sign In With an Anthropic Console Account…" : {
+
+    },
+    "Sign Out…" : {
+
+    },
+    "Sign in or provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms of service](%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sign in or provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms of service](%4$@)."
+          }
+        }
+      }
+    },
+    "Sign-in options for %@" : {
 
     },
     "Starts" : {
@@ -501,6 +560,9 @@
 
     },
     "logs" : {
+
+    },
+    "mark@example.com" : {
 
     },
     "path" : {

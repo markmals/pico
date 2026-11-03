@@ -1,3 +1,5 @@
+import type { MockResponse } from "@oh-my-pi/pi-ai/providers/mock";
+
 import { cfgBashAutoBackgroundThresholdMs } from "@oh-my-pi/pi-coding-agent/exec/settings";
 import { cfgAsyncMaxJobs, cfgLaunchEnabled } from "@oh-my-pi/pi-coding-agent/tools/settings";
 import assert from "node:assert/strict";
@@ -182,6 +184,69 @@ describe("proposal.0008 stopping background jobs", () => {
 
         await session.dispose();
 
+        assert.equal(isRunning(pid), false);
+    });
+
+    test("disposing waits for a job the model killed itself, even one ignoring SIGTERM", async t => {
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const pidFile = path.join(cwd, "job.pid");
+        // The model kills its job only once the job runs, so there is a process to watch.
+        async function* script(): AsyncGenerator<MockResponse> {
+            yield { content: [stubbornJob(pidFile, "job")] };
+            await pidFrom(pidFile);
+            yield { content: [toolCall("write", { path: "proc://bg_1/kill", content: "" })] };
+            yield { content: ["killed it"] };
+        }
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            dataDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({ responses: script() }),
+        });
+        await session.engine.prompt("start a job, then kill it");
+        const pid = await pidFrom(pidFile);
+
+        await session.dispose();
+
+        assert.equal(isRunning(pid), false);
+    });
+
+    test("stopping kills a process a finished job left running", async t => {
+        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const pidFile = path.join(cwd, "child.pid");
+        const session = await createPicoSession({
+            cwd,
+            agentDir,
+            dataDir,
+            mcpServers: [],
+            authStorage: await mockAuthStorage(agentDir),
+            model: createMockModel({
+                responses: [
+                    {
+                        content: [
+                            toolCall(
+                                "bash",
+                                {
+                                    command: `/bin/sh -c 'echo $$ > ${pidFile}; exec /bin/sleep 30' & echo started`,
+                                    async: true,
+                                },
+                                "job",
+                            ),
+                        ],
+                    },
+                    { content: ["started"] },
+                ],
+                handler: { content: ["woken"] },
+            }),
+        });
+        t.after(() => session.dispose());
+        await session.engine.prompt("start a job that leaves a child running");
+        await session.settleBackgroundWork(() => false);
+        const pid = await pidFrom(pidFile);
+
+        assert.equal(await session.stopBackgroundJobs(), true);
         assert.equal(isRunning(pid), false);
     });
 });

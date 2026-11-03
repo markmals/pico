@@ -11,11 +11,12 @@ Run both at the start of every session and whenever you are unsure where the wor
 
 ## Does this change need a proposal?
 
-Ask one question: **does this change decide something?**
+Ask one question: **does this change decide something?** Look and feel — how an interface looks and how it is operated — is the exception: the human decides it by looking at the running UI, not in a proposal.
 
 - If intent already exists — an approved proposal promises the behavior, or the correct behavior is obvious (a typo, a dead link, a bug whose fix is unambiguous) — implement it directly. Say which case it is, in one line, before you start.
+- If the human is shaping look and feel — layout, sizes, spacing, type, color, motion, which control presents a choice, how it is operated, and wording whose exact words are not themselves a requirement — make the changes directly with [`.agents/skills/polishing-a-ui/`](.agents/skills/polishing-a-ui/). Say so in one line before you start.
 - If the change decides something, you need the human's explicit yes to "do you want a proposal for this change?". Only then create a branch, push it to `origin`, open a **draft** pull request, and write the proposal with [`.agents/skills/writing-a-proposal/`](.agents/skills/writing-a-proposal/). A request to "start a feature" or to "write a proposal" is not that yes, and neither is `mise run status` output. Consent covers that change and its revisions, not the next one.
-- If a small fix turns out to need a design decision, stop and ask the proposal question then.
+- If a small fix turns out to need a design decision, or polish turns out to change what the feature does, stop and ask the proposal question then.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) is an **implementation brief**, not an approved proposal and not that yes. It is the handoff context the session that builds the adapter starts from: the intended behavior, the acceptance criteria, and the evidence each claim requires. The adapter still enters at the question above, and its intent is recorded in a proposal the human approves.
 
@@ -38,7 +39,7 @@ Implement inline by default. Delegate only slices that are independent, touch se
 
 ## Rules
 
-- **Stay inside the proposal.** Behavior it does not describe does not get built; if it should exist, revise the proposal with the human. A defect outside its scope becomes a Beads item ([`.agents/skills/tracking-work/`](.agents/skills/tracking-work/)); one that stops the proposal working is your work.
+- **Stay inside the proposal.** Behavior it does not describe does not get built; if it should exist, revise the proposal with the human. Look and feel is not behavior a proposal must describe: choose what the proposal leaves open to fit the project's existing interface and its platform's conventions, and let the human refine it on the running UI. A defect outside its scope becomes a Beads item ([`.agents/skills/tracking-work/`](.agents/skills/tracking-work/)); one that stops the proposal working is your work.
 - **Raise ambiguity.** When the proposal, vision, a policy, or a decision is ambiguous or conflicts with the work in a way that changes behavior, raise it rather than choosing silently.
 - **Never substitute planning for understanding.** A plausible strategy is no evidence that the problem is understood; ground it first ([`.agents/skills/grounding-a-problem/`](.agents/skills/grounding-a-problem/)), and treat agent synthesis as inference until evidence verifies it.
 - **Never silently encode an ontology decision.** If the work changes what kinds of things exist, their identity, relationships, states, or vocabulary, route it upstream ([`.agents/skills/ontology-review/`](.agents/skills/ontology-review/)).
@@ -263,6 +264,10 @@ Every skill lives in `.agents/skills/<name>/`. Process, in phase order:
 - `reviewing-an-implementation` — implementation is complete and needs its self-check, one independent review, the preview, and the handoff.
 - `adversarial-review` — finished work needs an independent attempt to falsify it.
 - `completing-a-feature` — accepted work needs records, merge, release, and cleanup.
+
+Outside the phases, whenever the human is shaping how an interface looks or is operated:
+
+- `polishing-a-ui` — look and feel is being refined on the running UI, during implementation, review, or between proposals.
 
 Reasoning, whenever the situation calls for it:
 

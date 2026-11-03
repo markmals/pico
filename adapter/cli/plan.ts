@@ -61,7 +61,10 @@ export function planInvocation(
 
 const DISCOVERY: Record<string, ((input: CommandInput) => object) | undefined> = {
     schema: input => {
-        const words = input.arguments.command as readonly string[];
+        // `cli search` shows a command as one string, so `schema "settings get"` names it too.
+        const words = (input.arguments.command as readonly string[]).flatMap(argument =>
+            argument.split(/\s+/).filter(word => word !== ""),
+        );
         return words.length === 0 ? schemaIndex() : commandSpecification(words);
     },
     "cli search": input => searchCommands((input.arguments.query as readonly string[]).join(" ")),

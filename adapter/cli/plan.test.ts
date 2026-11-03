@@ -81,6 +81,13 @@ describe("proposal.0007 what one run of pico does", () => {
         });
     });
 
+    test("schema accepts a command's words quoted as one argument, as cli search shows them", () => {
+        const response = responded(planInvocation(["schema", "settings update"], false));
+
+        expect(response.exitCode).toBe(0);
+        expect(JSON.parse(response.stdout)).toMatchObject({ command: "settings update" });
+    });
+
     test("schema with an unknown command fails with NOT_FOUND", () => {
         const response = responded(planInvocation(["schema", "nope"], false));
 

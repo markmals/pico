@@ -2,7 +2,7 @@
 id: proposal.0007
 title: Pico-Owned Configuration
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/46
 issues: [https://github.com/markmals/pico/issues/12]
 supersedes: []
@@ -499,3 +499,7 @@ Users who want a particular starting model choose it once with `pico settings up
 ## Open questions
 
 None.
+
+During acceptance on 2026-11-02, Linux CI failed four new tests. Running `pico` from source needs the Apple silicon addon package, so the executable tests that load Oh My Pi run only there, as the existing addon test already did. Oh My Pi gives a loopback LM Studio probe 250 ms, which the first discovery in the slower runner's test process overran; the fake-server tests now pay that one-time cost in a throwaway warm-up first.
+
+Mark accepted the implementation on 2026-11-02 and authorized merging PR #46 and cleaning up afterwards. Delivery is merge-only; no tag, package release or Homebrew publication is authorized.

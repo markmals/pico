@@ -29,9 +29,11 @@ Session restoration now works through ACP load, list and resume ([proposal 0004]
 
 The agent's task list now reaches Sesh as its plan ([proposal 0006](proposals/0006-todo-plan-updates.md)). OMP's `todo` tool reports a flat list through ACP plan updates instead of transcript rows, failed updates remain visible as failed tool calls, and a reopened session shows the current list. A real Sesh session verified the plan panel, the absence of todo rows and the restored plan after resume.
 
+Pico now owns its configuration ([proposal 0007](proposals/0007-pico-owned-configuration.md)). A versioned settings file holds the default model and thinking level for new sessions, read and changed only through `pico`'s agent-first commands, which an agent can discover, preview, run and verify from the executable alone. Pico sessions run on OMP's built-in defaults with Pico's policy and settings; from the user's OMP setup they reuse only credentials. Credential references and connecting the companion app to these commands remain follow-up work.
+
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
-The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, history, search and `pico://` links, and six settings panes whose controls are unconnected until the shared configuration contract exists, with a labelled, in-memory sample-data mode for reviewing their working state ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)).
+The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, history, search and `pico://` links, and six settings panes whose controls are still unconnected, with a labelled, in-memory sample-data mode for reviewing their working state ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)). The shared configuration contract the panes need now exists as `pico`'s commands; connecting them is next.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) supplies the implementation brief and observable acceptance scenarios. It informs Workbench proposal development and does not replace proposal approval.
 
@@ -45,7 +47,7 @@ Sesh MCP tools are first-class named tools for questions, artifacts, notificatio
 
 Pico’s runtime delegation uses Sesh child sessions running the same registered Pico agent. Native worker execution hidden behind a synthetic session card would defeat the desired visibility.
 
-Configuration is native and truthful. The companion app reuses credentials by explicit choice, offers models from OMP's available catalog, and exposes only settings backed by real capabilities.
+Configuration is native and truthful. The companion app reuses credentials by explicit choice, offers models from OMP's available catalog, and exposes only settings backed by real capabilities. Pico's behavior comes from Pico's own settings and fixed policy, never from the user's OMP configuration, and every setting is reachable through commands an agent can discover and verify.
 
 ## Beyond the minimum
 
@@ -77,3 +79,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-11-01 | Record private agent-session persistence and exercised Sesh restoration, with Sesh retaining the client transcript. | [proposal.0004](proposals/0004-session-restoration.md) |
 | 2026-11-02 | Record the accepted Mac app UI scaffold: System Settings navigation, history, search and links, six unconnected panes, and a labelled sample-data mode; configuration waits for #12. | [proposal.0005](proposals/0005-mac-app-ui-workspace.md) |
 | 2026-11-02 | Record the todo list as Sesh's plan: flat ACP plan updates, failures as tool calls, and the current plan on reopen. | [proposal.0006](proposals/0006-todo-plan-updates.md) |
+| 2026-11-02 | Record Pico-owned configuration: a versioned settings file and agent-first `pico` commands for the default model and thinking level, and Pico sessions that reuse nothing from OMP's configuration but credentials. | [proposal.0007](proposals/0007-pico-owned-configuration.md) |

@@ -226,7 +226,7 @@ const settingsGet: CommandSpec = {
     path: ["settings", "get"],
     summary: "Show Pico's settings and the model new sessions start on",
     description:
-        "Reads Pico's settings file and reports whether it is missing, valid, unsupported or invalid, with its revision, the saved default, and what a new session would begin on now: the saved default when there is one, otherwise OMP's built-in pick. It writes nothing, so it is also the way to check the file.",
+        "Reads Pico's settings file and reports whether it is missing, valid, unsupported or invalid, with its revision, the settings saved in it, and what a new session would begin on now: the saved default model when there is one, otherwise OMP's built-in pick, and the auto-background state a session would attach with. It writes nothing, so it is also the way to check the file.",
     keywords: [
         "settings",
         "configuration",
@@ -270,9 +270,10 @@ const settingsGet: CommandSpec = {
 
 const settingsUpdate: CommandSpec = {
     path: ["settings", "update"],
-    summary: "Change the default model or thinking level for new sessions",
+    summary:
+        "Change the default model or thinking level, and whether slow commands move to the background",
     description:
-        "Saves the default model and thinking level in Pico's settings file. Given only --default-model, the saved thinking level is kept when the chosen model offers it, and replaced by that model's default level otherwise. Given only --default-thinking, the level applies to the saved default model. Preview the receipt with --dry-run, and refuse a settings file that moved since you read it with --if-revision.",
+        "Saves the default model and thinking level in Pico's settings file. Given only --default-model, the saved thinking level is kept when the chosen model offers it, and replaced by that model's default level otherwise. Given only --default-thinking, the level applies to the saved default model. --auto-background decides whether a command still running after 60 seconds moves to the background on its own; given alone it reads no model catalog, so it needs no credentials. Preview the receipt with --dry-run, and refuse a settings file that moved since you read it with --if-revision.",
     keywords: [
         "settings",
         "update",
@@ -288,6 +289,12 @@ const settingsUpdate: CommandSpec = {
         "thinking",
         "level",
         "reasoning",
+        "background",
+        "auto",
+        "bash",
+        "command",
+        "job",
+        "slow",
     ],
     arguments: [],
     options: [
@@ -320,6 +327,17 @@ const settingsUpdate: CommandSpec = {
             description: "The thinking level a new session begins on.",
         },
         {
+            name: "--auto-background",
+            valueName: "state",
+            type: "string",
+            format: "text",
+            required: false,
+            default: undefined,
+            accepted: { kind: "values", values: ["on", "off"] },
+            description:
+                "Whether a command still running after 60 seconds moves to the background on its own.",
+        },
+        {
             name: "--if-revision",
             valueName: "revision",
             type: "string",
@@ -346,8 +364,8 @@ const settingsUpdate: CommandSpec = {
     constraints: [
         {
             kind: "at-least-one-of",
-            options: ["--default-model", "--default-thinking"],
-            description: "at least one of --default-model or --default-thinking",
+            options: ["--default-model", "--default-thinking", "--auto-background"],
+            description: "at least one of --default-model, --default-thinking or --auto-background",
         },
     ],
     effects: "writes",
@@ -357,7 +375,7 @@ const settingsUpdate: CommandSpec = {
     errors: [
         {
             code: "INVALID_ARGUMENT",
-            when: "Neither --default-model nor --default-thinking was given, a value is malformed, or the thinking level is one the model does not offer. details lists the accepted values when they are known.",
+            when: "None of --default-model, --default-thinking and --auto-background was given, a value is malformed or is not one the option accepts, or the thinking level is one the model does not offer. details lists the accepted values when they are known.",
         },
         {
             code: "NOT_FOUND",
@@ -393,6 +411,10 @@ const settingsUpdate: CommandSpec = {
         {
             description: "Save a thinking level for the saved default model",
             command: "pico settings update --default-thinking high",
+        },
+        {
+            description: "Keep slow commands in the foreground",
+            command: "pico settings update --auto-background off",
         },
         {
             description: "Refuse the update if the file moved since it was read",

@@ -20,7 +20,8 @@ describe("proposal.0007 cli search", () => {
 
         expect(first).toEqual({
             command: "settings update",
-            summary: "Change the default model or thinking level for new sessions",
+            summary:
+                "Change the default model or thinking level, and whether slow commands move to the background",
             usage: usageOf(findCommand(["settings", "update"]) as never),
         });
     });
@@ -67,5 +68,22 @@ describe("proposal.0007 cli search", () => {
 
             expect({ query, valid: parsed.success }).toEqual({ query, valid: true });
         }
+    });
+});
+
+describe("proposal.0008 finding the auto-background option", () => {
+    test.each([
+        ["stop slow bash commands going to the background", "settings update"],
+        ["background job", "settings update"],
+        ["turn auto background off", "settings update"],
+    ])("%p ranks %p first", (query: string, expected: string) => {
+        expect(searchCommands(query).items[0]?.command).toBe(expected);
+    });
+
+    test("background alone finds both the command that shows it and the one that changes it", () => {
+        expect(searchCommands("background").items.map(item => item.command)).toEqual([
+            "settings get",
+            "settings update",
+        ]);
     });
 });

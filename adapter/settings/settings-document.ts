@@ -3,16 +3,23 @@ import { z } from "zod/v4";
 
 export const SETTINGS_FILENAME = "settings.json";
 
-/** A saved default model and its thinking level, both null when none is saved. */
+/**
+ * A saved default model and its thinking level, both null when none is saved, and whether a slow
+ * command moves to the background on its own, null when the file does not set it.
+ */
 export interface PicoSettings {
     defaultModel: string | null;
     defaultThinking: string | null;
+    autoBackground: boolean | null;
 }
 
 export type SettingsState =
     | { status: "missing"; revision: "none"; item: PicoSettings }
     | { status: "valid"; revision: string; item: PicoSettings }
     | { status: "unsupported" | "invalid"; revision: string; problem: string };
+
+/** Pico's own auto-background value, used by a session whose settings file leaves it unset. */
+export const DEFAULT_AUTO_BACKGROUND = true;
 
 const VERSION = 1;
 
@@ -21,6 +28,7 @@ const settingsDocumentV1 = z
         version: z.literal(VERSION),
         defaultModel: z.string().min(1).optional(),
         defaultThinking: z.string().min(1).optional(),
+        autoBackground: z.boolean().optional(),
     })
     .check(context => {
         const { defaultModel, defaultThinking } = context.value;
@@ -43,7 +51,7 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
         return {
             status: "missing",
             revision: "none",
-            item: { defaultModel: null, defaultThinking: null },
+            item: { defaultModel: null, defaultThinking: null, autoBackground: null },
         };
     }
     const revision = revisionOf(bytes);
@@ -69,6 +77,7 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
         item: {
             defaultModel: document.data.defaultModel ?? null,
             defaultThinking: document.data.defaultThinking ?? null,
+            autoBackground: document.data.autoBackground ?? null,
         },
     };
 }
@@ -84,14 +93,15 @@ export function revisionOf(bytes: Uint8Array | undefined): string {
 }
 
 function settingsDocument(item: PicoSettings): SettingsDocumentV1 {
-    const { defaultModel, defaultThinking } = item;
+    const { defaultModel, defaultThinking, autoBackground } = item;
+    const background = autoBackground === null ? {} : { autoBackground };
     if (defaultModel !== null && defaultThinking !== null) {
-        return { version: VERSION, defaultModel, defaultThinking };
+        return { version: VERSION, defaultModel, defaultThinking, ...background };
     }
     if (defaultModel !== null || defaultThinking !== null) {
         throw new Error("a default model and its thinking level are saved together");
     }
-    return { version: VERSION };
+    return { version: VERSION, ...background };
 }
 
 type ParsedDocument = { object: Record<string, unknown> } | { problem: string };

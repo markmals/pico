@@ -149,7 +149,7 @@ describe("proposal.0001 shutdown", () => {
         assert.equal(session.disposalPhase, undefined);
 
         const pending = session.dispose();
-        assert.equal(session.disposalPhase, "disconnecting MCP servers");
+        assert.equal(session.disposalPhase, "stopping background jobs");
         await pending;
 
         assert.equal(session.disposalPhase, undefined);

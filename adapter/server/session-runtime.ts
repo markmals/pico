@@ -29,6 +29,9 @@ const ABORT_GRACE_MS = 5_000;
 const CLOSED_AFTER_FAILED_CANCELLATION =
     "This session was closed after a cancellation could not stop it. Start a new session.";
 
+const CLOSED_AFTER_UNSTOPPABLE_JOBS =
+    "This session was closed after its background jobs could not be stopped. Start a new session.";
+
 type AbortOutcome = "stopped" | "rejected" | "expired";
 
 interface Turn {
@@ -39,6 +42,11 @@ interface Turn {
     aborted?: Promise<AbortOutcome>;
     /** Set the moment a cancel is accepted: the turn is cancelled and stays reserved until this settles. */
     cancellation?: Promise<void>;
+    /**
+     * Set once the turn's background jobs are being stopped, by a cancellation or a failure; false
+     * when a job's processes would not stop (proposal.0008).
+     */
+    jobsStopped?: Promise<boolean>;
     /** Resolves when Pico stops waiting for the engine, because the session was closed. */
     readonly abandoned: PromiseWithResolvers<void>;
 }
@@ -219,16 +227,21 @@ export class SessionRuntime {
             if (event.type === "tool_execution_end" && event.toolName === "todo") {
                 this.#reportPlanChanges();
             }
+            // A run that fails ends the turn, so the jobs it leaves running go with it.
+            if (event.type === "agent_end" && !turn.cancellation && failed(lastAssistantMessage)) {
+                void this.#stopJobs(turn);
+            }
         });
 
         try {
             await this.flushPersistence();
             if (turn.cancellation) return "cancelled";
             this.#requireOpen();
-            turn.enginePrompt = this.#session.engine.prompt(text).then(
+            turn.enginePrompt = this.#runEngine(turn, text).then(
                 () => undefined,
                 (error: unknown) => {
                     turn.failure = error;
+                    void this.#stopJobs(turn);
                 },
             );
             await Promise.race([turn.enginePrompt, turn.abandoned.promise]);
@@ -238,6 +251,14 @@ export class SessionRuntime {
             // off a session this one may yet close, and keeps the updates the
             // unwinding produces on the stream.
             await turn.cancellation;
+            // A failed turn answers only once its jobs are gone; a cancelled one settled that above.
+            if (!turn.cancellation && turn.jobsStopped && !(await turn.jobsStopped)) {
+                this.#close(
+                    turn,
+                    "a failed turn's background jobs did not stop",
+                    CLOSED_AFTER_UNSTOPPABLE_JOBS,
+                );
+            }
             // A write the engine started can outlive the answer: releasing the turn
             // now would let it overwrite what the next turn writes to the same file.
             // A cancellation bounds the same wait, and closing the session ends it.
@@ -281,9 +302,24 @@ export class SessionRuntime {
             ABORT_GRACE_MS,
         );
         turn.aborted = aborted;
-        turn.cancellation = this.#settleCancellation(turn, aborted).catch((error: unknown) => {
-            console.error(`pico: cancelling the turn failed: ${describe(error)}`);
-        });
+        const jobsStopped = this.#stopJobs(turn);
+        turn.cancellation = this.#settleCancellation(turn, aborted, jobsStopped).catch(
+            (error: unknown) => {
+                console.error(`pico: cancelling the turn failed: ${describe(error)}`);
+            },
+        );
+    }
+
+    /** Runs the engine, then holds the turn for its background jobs and the runs they wake. */
+    async #runEngine(turn: Turn, text: string): Promise<void> {
+        await this.#session.engine.prompt(text);
+        await this.#session.settleBackgroundWork(() => turn.jobsStopped !== undefined);
+    }
+
+    /** Stops the turn's background jobs once; every later caller shares that outcome. */
+    #stopJobs(turn: Turn): Promise<boolean> {
+        turn.jobsStopped ??= this.#session.stopBackgroundJobs();
+        return turn.jobsStopped;
     }
 
     /**
@@ -306,7 +342,11 @@ export class SessionRuntime {
         }
     }
 
-    async #settleCancellation(turn: Turn, aborted: Promise<AbortOutcome>): Promise<void> {
+    async #settleCancellation(
+        turn: Turn,
+        aborted: Promise<AbortOutcome>,
+        jobsStopped: Promise<boolean>,
+    ): Promise<void> {
         const outcome = await aborted;
         if (outcome === "rejected") return this.#close(turn, "the engine rejected the abort");
         if (outcome === "expired") {
@@ -320,6 +360,14 @@ export class SessionRuntime {
                 `the turn did not end within ${ABORT_GRACE_MS}ms of an accepted abort`,
             );
         }
+        // A job that ignores SIGTERM outlives its cancellation for a moment, and one can start while
+        // the abort unwinds; the turn is not cancelled while any of their processes runs.
+        if (!(await jobsStopped) || !(await this.#session.stopBackgroundJobs())) {
+            return this.#close(
+                turn,
+                "a background job's processes were still running after the cancellation stopped it",
+            );
+        }
         // A write the cancelled turn started can still be on its way to disk. The
         // session cannot take another turn until it lands, or the next turn's file
         // is overwritten by the one this turn was told to stop.
@@ -331,8 +379,8 @@ export class SessionRuntime {
         }
     }
 
-    #close(turn: Turn, cause: string): void {
-        this.#closedReason = CLOSED_AFTER_FAILED_CANCELLATION;
+    #close(turn: Turn, cause: string, reason = CLOSED_AFTER_FAILED_CANCELLATION): void {
+        this.#closedReason = reason;
         console.error(`pico: ${cause}; closing the session`);
         turn.abandoned.resolve();
         // Disposal is off the cancelled response's path: a teardown that stalls must
@@ -365,6 +413,11 @@ export class SessionRuntime {
         }
         return this.#disposal;
     }
+}
+
+/** A run that ended in an error, a refusal, or an abort Pico did not ask for. */
+function failed(message: AssistantMessage | undefined): boolean {
+    return message?.stopReason === "error" || message?.stopReason === "aborted";
 }
 
 function stopReasonOf(message: AssistantMessage | undefined): StopReason {

@@ -4,6 +4,7 @@ import type { AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-
 import { describe, expect, test } from "bun:test";
 
 import {
+    backgroundDetails,
     toolExecutionEnd,
     toolExecutionStart,
     toolExecutionUpdate,
@@ -12,7 +13,14 @@ import {
 import { SessionEventMapper } from "./session-event-mapper.ts";
 
 const TOOL_CALL_IDS = ["call-1", "call-2", "call-3"];
-const TOOL_NAMES = ["read", "write", "edit", "bash", "grep", "mcp__sesh_notify"];
+const TOOL_NAMES = ["read", "write", "edit", "bash", "grep", "wait", "mcp__sesh_notify"];
+const JOB_STATES = ["running", "completed", "failed", "cancelled"] as const;
+
+/** The job state an engine result or frame reports, if it reports one. */
+function jobState(result: unknown): string | undefined {
+    return (result as { details?: { async?: { state?: string } } } | undefined)?.details?.async
+        ?.state;
+}
 
 /**
  * A 32-bit xorshift, deterministic per seed. Every step stays in uint32: a
@@ -36,7 +44,7 @@ function randomSequence(seed: number): AgentSessionEvent[] {
     for (let index = 0; index < length; index++) {
         const toolCallId = TOOL_CALL_IDS[next(TOOL_CALL_IDS.length)] as string;
         const toolName = TOOL_NAMES[next(TOOL_NAMES.length)] as string;
-        switch (next(4)) {
+        switch (next(6)) {
             case 0:
                 events.push(toolExecutionStart({ toolCallId, toolName, args: { path: "a.txt" } }));
                 break;
@@ -52,13 +60,39 @@ function randomSequence(seed: number): AgentSessionEvent[] {
             case 2:
                 events.push(toolExecutionEnd({ toolCallId, toolName, result: toolResult("done") }));
                 break;
-            default:
+            case 3:
                 events.push(
                     toolExecutionEnd({
                         toolCallId,
                         toolName,
                         result: toolResult("failed"),
                         isError: true,
+                    }),
+                );
+                break;
+            case 4:
+                events.push(
+                    toolExecutionEnd({
+                        toolCallId,
+                        toolName: "bash",
+                        result: toolResult(
+                            "Backgrounded as job bg_1 (bash)",
+                            backgroundDetails("running"),
+                        ),
+                    }),
+                );
+                break;
+            default:
+                events.push(
+                    toolExecutionUpdate({
+                        toolCallId,
+                        toolName: "bash",
+                        partialResult: toolResult(
+                            "job output",
+                            backgroundDetails(
+                                JOB_STATES[next(JOB_STATES.length)] as (typeof JOB_STATES)[number],
+                            ),
+                        ),
                     }),
                 );
         }
@@ -76,10 +110,16 @@ interface Coverage {
     duplicateEnds: number;
     /** Updates or ends for a call that never started. */
     orphans: number;
+    /** Ends that moved a command to a background job. */
+    backgroundEnds: number;
+    /** Updates carrying a background job's own state. */
+    jobFrames: number;
+    /** Job frames that ended a job whose call was still open. */
+    jobOutcomes: number;
 }
 
 function tally(events: AgentSessionEvent[], coverage: Coverage): void {
-    const seen = new Map<string, "running" | "ended">();
+    const seen = new Map<string, "running" | "backgrounded" | "ended">();
     for (const event of events) {
         if (event.type === "tool_execution_start") {
             coverage.starts++;
@@ -88,16 +128,25 @@ function tally(events: AgentSessionEvent[], coverage: Coverage): void {
         }
         if (event.type === "tool_execution_update") {
             coverage.updates++;
-            if (!seen.has(event.toolCallId)) coverage.orphans++;
+            const state = jobState(event.partialResult);
+            if (state) coverage.jobFrames++;
+            const call = seen.get(event.toolCallId);
+            if (call === undefined) coverage.orphans++;
+            else if (call === "backgrounded" && state && state !== "running") {
+                coverage.jobOutcomes++;
+                seen.set(event.toolCallId, "ended");
+            }
             continue;
         }
         if (event.type !== "tool_execution_end") continue;
-        if (event.isError === true) coverage.failedEnds++;
+        const backgrounding = jobState(event.result) === "running";
+        if (backgrounding) coverage.backgroundEnds++;
+        else if (event.isError === true) coverage.failedEnds++;
         else coverage.completedEnds++;
-        const state = seen.get(event.toolCallId);
-        if (state === undefined) coverage.orphans++;
-        else if (state === "ended") coverage.duplicateEnds++;
-        seen.set(event.toolCallId, "ended");
+        const call = seen.get(event.toolCallId);
+        if (call === undefined) coverage.orphans++;
+        else if (call === "ended") coverage.duplicateEnds++;
+        seen.set(event.toolCallId, backgrounding && call === "running" ? "backgrounded" : "ended");
     }
 }
 
@@ -116,6 +165,9 @@ describe("proposal.0001 tool call reporting invariants", () => {
             failedEnds: 0,
             duplicateEnds: 0,
             orphans: 0,
+            backgroundEnds: 0,
+            jobFrames: 0,
+            jobOutcomes: 0,
         };
 
         for (let seed = 1; seed <= 200; seed++) {
@@ -172,6 +224,9 @@ describe("proposal.0001 tool call reporting invariants", () => {
         expect(coverage.failedEnds, "generated failed ends").toBeGreaterThan(0);
         expect(coverage.duplicateEnds, "generated duplicate ends").toBeGreaterThan(0);
         expect(coverage.orphans, "generated orphan events").toBeGreaterThan(0);
+        expect(coverage.backgroundEnds, "generated background ends").toBeGreaterThan(0);
+        expect(coverage.jobFrames, "generated job frames").toBeGreaterThan(0);
+        expect(coverage.jobOutcomes, "generated job outcomes").toBeGreaterThan(0);
     });
 
     test("a second end for the same call reports nothing", () => {

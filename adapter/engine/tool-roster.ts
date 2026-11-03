@@ -8,6 +8,7 @@ export const PICO_BUILTIN_TOOLS = [
     "bash",
     "web_search",
     "todo",
+    "wait",
 ];
 
 /**

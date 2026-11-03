@@ -33,12 +33,17 @@ const SAVED_SETTINGS = {
     settingsFile: "/Users/mark/Library/Application Support/Pico/settings.json",
     status: "valid",
     revision: `sha256:${"b".repeat(64)}`,
-    item: { defaultModel: "anthropic/claude-sonnet-5-5", defaultThinking: "high" },
+    item: {
+        defaultModel: "anthropic/claude-sonnet-5-5",
+        defaultThinking: "high",
+        autoBackground: null,
+    },
     effective: {
         defaultModel: "anthropic/claude-sonnet-5-5",
         defaultThinking: "high",
         source: "settings",
         available: true,
+        autoBackground: true,
     },
 };
 

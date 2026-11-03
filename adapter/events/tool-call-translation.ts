@@ -1,6 +1,11 @@
 // Derived from oh-my-pi 18.14.0 src/modes/acp/acp-event-mapper.ts (MIT; see THIRD-PARTY-NOTICES.md).
 
-import type { ToolCallContent, ToolCallLocation, ToolKind } from "@agentclientprotocol/sdk";
+import type {
+    ToolCallContent,
+    ToolCallLocation,
+    ToolCallStatus,
+    ToolKind,
+} from "@agentclientprotocol/sdk";
 
 import { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls/router";
 import {
@@ -56,6 +61,7 @@ export function toolTitle(
     const statedIntent = intent?.trim();
     if (statedIntent) return statedIntent;
     if (toolName === "todo") return "Update plan";
+    if (toolName === "wait") return "Wait for background jobs";
 
     const subject =
         stringProperty(args, "path") ??
@@ -181,6 +187,49 @@ export function resultText(result: unknown): string {
     const content = property(result, "content");
     if (!Array.isArray(content)) return "";
     return content.map(block => stringProperty(block, "text") ?? "").join("");
+}
+
+/** The background job a `bash` result or update reports, and the state it is in. */
+export interface BackgroundJob {
+    jobId: string;
+    state: string;
+}
+
+export function backgroundJob(details: unknown): BackgroundJob | undefined {
+    const job = property(details, "async");
+    const jobId = stringProperty(job, "jobId");
+    const state = stringProperty(job, "state");
+    return jobId && state ? { jobId, state } : undefined;
+}
+
+/** How a job's frame settles its call; a job that still runs settles nothing. */
+export function backgroundOutcome(job: BackgroundJob | undefined): ToolCallStatus | undefined {
+    if (job?.state === "completed") return "completed";
+    return job?.state === "failed" || job?.state === "cancelled" ? "failed" : undefined;
+}
+
+/** A running job's call: what the command has produced, then the job it runs as. */
+export function backgroundContent(output: string, jobId: string): ToolCallContent[] {
+    const job = textContent(`Running in the background as job ${jobId}.`);
+    return output ? [textContent(output), job] : [job];
+}
+
+/** The jobs a `wait` call reports, one line each: `<id> — <status> — <label>`. */
+export function jobLines(details: unknown): string {
+    const jobs = property(details, "jobs");
+    if (!Array.isArray(jobs)) return "";
+    const lines: string[] = [];
+    for (const job of jobs) {
+        const line = [
+            stringProperty(job, "id"),
+            stringProperty(job, "status"),
+            stringProperty(job, "label"),
+        ]
+            .filter(part => part !== undefined)
+            .join(" — ");
+        if (line) lines.push(line);
+    }
+    return lines.join("\n");
 }
 
 /**

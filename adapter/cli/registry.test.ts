@@ -74,6 +74,7 @@ describe("proposal.0007 command registry", () => {
         expect(update?.options.map(option => option.name)).toEqual([
             "--default-model",
             "--default-thinking",
+            "--auto-background",
             "--if-revision",
             "--dry-run",
         ]);
@@ -82,8 +83,9 @@ describe("proposal.0007 command registry", () => {
         expect(update?.constraints).toEqual([
             {
                 kind: "at-least-one-of",
-                options: ["--default-model", "--default-thinking"],
-                description: "at least one of --default-model or --default-thinking",
+                options: ["--default-model", "--default-thinking", "--auto-background"],
+                description:
+                    "at least one of --default-model, --default-thinking or --auto-background",
             },
         ]);
     });
@@ -110,7 +112,7 @@ describe("proposal.0007 command registry", () => {
         );
         expect(usageOf(findCommand(["settings", "update"]) as never)).toBe(
             "pico settings update [--default-model <model>] [--default-thinking <level>]" +
-                " [--if-revision <revision>] [--dry-run]",
+                " [--auto-background <state>] [--if-revision <revision>] [--dry-run]",
         );
         expect(usageOf(findCommand(["cli", "search"]) as never)).toBe("pico cli search <query…>");
         expect(usageOf(findCommand(["schema"]) as never)).toBe("pico schema [<command…>]");
@@ -143,5 +145,48 @@ describe("proposal.0007 command registry", () => {
                 }).toEqual({ id: commandId(command), known: true, explained: true });
             }
         }
+    });
+});
+
+describe("proposal.0008 the auto-background option", () => {
+    test("settings update declares it with its value name and the states it accepts", () => {
+        const option = findCommand(["settings", "update"])?.options.find(
+            declared => declared.name === "--auto-background",
+        );
+
+        expect(option).toEqual({
+            name: "--auto-background",
+            valueName: "state",
+            type: "string",
+            format: "text",
+            required: false,
+            default: undefined,
+            accepted: { kind: "values", values: ["on", "off"] },
+            description: expect.any(String) as unknown as string,
+        });
+    });
+
+    test("its words are in the command's search keywords", () => {
+        const keywords = findCommand(["settings", "update"])?.keywords ?? [];
+
+        expect(["background", "bash", "job"].filter(word => !keywords.includes(word))).toEqual([]);
+    });
+
+    test("an example turns it off", () => {
+        const examples = findCommand(["settings", "update"])?.examples ?? [];
+
+        expect(
+            examples.some(
+                example => example.command === "pico settings update --auto-background off",
+            ),
+        ).toBe(true);
+    });
+
+    test("the INVALID_ARGUMENT description names it among the options one of which is required", () => {
+        const invalid = findCommand(["settings", "update"])?.errors.find(
+            error => error.code === "INVALID_ARGUMENT",
+        );
+
+        expect(invalid?.when).toContain("--auto-background");
     });
 });

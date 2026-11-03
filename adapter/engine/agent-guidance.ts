@@ -4,7 +4,8 @@ export const PICO_GUIDANCE = `§ Pico
 - Sesh may run this session in its own git worktree on its own branch; \`mcp__sesh_session_info\` reports which worktree, branch and project you are in.
 - Delegate reviews and other work only through \`mcp__sesh_start_session\`, when Sesh supplies it. Children inherit this session's registered Pico agent; omit the \`agent\` field.
 - Never launch agent harnesses through \`bash\` or native workers as a delegation fallback. If Sesh delegation is unavailable or fails, report the limitation or do the work in this session.
-- Keep the \`todo\` list flat: create it with \`init\` and \`items\` (no \`list\`), and add tasks with \`append\` and \`phase: "Tasks"\`. Sesh shows the list as a plan without phase names.`;
+- Keep the \`todo\` list flat: create it with \`init\` and \`items\` (no \`list\`), and add tasks with \`append\` and \`phase: "Tasks"\`. Sesh shows the list as a plan without phase names.
+- A background \`bash\` job belongs to the turn that started it: Sesh shows the turn as running until every job ends, and stopping the turn kills them. Don't start a server or watcher in the background expecting it to outlive your reply.`;
 
 /**
  * The default prompt blocks with the `agent://` internal-URL line removed and

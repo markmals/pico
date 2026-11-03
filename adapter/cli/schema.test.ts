@@ -52,10 +52,11 @@ describe("proposal.0007 schema command", () => {
         expect(specification.options.map(option => option.name)).toEqual([
             "--default-model",
             "--default-thinking",
+            "--auto-background",
             "--if-revision",
             "--dry-run",
         ]);
-        expect(specification.options[3]).toEqual({
+        expect(specification.options[4]).toEqual({
             name: "--dry-run",
             valueName: null,
             type: "boolean",
@@ -122,5 +123,22 @@ describe("proposal.0007 schema command", () => {
                 accepted: COMMANDS.map(command => commandId(command)),
             });
         }
+    });
+});
+
+describe("proposal.0008 the auto-background option in schema output", () => {
+    test("its specification carries its value name and the states it accepts", () => {
+        const specification = commandSpecification(["settings", "update"]);
+
+        expect(specification.options.find(option => option.name === "--auto-background")).toEqual({
+            name: "--auto-background",
+            valueName: "state",
+            type: "string",
+            required: false,
+            default: null,
+            format: "a value that is not empty",
+            accepted: { values: ["on", "off"] },
+            description: expect.any(String) as unknown as string,
+        });
     });
 });

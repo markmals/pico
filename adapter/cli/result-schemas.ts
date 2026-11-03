@@ -35,16 +35,18 @@ export const modelsGetOutput = z.object({
     item: modelSchema,
 });
 
-const savedDefault = z.object({
+const savedSettings = z.object({
     defaultModel: z.string().nullable(),
     defaultThinking: z.string().nullable(),
+    autoBackground: z.boolean().nullable(),
 });
 
-const effectiveDefault = z.object({
+const effectiveSettings = z.object({
     defaultModel: z.string().nullable(),
     defaultThinking: z.string().nullable(),
     source: z.enum(["settings", "built-in"]),
     available: z.boolean(),
+    autoBackground: z.boolean(),
 });
 
 export const settingsGetOutput = z.discriminatedUnion("status", [
@@ -53,16 +55,16 @@ export const settingsGetOutput = z.discriminatedUnion("status", [
         settingsFile: z.string(),
         status: z.literal("missing"),
         revision: z.literal("none"),
-        item: savedDefault,
-        effective: effectiveDefault,
+        item: savedSettings,
+        effective: effectiveSettings,
     }),
     z.object({
         apiVersion,
         settingsFile: z.string(),
         status: z.literal("valid"),
         revision,
-        item: savedDefault,
-        effective: effectiveDefault,
+        item: savedSettings,
+        effective: effectiveSettings,
     }),
     z.object({
         apiVersion,
@@ -75,7 +77,7 @@ export const settingsGetOutput = z.discriminatedUnion("status", [
     }),
 ]);
 
-const settingsSnapshot = z.object({ revision, item: savedDefault });
+const settingsSnapshot = z.object({ revision, item: savedSettings });
 
 export const settingsUpdateOutput = z.object({
     apiVersion,

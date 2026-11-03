@@ -534,6 +534,30 @@ test("parseFrontmatter reads a list value the formatter wrapped onto indented li
     });
 });
 
+test("parseFrontmatter reads a list the formatter wrapped one item per line", () => {
+    let source = [
+        "---",
+        "id: guide.wrapped",
+        "describes:",
+        "    [",
+        "        proposal.0001,",
+        "        proposal.0002,",
+        "    ]",
+        "---",
+    ].join("\n");
+
+    assert.deepEqual(parseFrontmatter(source), {
+        frontmatter: { id: "guide.wrapped", describes: ["proposal.0001", "proposal.0002"] },
+        content: source,
+    });
+});
+
+test("parseFrontmatter still rejects a list with an empty item", () => {
+    assert.deepEqual(parseFrontmatter("---\ndescribes: [proposal.0001, , proposal.0002]\n---"), {
+        error: 'cannot parse list value for "describes"',
+    });
+});
+
 test("parseFrontmatter rejects an indented line that continues no key", () => {
     assert.deepEqual(parseFrontmatter("---\n    [proposal.0001]\n---"), {
         error: 'cannot parse frontmatter line "    [proposal.0001]"',

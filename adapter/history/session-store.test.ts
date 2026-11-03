@@ -14,6 +14,7 @@ import { describe, test } from "node:test";
 import type { PicoSession } from "../engine/pico-session.ts";
 import type { ConnectedClient } from "../server/agent-harness.ts";
 
+import { createPicoModelRegistry } from "../engine/model-catalog.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
 import {
     picoWorkspace,
@@ -21,7 +22,7 @@ import {
     unauthenticatedAuthStorage,
     useAsProcessAgentDir,
 } from "../engine/testing/session-fixture.ts";
-import { installTestProvider } from "../engine/testing/test-provider.ts";
+import { ALPHA_DEFAULT, testProvider } from "../engine/testing/test-provider.ts";
 import { connectPicoAgent } from "../server/agent-harness.ts";
 import { picoAgentShutdown } from "../server/pico-agent.ts";
 
@@ -68,8 +69,10 @@ function rejected<T>(result: T | Failure): Failure["error"] {
 async function fixture(t: TestContext) {
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
     useAsProcessAgentDir(t, agentDir);
-    const models = installTestProvider(cwd);
     const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+    const provider = testProvider();
+    provider.register(modelRegistry);
     const connections: ConnectedClient[] = [];
     const state = { factoryCalls: 0, factoryFailure: undefined as string | undefined };
     const connect = async () => {
@@ -80,6 +83,7 @@ async function fixture(t: TestContext) {
                 directory: string,
                 mcpServers: McpServerStdio[],
                 sessionManager: SessionManager,
+                fresh: boolean,
             ): Promise<PicoSession> => {
                 state.factoryCalls++;
                 if (state.factoryFailure) throw new Error(state.factoryFailure);
@@ -88,6 +92,9 @@ async function fixture(t: TestContext) {
                     agentDir,
                     dataDir,
                     authStorage,
+                    modelRegistry,
+                    // A reopened session takes its model from its own journal.
+                    startOn: fresh ? ALPHA_DEFAULT : undefined,
                     mcpServers,
                     sessionManager,
                 });
@@ -105,7 +112,7 @@ async function fixture(t: TestContext) {
         cwd,
         agentDir,
         dataDir,
-        models,
+        models: provider.models,
         state,
         connect,
         sessionsRoot: path.join(dataDir, "sessions"),

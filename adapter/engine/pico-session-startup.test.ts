@@ -8,14 +8,12 @@ import { createPicoSession, PicoSessionError } from "./pico-session.ts";
 import { exited, fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
     createMockModel,
-    createReasoningMockModel,
     lockCredentialStore,
     mockAuthStorage,
     picoWorkspace,
-    temporaryDirectory,
+    storeMockProviderKey,
     unauthenticatedAuthStorage,
     withoutProviderCredentials,
-    writeMockProviderKey,
 } from "./testing/session-fixture.ts";
 
 describe("proposal.0001 credential store", () => {
@@ -75,7 +73,7 @@ describe("proposal.0001 credential store", () => {
 
     test("the store Pico opened is closed when the session is disposed", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
-        writeMockProviderKey(agentDir);
+        await storeMockProviderKey(agentDir);
         const session = await createPicoSession({
             cwd,
             agentDir,
@@ -127,25 +125,6 @@ describe("proposal.0001 model selection", () => {
         );
     });
 
-    test("a model Oh My Pi substituted for the configured one fails creation", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(
-            t,
-            "modelRoles:\n  default: openai/pico-no-such-model\n",
-        );
-        const authStorage = await mockAuthStorage(agentDir);
-        authStorage.keys.setRuntime("anthropic", "test-key");
-
-        await assert.rejects(
-            createPicoSession({ cwd, agentDir, dataDir, mcpServers: [], authStorage }),
-            (error: unknown) => {
-                assert.ok(error instanceof PicoSessionError);
-                assert.match(error.message, /openai\/pico-no-such-model/);
-                assert.match(error.message, /substitute/i);
-                return true;
-            },
-        );
-    });
-
     test("a model whose credentials cannot be resolved fails creation", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
 
@@ -191,53 +170,6 @@ describe("proposal.0001 model selection", () => {
     });
 });
 
-/** A project-level OMP configuration, as a checkout carries one. */
-function writeProjectConfig(projectDir: string, config: string): void {
-    fs.mkdirSync(path.join(projectDir, ".omp"), { recursive: true });
-    fs.writeFileSync(path.join(projectDir, ".omp", "config.yml"), config);
-}
-describe("proposal.0001 thinking level", () => {
-    test("the session uses the thinking level the configuration selects", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t, "defaultThinkingLevel: low\n");
-        const session = await createPicoSession({
-            cwd,
-            agentDir,
-            dataDir,
-            mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
-            model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
-        });
-        t.after(() => session.dispose());
-
-        assert.equal(session.engine.thinkingLevel, "low");
-    });
-
-    test("project settings come from the session's worktree, not the main checkout", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
-        const mainCheckout = temporaryDirectory(t, "sesh-root");
-        writeProjectConfig(cwd, "defaultThinkingLevel: low\n");
-        writeProjectConfig(mainCheckout, "defaultThinkingLevel: high\n");
-        const previous = process.env.SESH_ROOT_PATH;
-        process.env.SESH_ROOT_PATH = mainCheckout;
-        t.after(() => {
-            if (previous === undefined) delete process.env.SESH_ROOT_PATH;
-            else process.env.SESH_ROOT_PATH = previous;
-        });
-
-        const session = await createPicoSession({
-            cwd,
-            agentDir,
-            dataDir,
-            mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
-            model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
-        });
-        t.after(() => session.dispose());
-
-        assert.equal(session.engine.thinkingLevel, "low");
-    });
-});
-
 describe("proposal.0001 stored credentials", () => {
     const STORED_PROVIDER = "pico-untouched-provider";
 
@@ -264,8 +196,7 @@ describe("proposal.0001 stored credentials", () => {
 
     test("a session neither copies nor removes the user's stored credentials", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
-        writeMockProviderKey(agentDir);
-        (await unauthenticatedAuthStorage(agentDir)).close();
+        await storeMockProviderKey(agentDir);
         const seed = new Database(path.join(agentDir, "agent.db"));
         seed.run(
             "INSERT INTO auth_credentials (provider, credential_type, data) VALUES (?, ?, ?)",
@@ -273,7 +204,7 @@ describe("proposal.0001 stored credentials", () => {
         );
         seed.close();
         const before = { files: credentialFiles(agentDir), rows: credentialRows(agentDir) };
-        assert.equal(before.rows.length, 1);
+        assert.equal(before.rows.length, 2, "the store holds the mock key and the user's own");
 
         const session = await createPicoSession({
             cwd,

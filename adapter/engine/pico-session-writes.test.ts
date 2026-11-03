@@ -7,7 +7,6 @@ import { describe, test } from "node:test";
 import type { RecordedChange } from "./pico-session.ts";
 
 import { createPicoSession } from "./pico-session.ts";
-import { installDetailStrippingExtension } from "./testing/extension-fixture.ts";
 import {
     collectToolCallIds,
     collectWrites,
@@ -426,53 +425,6 @@ describe("proposal.0001 change attribution", () => {
         ]);
         assert.deepEqual(byCall.get("write-1"), [
             { path: edited, oldText: "edited\n", newText: "final\n" },
-        ]);
-    });
-
-    test("an extension that rewrites a write's details does not strand its record", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
-        const absolute = path.join(cwd, "detailed.txt");
-        installDetailStrippingExtension(path.join(cwd, ".omp", "extensions"));
-        const session = await createPicoSession({
-            cwd,
-            agentDir,
-            dataDir,
-            mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
-            model: createMockModel({
-                responses: [
-                    {
-                        content: [
-                            toolCall(
-                                "write",
-                                { path: "detailed.txt", content: "one\n" },
-                                "write-1",
-                            ),
-                            toolCall(
-                                "write",
-                                { path: "detailed.txt", content: "two\n" },
-                                "write-2",
-                            ),
-                        ],
-                    },
-                    { content: ["done"] },
-                ],
-            }),
-        });
-        t.after(() => session.dispose());
-        const byCall = new Map<string, RecordedChange[]>();
-        session.engine.subscribe(event => {
-            if (event.type !== "tool_execution_end") return;
-            byCall.set(event.toolCallId, session.takeChanges(event.toolCallId));
-        });
-
-        await session.engine.prompt("write detailed.txt twice");
-
-        assert.deepEqual(byCall.get("write-1"), [
-            { path: absolute, oldText: null, newText: "one\n" },
-        ]);
-        assert.deepEqual(byCall.get("write-2"), [
-            { path: absolute, oldText: "one\n", newText: "two\n" },
         ]);
     });
 });

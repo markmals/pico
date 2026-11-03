@@ -1,14 +1,15 @@
 ---
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
-describes: [proposal.0001, proposal.0002, proposal.0003, proposal.0004, proposal.0006]
+describes:
+    [proposal.0001, proposal.0002, proposal.0003, proposal.0004, proposal.0006, proposal.0007]
 ---
 
 # Running Pico in Sesh
 
 ## What it does
 
-Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session gets an Oh My Pi (OMP) agent that uses your existing OMP configuration, credentials and default model, with a fixed set of tools:
+Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session gets an Oh My Pi (OMP) agent that uses your existing OMP credentials and Pico's own settings, with a fixed set of tools:
 
 - **Files and commands:** `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`.
 - **A task list:** `todo`, which Sesh shows as the session's plan (see [The task list](#the-task-list)).
@@ -32,10 +33,70 @@ Pico runs on Apple silicon Macs with macOS 14 or later, and installs with Homebr
 
 2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Name it "Pico" and choose `/opt/homebrew/bin/pico` as the executable.
 3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
-4. To choose a model, use Sesh's **Model** menu for the agent. It lists every model your OMP setup can use with its credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only, survives reconnecting to it, and changes nothing in your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts.
+4. To choose a model for one session, use Sesh's **Model** menu for the agent. It lists every model Pico can use with your credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports. Your choice applies to that session only, survives reconnecting to it, and changes nothing in Pico's settings or your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts. To change the model new sessions start on, see [Choosing the default model](#choosing-the-default-model).
 5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
 
-Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` yourself in a terminal prints `usage: pico [--version]` and a reminder that Sesh launches it, then exits; `pico` with any argument other than `--version` prints the usage line and exits with status 2.
+Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` with no arguments in a terminal prints its help and a reminder that Sesh launches it, then exits with status 2. `pico` also has commands of its own for Pico's settings and model list; see [The `pico` command](#the-pico-command).
+
+### Choosing the default model
+
+A new session starts on Pico's default model and thinking level. You set them once with `pico`, and every new Sesh session after that starts on them, without restarting anything:
+
+1. See which models you can use, with the thinking levels each one offers:
+
+    ```sh
+    pico models list
+    ```
+
+2. Preview the change. `--dry-run` shows what the settings would become and writes nothing:
+
+    ```sh
+    pico settings update --default-model <provider/model> --dry-run
+    ```
+
+3. Make the change, then read it back:
+
+    ```sh
+    pico settings update --default-model <provider/model>
+    pico settings get
+    ```
+
+Giving only `--default-model` keeps the thinking level you had saved when the new model offers it, and otherwise uses that model's own default level. `--default-thinking <level>` sets the level, for the model you name or for the saved one. A level the model doesn't offer is refused, and the error lists the levels it does offer.
+
+What a session starts on:
+
+- **With a default saved,** a new session starts on it. If that model has become unusable, for example because its credentials are gone, or the saved level is one the model no longer offers, the session fails to start with an error naming the model; Pico never starts on a different one. Choose another default with `pico settings update`.
+- **With no default saved,** a new session starts on OMP's own pick: the first model it lists that you have credentials for, at that model's default thinking level. `pico settings get` names that model under `effective`. There is no command to remove a default once saved; deleting `settings.json` (see [Pico's own files](#picos-own-files)) is the only way back to OMP's pick.
+- **A model you choose in Sesh** wins for that session. Sessions already open, and conversations you reopen, keep the model and thinking level they had, whatever the default is now.
+
+If `settings.json` has been edited by hand and can't be read, or was written by a newer Pico, new sessions fail to start with the file's path and the problem, and `pico settings update` refuses to change it until you fix or delete it. Reopening an existing conversation still works.
+
+### What Pico reads from OMP
+
+Pico uses OMP as its engine, with OMP's built-in defaults and Pico's own settings. From your OMP setup, it uses only your credentials. It does not read:
+
+- your OMP settings, global (`~/.omp/agent/config.yml`) or per project, including OMP's default model;
+- custom models and providers in `~/.omp/agent/models.yml`;
+- OMP extensions and hooks, in `~/.omp/agent/extensions` or a project's `.omp/extensions`;
+- skills, rules, prompts, commands, system prompt files and `AGENTS.md` kept in `~/.omp/agent` or a project's `.omp` folder, or OMP's auto-learned skills.
+
+`AGENTS.md` files in your projects and folders, `.agents` and `.agent` folders, and other agents' folders such as `.claude` still load, as in any session. Local model servers that OMP finds on its own, such as Ollama, llama.cpp and LM Studio, still work, including when you point OMP at them with `OLLAMA_BASE_URL`, `LLAMA_CPP_BASE_URL` or `LM_STUDIO_BASE_URL`. Terminal OMP is unaffected: it keeps using all of your OMP configuration.
+
+### The `pico` command
+
+Besides running as Sesh's agent, `pico` answers commands about its settings and the models it can use. They are built to be found and used without this guide, by you or by an agent:
+
+- `pico --help` lists every command and how to explore them.
+- `pico <command> --help` explains one command, with examples, for example `pico settings update --help`.
+- `pico cli search "<what you want to do>"` suggests commands, for example `pico cli search "change the default model"`.
+- `pico schema <command>` describes a command's options, output and errors as JSON, for scripts and agents.
+- `pico models list` and `pico models get <provider/model>` show the models you can use and their thinking levels.
+- `pico settings get` shows Pico's settings, whether the file is valid, and what new sessions start on.
+- `pico settings update` changes the default model or thinking level.
+
+Apart from `--help` and `--version`, every command prints one JSON document on standard output. A failure prints nothing there; instead, the last line of standard error is a JSON error with a `code` (such as `INVALID_ARGUMENT` or `NOT_FOUND`), a `message`, whether retrying could help, and details, and the command exits with status 2 for a mistake in the command itself or 1 for anything else. No command asks a question or waits for input.
+
+`pico settings update` also accepts `--if-revision <revision>`: it then refuses, with `CONFLICT`, to change a settings file that has changed since you read its `revision` from `pico settings get`. Every change returns a receipt with the settings before and after, and making the same change twice changes nothing the second time.
 
 ### The task list
 
@@ -77,6 +138,7 @@ Other ACP clients can use `session/list` to discover Pico's saved conversations,
 Pico keeps the files it creates in `~/Library/Application Support/Pico`, which it creates with access for your user only:
 
 - `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs. It removes another version's folder once nothing has used it for 10 minutes, and leaves OMP's other folders here, such as `grammars/`, alone.
+- `settings.json`: Pico's settings, written only by `pico settings update`. It doesn't exist until you first save a default.
 - `models.db`: the cache of OMP's model list.
 - `sessions/`: the private OMP-format journals for Pico's agent conversations and their artifacts, grouped by working directory.
 - `engine/`: SDK supporting history state, including saved blobs and any title index. This is separate from the original OMP configuration and credential store.
@@ -136,25 +198,23 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 
 - **No Python or JavaScript eval** and **no built-in language server.** For code intelligence, the agent runs your `intellisense` CLI through `bash`, like any other command. Edits get no automatic diagnostics or formatting.
 - **No OMP subagents** (`task`, or OMP's worker sessions). To split work up, the agent starts real Sesh sessions with Sesh's own tools. If it tries a tool it doesn't have, that tool call shows as failed and nothing runs.
-- **Not available yet:** OMP's `ask`, `find`, `wait`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug`, its memory tools, and tools added by OMP extensions. Your extensions' hooks still run; an extension that fails to load is skipped, and the session starts without it.
+- **Not available yet:** OMP's `ask`, `find`, `wait`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug` and its memory tools. OMP extensions don't load in Pico at all, so neither their tools nor their hooks run (see [What Pico reads from OMP](#what-pico-reads-from-omp)).
 - **Questions to you** go through Sesh's `ask_user` tool, so you can answer them from your phone.
 
 ## Limits and edge cases
 
-- **Model:** a new session starts on the model and thinking level your OMP configuration selects for the project, and you can switch both from Sesh's menus (see above). Reopening uses that conversation's saved choices instead of replacing them with a changed project default. A session fails to start or restore, with an error saying why, when its model isn't available (Pico never starts on another model instead), or its credentials can't be used. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model. Switching to a model that can't reason sets Thinking to Off.
+- **Model:** a new session starts on Pico's default model and thinking level, or on OMP's pick when no default is saved (see [Choosing the default model](#choosing-the-default-model)), and you can switch both from Sesh's menus. Reopening uses that conversation's saved choices instead of replacing them with a changed default. A session fails to start or restore, with an error saying why, when its model isn't available (Pico never starts on another model instead), or its credentials can't be used. A conversation whose model came from your `models.yml` can no longer be reopened, because Pico no longer reads that file. Choosing a model from the menu whose credentials can't be used is refused with the reason, and the session stays on its current model. Switching to a model that can't reason sets Thinking to Off.
 - **Provider errors during a turn** (an expired key, a rate limit, a network failure) end the turn with an error that carries the provider's message, not with a normal reply. What the agent had already shown stays in the conversation.
 - **Credentials:** Pico uses your OMP credential store at `~/.omp/agent/agent.db`. If an OAuth token has expired, OMP refreshes it there when the session starts or later, exactly as terminal OMP does. Pico never copies or deletes credentials.
 - **What Pico still writes in `~/.omp`:** OMP keeps these files there, and Pico has no way to move them:
     - your credential store, `~/.omp/agent/agent.db` (created if you have none yet), for OAuth refresh;
-    - its skill-description cache, `~/.omp/agent/skill-descriptions.db`;
     - its logs, in `~/.omp/logs`;
-    - with the Homebrew `pico`, a cache of the extensions it has loaded, `~/.omp/cache/legacy-pi-extension-cache.db`.
     - the SDK's runtime ownership locks, in `~/.omp/run/session-owners`; these are not conversation archives.
 
     Everything else Pico creates is in `~/Library/Application Support/Pico`.
 
 - **macOS's own `pico` editor:** macOS ships a text editor at `/usr/bin/pico`. With Homebrew first on your `PATH`, typing `pico` in a terminal runs Pico instead. `nano`, or `/usr/bin/pico` by its full path, still opens the editor.
-- **Project files:** the session's working directory decides which project settings, extensions and `AGENTS.md` files OMP uses, exactly as in terminal OMP.
+- **Project files:** the session's working directory decides which `AGENTS.md` files and `.agents` folders the agent uses. A project's `.omp` folder is ignored.
 - **New Branch sessions** (Sesh's default) work normally. The working directory is the session's worktree, so the agent works and reads project files there, and you push and open pull requests from Sesh.
 - **Autonomous sessions don't work yet.** Sesh's sandbox blocks writes to `~/.omp`, so OMP can't open your credential store. The session fails to start with an error that names `agent.db` and says Autonomous sessions aren't supported yet.
 - **MCP servers:** only the servers Sesh provides, running in the session's working directory. Servers in your own OMP MCP configuration are not connected. The session fails to start, with an error naming the server and the reason, if one of Sesh's servers can't start, hasn't listed its tools within 30 seconds, isn't a local (stdio) server, shares its name with another, or offers two tools whose names OMP can't tell apart. You never get a session with only some of the servers or tools.

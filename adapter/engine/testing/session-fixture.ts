@@ -110,9 +110,14 @@ export function unauthenticatedAuthStorage(agentDir: string): Promise<AuthStorag
     return discoverAuthStorage(agentDir);
 }
 
-/** Persists the mock provider's key in `agentDir`, for a session that opens its own credential store. */
-export function writeMockProviderKey(agentDir: string): void {
-    fs.writeFileSync(path.join(agentDir, "models.yml"), "providers:\n  mock:\n    apiKey: test\n");
+/**
+ * Persists the mock provider's key in the credential store `agentDir` holds, for a
+ * session that opens its own store: Pico reads no `models.yml` (proposal.0007).
+ */
+export async function storeMockProviderKey(agentDir: string): Promise<void> {
+    const store = await discoverAuthStorage(agentDir);
+    await store.credentials.set("mock", { type: "api_key", key: "test" });
+    store.close();
 }
 
 /**

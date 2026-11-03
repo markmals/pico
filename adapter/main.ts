@@ -25,7 +25,7 @@ try {
 
 const { ndJsonStream } = await import("@agentclientprotocol/sdk");
 const { createPicoAgent, picoAgentShutdown } = await import("./server/pico-agent.ts");
-const { createPicoSession } = await import("./engine/pico-session.ts");
+const { picoSessionFactory } = await import("./server/session-factory.ts");
 const agentDir = initializeRuntimeStorage(dataDir);
 
 /** How long shutdown may take before Pico reports an unclean exit. */
@@ -34,8 +34,7 @@ const SHUTDOWN_GRACE_MS = 5_000;
 const app = createPicoAgent({
     version: manifest.version,
     dataDir,
-    createSession: (cwd, mcpServers, sessionManager) =>
-        createPicoSession({ cwd, mcpServers, dataDir, agentDir, sessionManager }),
+    createSession: picoSessionFactory({ dataDir, agentDir }),
 });
 
 const connection = app.connect(ndJsonStream(protocolStdout, Bun.stdin.stream()));

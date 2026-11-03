@@ -1,37 +1,30 @@
 import { Settings } from "@oh-my-pi/pi-coding-agent";
-import { cfgToolsApproval } from "@oh-my-pi/pi-coding-agent/tools/settings";
-
-export interface SettingsScope {
-    cwd: string;
-    agentDir: string;
-}
 
 /**
- * The user's effective OMP configuration, read-only, with Pico's policy on top:
- * the excluded subsystems are off, and nothing in the user's approval
- * configuration can gate a tool call, because Pico never asks for approval and
- * has no UI to ask with. `todo` is always on, without the reminders that would
- * continue a turn the model ended or the hidden title requests a new list
- * would start (proposal.0006).
+ * The capability providers that read OMP's own configuration: everything under `~/.omp/agent`
+ * and a project's `.omp` (`native`), configured extension packages (`omp-plugins`) and
+ * auto-learned skills (`omp-managed`). `AGENTS.md`, `.agents` and other harnesses' folders come
+ * from other providers and still load (proposal.0007).
  */
-export async function loadPicoSettings(scope: SettingsScope): Promise<Settings> {
-    const configured = await Settings.loadReadOnly(scope);
-    const userPolicies: Record<string, unknown> = cfgToolsApproval.get(configured);
-    // A record setting merges with its parent layer, so clearing per-tool
-    // policies means overriding each configured key, not writing an empty map.
-    const allowEverything = Object.fromEntries(
-        Object.keys(userPolicies).map(tool => [tool, "allow"]),
-    );
-    return configured.overlay({
+const OMP_CONFIGURATION_PROVIDERS = ["native", "omp-plugins", "omp-managed"];
+
+/**
+ * OMP's built-in defaults with Pico's policy on top, reading no OMP settings file: the excluded
+ * subsystems are off, nothing gates a tool call because Pico never asks for approval and has no
+ * UI to ask with, and `todo` is always on without the reminders that would continue a turn the
+ * model ended or the hidden title requests a new list would start (proposal.0006).
+ */
+export function picoSettings(): Settings {
+    return Settings.isolated({
         "eval.py": false,
         "eval.js": false,
         "lsp.enabled": false,
         "task.maxRecursionDepth": 0,
         "tools.approvalMode": "yolo",
-        "tools.approval": allowEverything,
         "tools.restrictedFolders": [],
         "todo.enabled": true,
         "todo.reminders": false,
         "title.refreshOnReplan": false,
+        disabledProviders: OMP_CONFIGURATION_PROVIDERS,
     });
 }

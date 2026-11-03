@@ -164,7 +164,7 @@ export class SessionRegistry {
         let runtime: SessionRuntime | undefined;
         try {
             this.#requireOpen(signal);
-            session = await this.#options.createSession(stored.cwd, servers, stored.manager);
+            session = await this.#options.createSession(stored.cwd, servers, stored.manager, fresh);
             this.#requireOpen(signal);
             runtime = new SessionRuntime(stored.sessionId, session, this.#client, stored);
             await runtime.flushPersistence();

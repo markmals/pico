@@ -6,7 +6,8 @@
     "type": "module",
     "dependencies": {
         "@agentclientprotocol/sdk": "2.1.0",
-        "@oh-my-pi/pi-coding-agent": "18.14.0"
+        "@oh-my-pi/pi-coding-agent": "18.14.0",
+        "zod": "3.25.76"
     },
     "devDependencies": {
         "@changesets/cli": "3.0.3",
@@ -14,8 +15,5 @@
         "oxfmt": "0.75.0",
         "oxlint": "1.90.0",
         "typescript": "7.0.2"
-    },
-    "patchedDependencies": {
-        "@oh-my-pi/pi-coding-agent@18.14.0": "patches/@oh-my-pi%2Fpi-coding-agent@18.14.0.patch"
     }
 }

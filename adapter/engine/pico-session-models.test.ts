@@ -7,28 +7,33 @@ import { describe, test } from "node:test";
 import type { PicoSession } from "./pico-session.ts";
 import type { Cleanups } from "./testing/session-fixture.ts";
 
+import { createPicoModelRegistry } from "./model-catalog.ts";
 import { createPicoSession, PicoSessionError } from "./pico-session.ts";
 import {
     picoWorkspace,
     unauthenticatedAuthStorage,
     withoutProviderCredentials,
 } from "./testing/session-fixture.ts";
-import { installTestProvider, TEST_PROVIDER } from "./testing/test-provider.ts";
+import { ALPHA_DEFAULT, TEST_PROVIDER, testProvider } from "./testing/test-provider.ts";
 
 async function sessionOnTestProvider(t: Cleanups) {
     withoutProviderCredentials(t);
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
-    const models = installTestProvider(cwd);
+    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+    const provider = testProvider();
+    provider.register(modelRegistry);
     const session = await createPicoSession({
         cwd,
         agentDir,
         dataDir,
         mcpServers: [],
-        authStorage: await unauthenticatedAuthStorage(agentDir),
+        authStorage,
+        modelRegistry,
+        startOn: ALPHA_DEFAULT,
     });
     t.after(() => session.dispose());
-    const projectConfig = path.join(cwd, ".omp", "config.yml");
-    return { session, models, cwd, agentDir, projectConfig };
+    return { session, models: provider.models, cwd, agentDir };
 }
 
 function availableModel(session: PicoSession, id: string) {
@@ -40,18 +45,8 @@ function availableModel(session: PicoSession, id: string) {
 }
 
 describe("proposal.0001 model selection", () => {
-    test("a session starts on the project's configured model", async t => {
-        const { session } = await sessionOnTestProvider(t);
-
-        assert.equal(
-            `${session.engine.model?.provider}/${session.engine.model?.id}`,
-            "pico-test/alpha",
-        );
-    });
-
     test("a selected model answers the next prompt, and no configuration is written", async t => {
-        const { session, models, projectConfig, agentDir } = await sessionOnTestProvider(t);
-        const configBefore = fs.readFileSync(projectConfig, "utf8");
+        const { session, models, cwd, agentDir } = await sessionOnTestProvider(t);
         const agentFilesBefore = fs.readdirSync(agentDir).toSorted();
 
         await session.selectModel(availableModel(session, "beta"));
@@ -61,7 +56,10 @@ describe("proposal.0001 model selection", () => {
         assert.equal(session.engine.model?.id, "beta");
         assert.ok(models.beta.calls.length > 0, "beta answered");
         assert.equal(models.alpha.calls.length, alphaCallsBefore, "alpha was not asked");
-        assert.equal(fs.readFileSync(projectConfig, "utf8"), configBefore);
+        assert.ok(
+            !fs.existsSync(path.join(cwd, ".omp")),
+            "the project gained an Oh My Pi configuration directory",
+        );
         assert.ok(
             !fs.existsSync(path.join(agentDir, "config.yml")),
             "no user configuration was written",
@@ -94,8 +92,7 @@ describe("proposal.0001 model selection", () => {
 
 describe("proposal.0001 thinking level selection", () => {
     test("a selected thinking level reaches the next request, and no configuration is written", async t => {
-        const { session, models, projectConfig } = await sessionOnTestProvider(t);
-        const configBefore = fs.readFileSync(projectConfig, "utf8");
+        const { session, models, cwd } = await sessionOnTestProvider(t);
         await session.selectModel(availableModel(session, "beta"));
 
         const high = parseConfiguredThinkingLevel("high");
@@ -105,6 +102,9 @@ describe("proposal.0001 thinking level selection", () => {
 
         assert.equal(session.engine.configuredThinkingLevel(), "high");
         assert.equal(models.beta.calls.at(-1)?.options?.reasoning, "high");
-        assert.equal(fs.readFileSync(projectConfig, "utf8"), configBefore);
+        assert.ok(
+            !fs.existsSync(path.join(cwd, ".omp")),
+            "the project gained an Oh My Pi configuration directory",
+        );
     });
 });

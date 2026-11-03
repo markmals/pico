@@ -1,0 +1,154 @@
+import { describe, expect, test } from "bun:test";
+
+import type { PicoSettings } from "./settings-document.ts";
+
+import { readSettingsState, revisionOf, serializeSettings } from "./settings-document.ts";
+
+/**
+ * A 32-bit xorshift, deterministic per seed, as the session event mapper's invariants use: a
+ * multiplying generator loses its low bits once the state passes 2^53 and silently collapses
+ * the small moduli these generators take.
+ */
+function randomSource(seed: number): (bound: number) => number {
+    let state = seed >>> 0 || 0x9e37_79b9;
+    return bound => {
+        state = (state ^ (state << 13)) >>> 0;
+        state = state ^ (state >>> 17);
+        state = (state ^ (state << 5)) >>> 0;
+        return state % bound;
+    };
+}
+
+/** Characters a settings value may really hold, including ones JSON has to escape. */
+const CHARACTERS = [..."ab/-_. ", '"', "\\", "\n", "é", "日", "🙂", "\u0000"];
+
+function randomText(next: (bound: number) => number): string {
+    let text = "";
+    const length = 1 + next(8);
+    for (let index = 0; index < length; index++) {
+        text += CHARACTERS[next(CHARACTERS.length)] as string;
+    }
+    return text;
+}
+
+function randomItem(next: (bound: number) => number): PicoSettings {
+    if (next(5) === 0) return { defaultModel: null, defaultThinking: null };
+    return { defaultModel: randomText(next), defaultThinking: randomText(next) };
+}
+
+const VERSIONS: unknown[] = [1, 1, 1, 1, 2, 7, 1000, 1.5, "1", 0, -3, true, null, { major: 1 }];
+const MEMBER_VALUES: unknown[] = [
+    "high",
+    "anthropic/claude-sonnet-5-5",
+    "日 /x",
+    "",
+    5,
+    true,
+    null,
+    [],
+];
+const UNKNOWN_KEYS = ["flavour", "defaultmodel", "extra", "VERSION"];
+
+function randomCandidate(next: (bound: number) => number): Record<string, unknown> {
+    const candidate: Record<string, unknown> = {};
+    if (next(12) !== 0) candidate["version"] = VERSIONS[next(VERSIONS.length)];
+    if (next(3) !== 0) candidate["defaultModel"] = MEMBER_VALUES[next(MEMBER_VALUES.length)];
+    if (next(3) !== 0) candidate["defaultThinking"] = MEMBER_VALUES[next(MEMBER_VALUES.length)];
+    if (next(4) === 0) candidate[UNKNOWN_KEYS[next(UNKNOWN_KEYS.length)] as string] = "anything";
+    return candidate;
+}
+
+/** What version 1 defines, written out independently of the schema it is compared against. */
+function expectedStatus(candidate: Record<string, unknown>): string {
+    const version = candidate["version"];
+    if (typeof version === "number" && Number.isInteger(version) && version > 1) {
+        return "unsupported";
+    }
+    if (version !== 1) return "invalid";
+    const defined = ["version", "defaultModel", "defaultThinking"];
+    if (Object.keys(candidate).some(key => !defined.includes(key))) return "invalid";
+    const model = candidate["defaultModel"];
+    const thinking = candidate["defaultThinking"];
+    if (model === undefined && thinking === undefined) return "valid";
+    if (typeof model !== "string" || typeof thinking !== "string") return "invalid";
+    return model.length > 0 && thinking.length > 0 ? "valid" : "invalid";
+}
+
+function randomBytes(next: (bound: number) => number): Uint8Array {
+    const bytes = new Uint8Array(next(17));
+    for (let index = 0; index < bytes.length; index++) bytes[index] = next(256);
+    return bytes;
+}
+
+const CASES = 400;
+
+describe("proposal.0007 settings file invariants", () => {
+    test("every item Pico serializes reads back as the same valid settings, at those bytes' revision", () => {
+        const counts = { withDefault: 0, withoutDefault: 0, needingEscapes: 0, nonAscii: 0 };
+
+        for (let seed = 1; seed <= CASES; seed++) {
+            const next = randomSource(seed);
+            const item = randomItem(next);
+            const saved = `${item.defaultModel ?? ""}${item.defaultThinking ?? ""}`;
+            if (item.defaultModel === null) counts.withoutDefault++;
+            else counts.withDefault++;
+            if (['"', "\\", "\n", "\u0000"].some(escaped => saved.includes(escaped))) {
+                counts.needingEscapes++;
+            }
+            if (/[^\u0020-\u007e]/.test(saved)) counts.nonAscii++;
+            const bytes = new TextEncoder().encode(serializeSettings(item));
+
+            expect(readSettingsState(bytes)).toEqual({
+                status: "valid",
+                revision: revisionOf(bytes),
+                item,
+            });
+        }
+
+        expect(counts.withDefault).toBeGreaterThan(0);
+        expect(counts.withoutDefault).toBeGreaterThan(0);
+        expect(counts.needingEscapes).toBeGreaterThan(0);
+        expect(counts.nonAscii).toBeGreaterThan(0);
+    });
+
+    test("a JSON object is valid only when it is exactly a version 1 document, and a later integer version is unsupported", () => {
+        const counts: Record<string, number> = { valid: 0, unsupported: 0, invalid: 0 };
+
+        for (let seed = 1; seed <= CASES; seed++) {
+            const next = randomSource(seed * 2_654_435_761);
+            const candidate = randomCandidate(next);
+            const status = expectedStatus(candidate);
+            counts[status] = (counts[status] ?? 0) + 1;
+            const bytes = new TextEncoder().encode(JSON.stringify(candidate));
+
+            expect([JSON.stringify(candidate), readSettingsState(bytes).status]).toEqual([
+                JSON.stringify(candidate),
+                status,
+            ]);
+        }
+
+        expect(counts["valid"]).toBeGreaterThan(0);
+        expect(counts["unsupported"]).toBeGreaterThan(0);
+        expect(counts["invalid"]).toBeGreaterThan(0);
+    });
+
+    test("a revision is sha256 and its digest, the same for the same bytes and different for different bytes", () => {
+        let differingPairs = 0;
+
+        for (let seed = 1; seed <= CASES; seed++) {
+            const next = randomSource(seed * 97);
+            const left = randomBytes(next);
+            const right = randomBytes(next);
+            const revision = revisionOf(left);
+
+            expect(revision).toMatch(/^sha256:[0-9a-f]{64}$/);
+            expect(revisionOf(Uint8Array.from(left))).toBe(revision);
+            const same =
+                left.length === right.length && left.every((byte, at) => byte === right[at]);
+            if (!same) differingPairs++;
+            expect(revisionOf(right) === revision).toBe(same);
+        }
+
+        expect(differingPairs).toBeGreaterThan(0);
+    });
+});

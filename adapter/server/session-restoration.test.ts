@@ -11,6 +11,7 @@ import type { PicoSession } from "../engine/pico-session.ts";
 import type { TestProviderScripts } from "../engine/testing/test-provider.ts";
 import type { ConnectedClient } from "./agent-harness.ts";
 
+import { createPicoModelRegistry } from "../engine/model-catalog.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
 import { exited, fakeMcpServer } from "../engine/testing/mcp-fixture.ts";
 import {
@@ -19,7 +20,7 @@ import {
     unauthenticatedAuthStorage,
     useAsProcessAgentDir,
 } from "../engine/testing/session-fixture.ts";
-import { installTestProvider } from "../engine/testing/test-provider.ts";
+import { ALPHA_DEFAULT, testProvider } from "../engine/testing/test-provider.ts";
 import { assistantText, connectPicoAgent } from "./agent-harness.ts";
 import { picoAgentShutdown } from "./pico-agent.ts";
 import { isRunning } from "./session-fixture.ts";
@@ -27,8 +28,10 @@ import { isRunning } from "./session-fixture.ts";
 async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
     useAsProcessAgentDir(t, agentDir);
-    const models = installTestProvider(cwd, scripts);
     const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+    const provider = testProvider(scripts);
+    provider.register(modelRegistry);
     const connections: ConnectedClient[] = [];
     const engines: PicoSession[] = [];
     const creation: { before?: () => Promise<void> } = {};
@@ -40,6 +43,7 @@ async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
                 directory: string,
                 mcpServers: McpServerStdio[],
                 sessionManager: SessionManager,
+                fresh: boolean,
             ) => {
                 await creation.before?.();
                 const session = await createPicoSession({
@@ -47,6 +51,9 @@ async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
                     agentDir,
                     dataDir,
                     authStorage,
+                    modelRegistry,
+                    // A reopened session takes its model from its own journal.
+                    startOn: fresh ? ALPHA_DEFAULT : undefined,
                     mcpServers,
                     sessionManager,
                 });
@@ -62,7 +69,15 @@ async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
         for (const client of connections) await disconnect(client);
         authStorage.close();
     });
-    return { cwd, dataDir, agentDir, models, engines, connect, creation };
+    return {
+        cwd,
+        dataDir,
+        agentDir,
+        models: provider.models,
+        engines,
+        connect,
+        creation,
+    };
 }
 
 async function disconnect(client: ConnectedClient): Promise<void> {
@@ -109,8 +124,7 @@ describe("proposal.0004 agent continuation", () => {
 
     test("resume restores context and session-local selectors without replay or default writes", async t => {
         const f = await fixture(t);
-        const configPath = path.join(f.cwd, ".omp", "config.yml");
-        const config = fs.readFileSync(configPath, "utf8");
+
         const first = await f.connect();
         const { sessionId } = await first.agent.request("session/new", {
             cwd: f.cwd,
@@ -149,7 +163,7 @@ describe("proposal.0004 agent continuation", () => {
         assert.match(received, /from alpha/);
         assert.match(assistantText(second.updatesFor(sessionId)), /from beta/);
         assert.equal(f.models.beta.calls.at(-1)?.options?.reasoning, "high");
-        assert.equal(fs.readFileSync(configPath, "utf8"), config);
+        assert.equal(fs.existsSync(path.join(f.cwd, ".omp")), false);
         assert.equal(fs.existsSync(path.join(f.agentDir, "config.yml")), false);
     });
 

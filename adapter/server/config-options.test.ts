@@ -16,8 +16,9 @@ import type { PicoSession } from "../engine/pico-session.ts";
 import type { TestProviderModels, TestProviderScripts } from "../engine/testing/test-provider.ts";
 import type { ConnectedClient } from "./agent-harness.ts";
 
+import { createPicoModelRegistry } from "../engine/model-catalog.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
-import { installTestProvider } from "../engine/testing/test-provider.ts";
+import { ALPHA_DEFAULT, testProvider } from "../engine/testing/test-provider.ts";
 import { connectPicoAgent, INVALID_PARAMS, requestError } from "./agent-harness.ts";
 import {
     mockEngine,
@@ -62,18 +63,24 @@ interface ModelSession {
 async function startModelSession(scripts: TestProviderScripts = {}): Promise<ModelSession> {
     const cwd = temporaryProject();
     const agentDir = realpathSync(mkdtempSync(join(tmpdir(), "pico-agent-dir-")));
-    const models = installTestProvider(cwd, scripts);
+    const dataDir = temporaryDataDir();
     const authStorage = await discoverAuthStorage(agentDir);
+    const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+    const provider = testProvider(scripts);
+    provider.register(modelRegistry);
     let created: PicoSession | undefined;
     const client = connectPicoAgent({
         version: "0.0.0-test",
-        createSession: async (sessionCwd, mcpServers, sessionManager) => {
+        createSession: async (sessionCwd, mcpServers, sessionManager, fresh) => {
             created = await createPicoSession({
                 cwd: sessionCwd,
                 mcpServers,
                 agentDir,
-                dataDir: temporaryDataDir(),
+                dataDir,
                 authStorage,
+                modelRegistry,
+                // A reopened session takes its model from its own journal.
+                startOn: fresh ? ALPHA_DEFAULT : undefined,
                 sessionManager,
             });
             return created;
@@ -90,7 +97,7 @@ async function startModelSession(scripts: TestProviderScripts = {}): Promise<Mod
     return {
         client,
         sessionId,
-        models,
+        models: provider.models,
         response,
         session: created,
         set: (configId, value) =>
@@ -334,7 +341,7 @@ describe("proposal.0001 rejected config changes", () => {
         expect(error.code).toBe(INVALID_PARAMS);
         expect(error.message).toContain(String(named));
         expect(session.session.engine.model?.id).toBe("alpha");
-        expect(session.session.engine.configuredThinkingLevel()).toBeUndefined();
+        expect(session.session.engine.configuredThinkingLevel()).toBe("off");
         expect(session.models.alpha.calls.length).toBeGreaterThan(alphaCallsBefore);
         expect(session.models.beta.calls).toEqual([]);
     });

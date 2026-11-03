@@ -1,6 +1,7 @@
 // `mise run pico:verify`: checks the compiled `pico` the way a Homebrew install runs it,
-// with a scratch home, a bare PATH and no credentials. A project extension that imports
-// an Oh My Pi package supplies a scripted model, so a whole turn runs offline.
+// with a scratch home, a bare PATH and no credentials. A local fake LM Studio server, which
+// Oh My Pi discovers through `LM_STUDIO_BASE_URL`, supplies a scripted model, so a whole turn
+// runs offline with no OMP extension or configuration file (proposal.0007).
 
 import {
     client,
@@ -17,57 +18,21 @@ import {
     realpathSync,
     rmSync,
     statSync,
-    writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import type { FakeLmStudio } from "./fake-lm-studio.ts";
+
 import manifest from "../../package.json" with { type: "json" };
 import { Checklist } from "./checklist.ts";
+import { checkCommands, VERIFY_MODEL } from "./commands.ts";
+import { startFakeLmStudio } from "./fake-lm-studio.ts";
 import { subprocessInput } from "./processes.ts";
 import { verifyRestoration } from "./restoration.ts";
 import { acpMessageProblem, inspectLines } from "./wire.ts";
 
 const REPLY = "pico verified";
-
-// Loaded by `pico` at runtime from the project, as a user's extension would be. Its imports
-// resolve only through the module map compiled into `pico`: a named subpath export of
-// `@oh-my-pi/pi-ai`, and a subpath of `@oh-my-pi/pi-utils` served by its `./*` catch-all.
-function providerExtension(memoryToken: string): string {
-    return `import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
-import { getAgentDir } from "@oh-my-pi/pi-utils/dirs";
-import { getAgentDir as viaJsSpelling } from "@oh-my-pi/pi-utils/dirs.js";
-
-if (getAgentDir !== viaJsSpelling) throw new Error("@oh-my-pi/pi-utils/dirs did not load as one module");
-
-const memoryToken = ${JSON.stringify(memoryToken)};
-const cost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-const echo = createMockModel({ id: "echo", provider: "pico-verify", handler: context => {
-    const users = context.messages.filter(message => message.role === "user");
-    if (users.length > 1) {
-        const remembered = users.slice(0, -1).some(message => JSON.stringify(message.content).includes(memoryToken));
-        return { content: [remembered ? "remembered:" + memoryToken : "history missing"] };
-    }
-    if (context.messages.at(-1)?.role === "user") {
-        return { content: [
-            { type: "toolCall", id: "verify-write", name: "write", arguments: { path: "restart-note.txt", content: memoryToken + "\\n" } },
-            { type: "toolCall", id: "verify-todo", name: "todo", arguments: { op: "init", items: ["Remember " + memoryToken] } },
-        ] };
-    }
-    return { content: [${JSON.stringify(REPLY)}] };
-} });
-
-export default function (pi) {
-    pi.registerProvider("pico-verify", {
-        baseUrl: "http://127.0.0.1:9",
-        apiKey: "verify",
-        api: "pico-verify",
-        streamSimple: (model, context, options) => echo.stream(model, context, options),
-        models: [{ id: "echo", name: "Echo", reasoning: false, input: ["text"], cost, contextWindow: 200000, maxTokens: 32000 }],
-    });
-}
-`;
-}
 
 const EXPECTED_CAPABILITIES = {
     loadSession: true,
@@ -81,6 +46,7 @@ export interface Scratch {
     project: string;
     env: Record<string, string>;
     memoryToken: string;
+    model: FakeLmStudio;
 }
 
 function scratch(): Scratch {
@@ -88,21 +54,20 @@ function scratch(): Scratch {
     let home = path.join(root, "home");
     let project = path.join(root, "project");
     const memoryToken = randomUUID();
-    mkdirSync(path.join(project, ".omp", "extensions"), { recursive: true });
+    mkdirSync(project);
     mkdirSync(home);
-    writeFileSync(
-        path.join(project, ".omp", "extensions", "verify-provider.ts"),
-        providerExtension(memoryToken),
-    );
-    writeFileSync(
-        path.join(project, ".omp", "config.yml"),
-        "modelRoles:\n  default: pico-verify/echo\n",
-    );
+    const model = startFakeLmStudio({ memoryToken, reply: REPLY });
     return {
         home,
         project,
         memoryToken,
-        env: { HOME: home, USER: process.env.USER ?? "pico", PATH: "/usr/bin:/bin" },
+        model,
+        env: {
+            HOME: home,
+            USER: process.env.USER ?? "pico",
+            PATH: "/usr/bin:/bin",
+            LM_STUDIO_BASE_URL: model.baseUrl,
+        },
     };
 }
 
@@ -187,8 +152,8 @@ async function checkTurn(
             sessionId = session.sessionId;
             let model = session.configOptions?.find(option => option.id === "model");
             checklist.record(
-                "a session starts on the extension's model",
-                model?.type === "select" && model.currentValue === "pico-verify/echo"
+                "a new session starts on the saved default model",
+                model?.type === "select" && model.currentValue === VERIFY_MODEL
                     ? null
                     : `model option ${JSON.stringify(model)}`,
             );
@@ -203,7 +168,7 @@ async function checkTurn(
                 ],
             });
             checklist.record(
-                "a turn answers through the extension that imports Oh My Pi",
+                "a turn answers through the offline model",
                 turn.stopReason === "end_turn" && replyText === REPLY
                     ? null
                     : `stop reason ${turn.stopReason}, reply ${JSON.stringify(replyText)}`,
@@ -286,6 +251,7 @@ async function main(): Promise<void> {
     let checklist = new Checklist();
     try {
         checkVersion(executable, scratchDirs, checklist);
+        await checkCommands(executable, scratchDirs, checklist);
         const sessionId = await checkTurn(executable, scratchDirs, checklist);
         if (sessionId) await verifyRestoration(executable, scratchDirs, sessionId, checklist);
         checkDataDir(scratchDirs, checklist);
@@ -298,6 +264,7 @@ async function main(): Promise<void> {
             }\n`,
         );
     } finally {
+        scratchDirs.model.stop();
         rmSync(path.dirname(scratchDirs.home), { recursive: true, force: true });
     }
     if (!checklist.passed) {

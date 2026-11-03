@@ -1,48 +1,76 @@
 // The entry point `tools/build-pico.ts` compiles into the `pico` executable. Nothing here
-// may load Oh My Pi: its native loader reads `PI_NATIVES_DIR` the moment it is imported.
+// may load Oh My Pi: its native loader reads `PI_NATIVES_DIR` the moment it is imported, and
+// discovery commands must answer without it (proposal.0007).
 
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import manifest from "../package.json" with { type: "json" };
+import { CliError } from "./cli/errors.ts";
+import { renderError } from "./cli/output.ts";
+import { planInvocation } from "./cli/plan.ts";
 import { DataDirError, ensureDataDir, picoDataDir } from "./data-dir.ts";
-import { parseInvocation } from "./invocation.ts";
 import { installNativeAddon } from "./native-addon.ts";
+import { isolateStdout } from "./stdout-isolation.ts";
 
 const ADDON_FILENAME = "pi_natives.darwin-arm64.node";
 
-const invocation = parseInvocation(process.argv.slice(2), process.stdin.isTTY === true);
+const stdoutIsTerminal = process.stdout.isTTY === true;
+const invocation = planInvocation(
+    process.argv.slice(2),
+    process.stdin.isTTY === true,
+    stdoutIsTerminal,
+);
 
 if (invocation.kind === "version") {
     process.stdout.write(`pico ${manifest.version}\n`);
-    process.exit(0);
-}
-if (invocation.kind === "usage") {
-    process.stderr.write(invocation.message);
-    process.exit(2);
-}
+} else if (invocation.kind === "respond") {
+    if (invocation.stdout !== undefined) process.stdout.write(invocation.stdout);
+    if (invocation.stderr !== undefined) process.stderr.write(invocation.stderr);
+    process.exitCode = invocation.exitCode;
+} else {
+    const dataDir = picoDataDir(homedir());
+    const nativesDir = join(dataDir, "natives");
+    try {
+        ensureDataDir(dataDir);
+        const addon = await carriedAddon();
+        installNativeAddon({
+            source: addon.path,
+            nativesDir,
+            version: addon.version,
+            filename: ADDON_FILENAME,
+        });
+    } catch (error) {
+        if (!(error instanceof DataDirError)) throw error;
+        if (invocation.kind === "acp") {
+            process.stderr.write(`pico: ${error.message}\n`);
+        } else {
+            const failure = new CliError("IO_ERROR", `pico: ${error.message}`, {
+                details: { path: dataDir },
+            });
+            process.stderr.write(renderError(failure));
+        }
+        process.exit(1);
+    }
+    process.env.PI_NATIVES_DIR = nativesDir;
 
-const dataDir = picoDataDir(homedir());
-const nativesDir = join(dataDir, "natives");
-try {
-    ensureDataDir(dataDir);
-    const addon = await carriedAddon();
-    installNativeAddon({
-        source: addon.path,
-        nativesDir,
-        version: addon.version,
-        filename: ADDON_FILENAME,
-    });
-} catch (error) {
-    if (!(error instanceof DataDirError)) throw error;
-    process.stderr.write(`pico: ${error.message}\n`);
-    process.exit(1);
+    // Dynamic, so the agent, the commands and Oh My Pi load only after `PI_NATIVES_DIR` is set.
+    if (invocation.kind === "acp") {
+        await import("./main.ts");
+    } else {
+        const stdout = isolateStdout();
+        const { runCommand } = await import("./cli/commands/run.ts");
+        const exitCode = await runCommand(
+            invocation.command,
+            invocation.input,
+            dataDir,
+            stdout,
+            stdoutIsTerminal,
+        );
+        process.exit(exitCode);
+    }
 }
-process.env.PI_NATIVES_DIR = nativesDir;
-
-// Dynamic, so the agent and Oh My Pi load only after `PI_NATIVES_DIR` is set.
-await import("./main.ts");
 
 /**
  * The addon this executable carries and the version Oh My Pi's loader looks for. A source

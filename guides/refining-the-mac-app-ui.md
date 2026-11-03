@@ -10,7 +10,7 @@ describes: [proposal.0005]
 
 Pico's Mac app is a native settings window, laid out like macOS System Settings, for refining the design before it is connected to real configuration. Its sidebar opens General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Each pane starts with a header and lists its settings in grouped rows. Every configuration control is unavailable, and every value reads “Not connected”, until you turn on sample data to see the panes in their working state.
 
-Navigation works: the sidebar, back and forward, search across every setting, and `pico://` links. The app does not inspect or change your Pico or OMP configuration, read credentials, discover models, launch a helper, or contact Sesh, with or without sample data. Configuration functionality waits for issue #12's shared contract and subsequent integration work.
+Navigation works: the sidebar, back and forward, search across every setting, and `pico://` links. The app does not inspect or change your Pico or OMP configuration, read credentials, discover models, launch a helper, or contact Sesh, with or without sample data. Pico's configuration now exists behind `pico`'s settings and models commands (see [Running Pico in Sesh](running-pico-in-sesh.md#choosing-the-default-model)); connecting the panes to them is later integration work.
 
 ## How to use it
 

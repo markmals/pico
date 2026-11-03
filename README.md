@@ -1,6 +1,6 @@
 # Pico
 
-Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected unless you turn on its labelled sample data ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
+Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). Pico keeps its own settings, starting with the default model for new sessions, which you read and change with `pico`'s commands (`pico --help`); its sessions use only your OMP credentials, not the rest of your OMP configuration. The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected unless you turn on its labelled sample data ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
 
 ## Install
 
@@ -90,9 +90,8 @@ Beads (`bd`) is the work tracker, the ready-work queue, and durable agent memory
 In the repository today:
 
 - `mise.toml`, the only task graph. Every routine command is a mise task.
-- `adapter/`, the ACP adapter with its curated turn path, Pico-only child launches and private session persistence ([proposals 0001–0004](proposals/)), with tests beside the code; `tools/write-launcher.ts`, which writes the `.build/pico-acp` development launcher; and `tools/build-pico.ts`, which compiles the `pico` executable and generates `THIRD-PARTY-NOTICES.md`.
+- `adapter/`, the ACP adapter with its curated turn path, Pico-only child launches, private session persistence and Pico-owned settings with their agent-first `pico` commands ([proposals 0001–0004, 0006 and 0007](proposals/)), with tests beside the code; `tools/write-launcher.ts`, which writes the `.build/pico-acp` development launcher; and `tools/build-pico.ts`, which compiles the `pico` executable and generates `THIRD-PARTY-NOTICES.md`.
 - `LICENSE` (MIT).
-- `patches/`, the version-pinned SDK discovery correction applied by Bun's frozen install, preserving the original configuration directory while Pico's history lives separately.
 - `tools/check-scoped-commit.ts` with its tests, enforcing commit subjects from `commit-msg`, and `tools/check-pr-commits.ts`, which applies the same rule to a pull request. They are the live example of the TypeScript and test conventions here.
 - the Workbench workflow scripts `tools/status.ts`, `tools/validate.ts` and `tools/require-changeset.ts`, with their tests.
 - `AGENTS.md`, `PROCESS.md`, `.agents/rules/`, `.agents/skills/` and `.agents/templates/`: the process, the binding rules, and the record templates.
@@ -107,8 +106,8 @@ Not implemented. Nothing below is faked anywhere; where the Mac app shows a cont
 
 - broader child-session handoff and integration workflows; Autonomous sessions; MCP servers beyond the ones Sesh sends. These remain follow-up work tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
-- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub, and connecting them waits for the configuration contract in issue #12. View › Show Sample Data fills the panes with invented values for design review; nothing in that mode is saved or reaches a provider, Sesh or your OMP configuration.
+- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub. The configuration contract of issue #12 now exists as `pico`'s commands, and connecting the panes to it is follow-up work. View › Show Sample Data fills the panes with invented values for design review; nothing in that mode is saved or reaches a provider, Sesh or your OMP configuration.
 
-`proposals/` holds proposals 0001–0005, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
+`proposals/` holds proposals 0001–0007, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 
 [`CHANGELOG.md`](CHANGELOG.md) records the initial template adaptation.

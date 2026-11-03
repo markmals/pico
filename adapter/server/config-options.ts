@@ -9,20 +9,19 @@ import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
 import type { PicoSession } from "../engine/pico-session.ts";
 
+import { modelValue, thinkingChoices } from "../engine/model-catalog.ts";
+
 const MODEL_CONFIG_ID = "model";
 const THINKING_CONFIG_ID = "thinking";
 const THINKING_OFF = "off";
 
 /** What the config options read from the engine session. */
-type ModelState = Pick<
-    AgentSession,
-    "model" | "getAvailableModels" | "getAvailableThinkingLevels" | "configuredThinkingLevel"
->;
+type ModelState = Pick<AgentSession, "model" | "getAvailableModels" | "configuredThinkingLevel">;
 
 /** The session's config options, in the order the proposal fixes: model, then thinking. */
 export function configOptionsOf(engine: ModelState): SessionConfigOption[] {
     const current = currentModel(engine);
-    const thinkingChoices = thinkingOptions(engine);
+    const thinking = thinkingChoices(current);
     return [
         {
             id: MODEL_CONFIG_ID,
@@ -41,8 +40,8 @@ export function configOptionsOf(engine: ModelState): SessionConfigOption[] {
             name: "Thinking",
             category: "thought_level",
             type: "select",
-            currentValue: currentThinking(engine, current, thinkingChoices),
-            options: thinkingChoices,
+            currentValue: currentThinking(engine, current, thinking),
+            options: thinking,
         },
     ];
 }
@@ -93,7 +92,9 @@ async function selectModel(session: PicoSession, value: string): Promise<void> {
 }
 
 function selectThinking(session: PicoSession, value: string): void {
-    const offered = thinkingOptions(session.engine).some(option => option.value === value);
+    const offered = thinkingChoices(currentModel(session.engine)).some(
+        option => option.value === value,
+    );
     const level = offered ? parseConfiguredThinkingLevel(value) : undefined;
     if (!level) {
         const model = modelValue(currentModel(session.engine));
@@ -103,10 +104,6 @@ function selectThinking(session: PicoSession, value: string): void {
         );
     }
     session.selectThinkingLevel(level);
-}
-
-function modelValue(model: Model<Api>): string {
-    return `${model.provider}/${model.id}`;
 }
 
 function currentModel(engine: ModelState): Model<Api> {
@@ -122,14 +119,6 @@ function selectableModels(engine: ModelState): Model<Api>[] {
     const available = engine.getAvailableModels();
     const listed = available.some(model => modelValue(model) === modelValue(current));
     return listed ? available : [current, ...available];
-}
-
-function thinkingOptions(engine: ModelState): SessionConfigSelectOption[] {
-    return [
-        { value: THINKING_OFF, name: "Off" },
-        { value: "auto", name: "Auto", description: "Auto-detect per prompt" },
-        ...engine.getAvailableThinkingLevels().map(level => ({ value: level, name: level })),
-    ];
 }
 
 function currentThinking(

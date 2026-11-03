@@ -10,10 +10,12 @@ import type { PicoSession } from "../engine/pico-session.ts";
 import { promptText } from "./prompt-content.ts";
 import { SessionRegistry } from "./session-registry.ts";
 
+/** `fresh` is true for `session/new`, false for a session reopened by load or resume. */
 export type PicoSessionFactory = (
     cwd: string,
     mcpServers: McpServerStdio[],
     sessionManager: SessionManager,
+    fresh: boolean,
 ) => Promise<PicoSession>;
 
 export interface PicoAgentOptions {

@@ -7,10 +7,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 
-import type { PicoSession } from "./pico-session.ts";
+import type { PicoSession, SavedDefault } from "./pico-session.ts";
 import type { Cleanups } from "./testing/session-fixture.ts";
-import type { TestProviderModels } from "./testing/test-provider.ts";
+import type { TestProvider, TestProviderModels } from "./testing/test-provider.ts";
 
+import { createPicoModelRegistry } from "./model-catalog.ts";
 import { createPicoSession, PicoSessionError } from "./pico-session.ts";
 import { exited, fakeMcpServer } from "./testing/mcp-fixture.ts";
 import {
@@ -19,7 +20,7 @@ import {
     unauthenticatedAuthStorage,
     withoutProviderCredentials,
 } from "./testing/session-fixture.ts";
-import { installTestProvider, TEST_PROVIDER } from "./testing/test-provider.ts";
+import { ALPHA_DEFAULT, TEST_PROVIDER, testProvider } from "./testing/test-provider.ts";
 
 /** A conversation that outlives its engine: a Pico-owned journal and the project it belongs to. */
 interface Conversation {
@@ -29,15 +30,17 @@ interface Conversation {
     /** Pico's own session bucket, standing in for `~/Library/Application Support/Pico/sessions/<project>`. */
     sessionDir: string;
     models: TestProviderModels;
+    /** The provider each attachment registers with its own model registry. */
+    provider: TestProvider;
 }
 
 function conversation(t: Cleanups): Conversation {
     withoutProviderCredentials(t);
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
-    const models = installTestProvider(cwd);
+    const provider = testProvider();
     const sessionDir = path.join(dataDir, "sessions", path.basename(cwd));
     fs.mkdirSync(sessionDir, { recursive: true });
-    return { cwd, agentDir, dataDir, sessionDir, models };
+    return { cwd, agentDir, dataDir, sessionDir, provider, models: provider.models };
 }
 
 /**
@@ -63,20 +66,46 @@ function journalFile(manager: SessionManager): string {
     return file;
 }
 
+/**
+ * An engine over one journal, with its own credential store and model registry,
+ * as a fresh process would open them. `startOn` is Pico's saved default, which
+ * only a new conversation takes; `offerProvider` false stands in for the model
+ * this conversation ran on no longer being offered.
+ */
 async function attach(
     conversationUnderTest: Conversation,
     manager: SessionManager,
     mcpServers: McpServerStdio[] = [],
+    { startOn, offerProvider = true }: AttachOptions = {},
 ): Promise<PicoSession> {
-    const { cwd, agentDir, dataDir } = conversationUnderTest;
+    const { cwd, agentDir, dataDir, provider } = conversationUnderTest;
+    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+    if (offerProvider) provider.register(modelRegistry);
     return createPicoSession({
         cwd,
         agentDir,
         dataDir,
         mcpServers,
-        authStorage: await unauthenticatedAuthStorage(agentDir),
+        authStorage,
+        modelRegistry,
+        startOn,
         sessionManager: manager,
     });
+}
+
+interface AttachOptions {
+    startOn?: SavedDefault;
+    offerProvider?: boolean;
+}
+
+/** The first attachment of a conversation: a new session, which starts on Pico's saved default. */
+function start(
+    conversationUnderTest: Conversation,
+    manager: SessionManager,
+    mcpServers: McpServerStdio[] = [],
+): Promise<PicoSession> {
+    return attach(conversationUnderTest, manager, mcpServers, { startOn: ALPHA_DEFAULT });
 }
 
 function textOf(content: unknown): string[] {
@@ -134,7 +163,7 @@ describe("proposal.0004 restored conversations", () => {
         const sessionId = manager.getSessionId();
         const file = journalFile(manager);
 
-        const first = await attach(underTest, manager);
+        const first = await start(underTest, manager);
         await first.engine.prompt("the passphrase is mangosteen");
         await first.dispose();
 
@@ -156,7 +185,7 @@ describe("proposal.0004 restored conversations", () => {
         const manager = await newJournal(underTest);
         const file = journalFile(manager);
 
-        const first = await attach(underTest, manager);
+        const first = await start(underTest, manager);
         for (const fact of turns) await first.engine.prompt(`remember ${fact}`);
         await first.dispose();
 
@@ -178,7 +207,7 @@ describe("proposal.0004 restored conversations", () => {
         const manager = await newJournal(underTest);
         const file = journalFile(manager);
 
-        const first = await attach(underTest, manager);
+        const first = await start(underTest, manager);
         const beta = first.engine
             .getAvailableModels()
             .find(model => model.provider === TEST_PROVIDER && model.id === "beta");
@@ -205,7 +234,7 @@ describe("proposal.0004 restored conversations", () => {
         const sessionId = manager.getSessionId();
         const file = journalFile(manager);
 
-        const first = await attach(underTest, manager);
+        const first = await start(underTest, manager);
         const beta = first.engine
             .getAvailableModels()
             .find(model => model.provider === TEST_PROVIDER && model.id === "beta");
@@ -214,15 +243,17 @@ describe("proposal.0004 restored conversations", () => {
         await first.engine.prompt("hello");
         await first.dispose();
 
-        // The provider this conversation ran on is gone from the project.
-        fs.rmSync(path.join(underTest.cwd, ".omp", "extensions"), { recursive: true });
+        // The provider this conversation ran on is no longer offered.
         const pidFile = path.join(underTest.cwd, "sesh.pid");
         const reopened = await reopenJournal(underTest, file);
 
         await assert.rejects(
-            attach(underTest, reopened, [
-                fakeMcpServer("extra", { flags: ["--pid-file", pidFile] }),
-            ]),
+            attach(
+                underTest,
+                reopened,
+                [fakeMcpServer("extra", { flags: ["--pid-file", pidFile] })],
+                { offerProvider: false },
+            ),
             (error: unknown) => {
                 assert.ok(error instanceof PicoSessionError);
                 assert.match(error.message, /pico-test\/beta/);
@@ -258,7 +289,7 @@ describe("proposal.0004 restored conversations", () => {
             additionalProperties: false,
         };
 
-        const first = await attach(underTest, manager, [fakeMcpServer("extra")]);
+        const first = await start(underTest, manager, [fakeMcpServer("extra")]);
         assert.ok(
             first.engine.getActiveToolNames().includes("mcp__extra_echo"),
             "the first attachment never mounted the server it was given",

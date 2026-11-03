@@ -1,15 +1,7 @@
-import {
-    mkdirSync,
-    readdirSync,
-    readFileSync,
-    renameSync,
-    rmSync,
-    statSync,
-    utimesSync,
-    writeFileSync,
-} from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 
+import { writeAtomically } from "./atomic-write.ts";
 import { DataDirError } from "./data-dir.ts";
 
 /** How long another version's directory must sit unused before it is removed: Oh My Pi's figure. */
@@ -38,7 +30,11 @@ export function installNativeAddon(install: NativeAddonInstall): string {
     // `readFileSync` works on `/$bunfs`; `copyFileSync` does not.
     const content = readFileSync(install.source);
     if (!matches(target, content)) {
-        writeAtomically(target, content);
+        try {
+            writeAtomically(target, content, 0o755);
+        } catch (error) {
+            throw new DataDirError(target, error);
+        }
     }
     removeIdleVersions(install.nativesDir, install.version);
     return target;
@@ -59,17 +55,6 @@ function matches(target: string, content: Buffer): boolean {
         return readFileSync(target).equals(content);
     } catch {
         return false;
-    }
-}
-
-function writeAtomically(target: string, content: Buffer): void {
-    const temporary = `${target}.${process.pid}.tmp`;
-    try {
-        writeFileSync(temporary, content, { mode: 0o755 });
-        renameSync(temporary, target);
-    } catch (error) {
-        rmSync(temporary, { force: true });
-        throw new DataDirError(target, error);
     }
 }
 

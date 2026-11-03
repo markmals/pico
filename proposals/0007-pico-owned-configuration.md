@@ -183,7 +183,7 @@ pico settings update --default-thinking max   → exit 2, INVALID_ARGUMENT listi
 
 ### Thinking choices for a model
 
-- A model's thinking choices are the options Pico's Thinking option offers for it: Off, then Auto, then the model's supported reasoning levels in OMP's order. The config option and the CLI share one pure function of a model, so Sesh and every `pico` client see the same list.
+- A model's thinking choices are the options Pico's Thinking option offers for it. A model with reasoning offers Off, then Auto, then its supported reasoning levels in OMP's order. A model without reasoning offers only Off, because no other level changes anything for it; Mark decided this on 2026-11-02 after the adversarial review found that `pico` could save Auto for such a model while its session reported Off. This changes proposal 0001's Thinking option for those models, which also listed Auto. The config option and the CLI share one pure function of a model, so Sesh and every `pico` client see the same list.
 - A model's default thinking level is the value Pico's Thinking option shows when a session starts on that model with no level chosen. That is Off for a model without reasoning; otherwise it is OMP's built-in `high`, adjusted to the nearest level the model supports, as OMP adjusts it.
 
 ### The `pico` command line
@@ -204,7 +204,7 @@ pico settings update --default-thinking max   → exit 2, INVALID_ARGUMENT listi
 | `pico settings update [--default-model <model>] [--default-thinking <level>] [--if-revision <revision>] [--dry-run]` | writes | Change the default model or thinking level |
 
 - Commands follow `pico <resource> <operation>`, with the operations `list`, `get` and `update`. Resource names are plural for collections (`models`) and singular for the one settings document (`settings`). `schema` and `cli search` are the discovery verbs. Command and option names are kebab-case, option names match the JSON fields they set, and no command or option has an alias.
-- No command prompts, reads stdin, opens a browser or waits for input. A missing required value is an error.
+- No command prompts, reads stdin, opens a browser or waits for input. A missing required value is an error, and so is an option given twice: `INVALID_ARGUMENT` names it rather than letting the last one win silently (Mark, 2026-11-02).
 - A `models` or `settings` command loads OMP, opens the credential store read-only as sessions do, and runs at most one cache-aware catalog refresh, `online-if-uncached`, so a cold cache is filled once and a warm one makes no request. Discovery commands, `--help` and `--version` load no OMP module and no native addon. They open no credential store, create no data directory, and make no network request.
 
 #### The command registry

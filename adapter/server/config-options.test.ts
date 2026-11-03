@@ -151,10 +151,8 @@ describe("proposal.0001 config options on a new session", () => {
             category: "thought_level",
             currentValue: "off",
         });
-        expect(thinking.options).toEqual([
-            { value: "off", name: "Off" },
-            { value: "auto", name: "Auto", description: "Auto-detect per prompt" },
-        ]);
+        // pico-test/alpha cannot reason, so Off is its only thinking choice (proposal.0007).
+        expect(thinking.options).toEqual([{ value: "off", name: "Off" }]);
         expect((response.configOptions ?? []).map(entry => entry.id)).toEqual([
             "model",
             "thinking",
@@ -221,7 +219,7 @@ describe("proposal.0001 choosing a model and thinking level", () => {
         const response = await session.set("model", "pico-test/alpha");
 
         expect(option(response.configOptions, "thinking").currentValue).toBe("off");
-        expect(values(response.configOptions, "thinking")).toEqual(["off", "auto"]);
+        expect(values(response.configOptions, "thinking")).toEqual(["off"]);
     });
 
     test("a change while a turn runs applies from the next model request", async () => {

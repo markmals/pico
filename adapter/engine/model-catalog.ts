@@ -71,10 +71,15 @@ export function modelValue(model: Model<Api>): string {
     return `${model.provider}/${model.id}`;
 }
 
-/** Pico's Thinking option for a model: Off, Auto, then the model's levels in OMP's order. */
+/**
+ * Pico's Thinking option for a model: Off, Auto, then its levels in OMP's order. A model without
+ * reasoning offers only Off, because no other level changes anything for it (proposal.0007).
+ */
 export function thinkingChoices(model: Model<Api>): SessionConfigSelectOption[] {
+    const off = { value: "off", name: "Off" };
+    if (!model.reasoning) return [off];
     return [
-        { value: "off", name: "Off" },
+        off,
         { value: "auto", name: "Auto", description: "Auto-detect per prompt" },
         ...getSupportedEfforts(model).map(level => ({ value: level, name: level })),
     ];

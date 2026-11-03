@@ -2,7 +2,7 @@
 id: proposal.0007
 title: Pico-Owned Configuration
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/46
 issues: [https://github.com/markmals/pico/issues/12]
 supersedes: []

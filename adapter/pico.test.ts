@@ -17,6 +17,10 @@ const manifest = JSON.parse(readFileSync(join(import.meta.dir, "..", "package.js
     version: string;
 };
 
+// The native addon's package installs only on Apple silicon, the one platform `pico` ships for,
+// so anything that loads Oh My Pi through the entry point runs only there.
+const carriesAddon = process.platform === "darwin" && process.arch === "arm64";
+
 const homes: string[] = [];
 
 /** A scratch home, so nothing here touches the real `~/Library/Application Support/Pico`. */
@@ -79,8 +83,7 @@ describe("proposal.0002 the pico executable", () => {
         chmodSync(join(home, "Library"), 0o755);
     }, 30_000);
 
-    // The addon's package installs only on Apple silicon, the one platform `pico` ships for.
-    test.skipIf(!(process.platform === "darwin" && process.arch === "arm64"))(
+    test.skipIf(!carriesAddon)(
         "as an ACP agent it extracts the native addon into Pico's data directory",
         async () => {
             const home = scratchHome();
@@ -144,50 +147,62 @@ describe("proposal.0007 the pico command line", () => {
         expect(readdirSync(home)).toEqual([]);
     }, 30_000);
 
-    test("settings get reports a missing file as one JSON document on stdout", async () => {
-        const home = scratchHome();
+    test.skipIf(!carriesAddon)(
+        "settings get reports a missing file as one JSON document on stdout",
+        async () => {
+            const home = scratchHome();
 
-        const result = await runPico(["settings", "get"], home);
+            const result = await runPico(["settings", "get"], home);
 
-        expect(result.exitCode).toBe(0);
-        const document = JSON.parse(result.stdout);
-        expect(document.apiVersion).toBe(1);
-        expect(document.status).toBe("missing");
-        expect(document.settingsFile).toBe(
-            join(home, "Library", "Application Support", "Pico", "settings.json"),
-        );
-    }, 30_000);
+            expect(result.exitCode).toBe(0);
+            const document = JSON.parse(result.stdout);
+            expect(document.apiVersion).toBe(1);
+            expect(document.status).toBe("missing");
+            expect(document.settingsFile).toBe(
+                join(home, "Library", "Application Support", "Pico", "settings.json"),
+            );
+        },
+        30_000,
+    );
 
-    test("a refused update exits 1 with its error as the last stderr line and nothing on stdout", async () => {
-        const home = scratchHome();
+    test.skipIf(!carriesAddon)(
+        "a refused update exits 1 with its error as the last stderr line and nothing on stdout",
+        async () => {
+            const home = scratchHome();
 
-        const result = await runPico(
-            ["settings", "update", "--default-model", "nobody/nothing"],
-            home,
-        );
-
-        expect(result.exitCode).toBe(1);
-        expect(result.stdout).toBe("");
-        expect(lastErrorDocument(result.stderr).error.code).toBe("NOT_FOUND");
-    }, 30_000);
-
-    test("a command whose engine directory cannot be made still ends stderr with its error", async () => {
-        const home = scratchHome();
-        const dataDir = join(home, "Library", "Application Support", "Pico");
-        mkdirSync(dataDir, { recursive: true });
-        writeFileSync(join(dataDir, "engine"), "not a directory");
-
-        for (const args of [
-            ["settings", "get"],
-            ["models", "list"],
-        ]) {
-            const result = await runPico(args, home);
+            const result = await runPico(
+                ["settings", "update", "--default-model", "nobody/nothing"],
+                home,
+            );
 
             expect(result.exitCode).toBe(1);
             expect(result.stdout).toBe("");
-            const { error } = lastErrorDocument(result.stderr);
-            expect(error.code).toBe("IO_ERROR");
-            expect(error.details.path).toBe(join(dataDir, "engine"));
-        }
-    }, 30_000);
+            expect(lastErrorDocument(result.stderr).error.code).toBe("NOT_FOUND");
+        },
+        30_000,
+    );
+
+    test.skipIf(!carriesAddon)(
+        "a command whose engine directory cannot be made still ends stderr with its error",
+        async () => {
+            const home = scratchHome();
+            const dataDir = join(home, "Library", "Application Support", "Pico");
+            mkdirSync(dataDir, { recursive: true });
+            writeFileSync(join(dataDir, "engine"), "not a directory");
+
+            for (const args of [
+                ["settings", "get"],
+                ["models", "list"],
+            ]) {
+                const result = await runPico(args, home);
+
+                expect(result.exitCode).toBe(1);
+                expect(result.stdout).toBe("");
+                const { error } = lastErrorDocument(result.stderr);
+                expect(error.code).toBe("IO_ERROR");
+                expect(error.details.path).toBe(join(dataDir, "engine"));
+            }
+        },
+        30_000,
+    );
 });

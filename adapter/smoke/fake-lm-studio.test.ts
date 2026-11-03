@@ -1,7 +1,7 @@
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -26,12 +26,12 @@ afterEach(async () => {
     while (pending.length > 0) await pending.pop()?.();
 });
 
-/** The fake server, published to OMP's built-in LM Studio provider for one test. */
-function useFakeLmStudio(): void {
+/** The fake server, published to OMP's built-in LM Studio provider until `scope` cleans up. */
+function useFakeLmStudio(scope: Cleanups = cleanups): void {
     const server = startFakeLmStudio({ memoryToken: MEMORY_TOKEN, reply: REPLY });
     const previous = process.env.LM_STUDIO_BASE_URL;
     process.env.LM_STUDIO_BASE_URL = server.baseUrl;
-    cleanups.after(() => {
+    scope.after(() => {
         server.stop();
         if (previous === undefined) delete process.env.LM_STUDIO_BASE_URL;
         else process.env.LM_STUDIO_BASE_URL = previous;
@@ -46,9 +46,9 @@ const TEST_RUNTIME_ENV = ["NODE_ENV", "BUN_ENV", "PI_TEST_RUNTIME"];
  * constructor and disabled under a Bun test runtime, so only that call runs unmarked; the rest
  * of the session keeps the markers the test runner set.
  */
-async function picoRegistry(agentDir: string, dataDir: string) {
+async function picoRegistry(agentDir: string, dataDir: string, scope: Cleanups = cleanups) {
     const authStorage = await discoverAuthStorage(agentDir);
-    cleanups.after(() => authStorage.close());
+    scope.after(() => authStorage.close());
     const marks = TEST_RUNTIME_ENV.map(variable => [variable, process.env[variable]] as const);
     for (const [variable] of marks) delete process.env[variable];
     try {
@@ -67,6 +67,24 @@ function lastAssistantText(engine: AgentSession): string {
 
 /** A cold discovery pass probes every local provider Oh My Pi knows, which outruns the 5 s default. */
 const TIMEOUT_MS = 30_000;
+
+/**
+ * Oh My Pi gives a loopback LM Studio probe 250 ms, and the first discovery in a process also pays
+ * one-time start-up costs; on a slow CI runner that alone overruns the budget and caches an empty
+ * catalog for that data directory. One throwaway pass, in its own workspace, pays it first.
+ */
+beforeAll(async () => {
+    const warmup: Array<() => void | Promise<void>> = [];
+    const scope: Cleanups = { after: cleanup => void warmup.push(cleanup) };
+    try {
+        withoutProviderCredentials(scope);
+        useFakeLmStudio(scope);
+        const { agentDir, dataDir } = picoWorkspace(scope);
+        await loadCatalog((await picoRegistry(agentDir, dataDir, scope)).registry);
+    } finally {
+        while (warmup.length > 0) await warmup.pop()?.();
+    }
+}, TIMEOUT_MS);
 
 describe("proposal.0007 the offline model `mise run pico:verify` drives", () => {
     test(

@@ -198,9 +198,9 @@ async function exchange(
 }
 
 /**
- * Declared browser flows get no optional paste fallback: the SDK races it against the
- * callback, so rejecting that fallback would cancel a valid browser login. Undeclared
- * interactions abort the attempt, even if the flow catches the callback's rejection.
+ * The SDK synthesizes a paste prompt when browser flows get no manual callback, but a
+ * rejecting callback would cancel the parallel browser wait. Supply no answer until that
+ * wait ends. Undeclared interactions still abort, even if the flow catches the rejection.
  */
 function controllerFor(
     method: LoginMethodInfo,
@@ -235,10 +235,18 @@ function controllerFor(
         onBrowserSession: () => refuse("a browser session"),
         onManualCodeInput:
             method.interaction === "browser-callback"
-                ? undefined
+                ? waitSignal => waitWithoutAnswer(waitSignal ?? signal)
                 : () => refuse("a pasted authorization code"),
         signal,
     };
+}
+
+function waitWithoutAnswer(signal: AbortSignal): Promise<never> {
+    const { promise, reject } = Promise.withResolvers<never>();
+    const stop = () => reject(new LoginError("CANCELLED", "The browser callback wait ended."));
+    if (signal.aborted) stop();
+    else signal.addEventListener("abort", stop, { once: true });
+    return promise;
 }
 
 /** Rejects when the attempt ends, so an unresponsive provider cannot hold the process open. */

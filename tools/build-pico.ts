@@ -9,6 +9,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { buildKeychain } from "./build-keychain.ts";
 import { createLegacyPiVirtualModulePlugin } from "./legacy-pi-modules.ts";
 import {
     bundledInputDirectories,
@@ -109,6 +110,7 @@ export interface PicoBuildOptions {
 export async function compilePico(options: PicoBuildOptions): Promise<Bun.BuildMetafile> {
     let nodeModules = path.join(options.repoRoot, "node_modules");
     await mkdir(path.dirname(options.outfile), { recursive: true });
+    await buildKeychain(options.repoRoot);
 
     // Bun ad-hoc signs the Mach-O it writes. BUN_NO_CODESIGN_MACHO_BINARY stays unset: pico has
     // no Developer ID to re-sign with, and the tap's formula checks `codesign --verify`.
@@ -190,7 +192,18 @@ export async function noticesForBuild(inputs: NoticesInputs): Promise<string> {
             await readFile(path.join(import.meta.dirname, "bun-license.txt"), "utf8"),
         ),
     };
-    return renderNotices([...notices, bunNotice].sort(byNameThenVersion));
+    const nodeApiHeaders: PackageNotice = {
+        name: "node-api-headers",
+        version: "1.9.0",
+        license: "MIT",
+        licenseText: normalizeLicenseText(
+            await readFile(
+                path.join(inputs.repoRoot, "native", "keychain", "include", "LICENSE"),
+                "utf8",
+            ),
+        ),
+    };
+    return renderNotices([...notices, bunNotice, nodeApiHeaders].sort(byNameThenVersion));
 }
 
 function fail(message: string): never {

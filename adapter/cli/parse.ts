@@ -133,7 +133,9 @@ function applyDefaults(command: CommandSpec, options: Record<string, string | bo
 
 function checkConstraints(command: CommandSpec, options: Record<string, string | boolean>): void {
     for (const constraint of command.constraints) {
-        if (constraint.options.some(name => optionKey(name) in options)) continue;
+        const given = constraint.options.filter(name => optionKey(name) in options);
+        if (given.length === 1) continue;
+        if (given.length > 1 && constraint.kind === "at-least-one-of") continue;
         throw new CliError(
             "INVALID_ARGUMENT",
             `${commandId(command)} needs ${constraint.description}`,
@@ -141,6 +143,7 @@ function checkConstraints(command: CommandSpec, options: Record<string, string |
                 details: {
                     command: commandId(command),
                     accepted: [...constraint.options],
+                    ...(given.length > 1 ? { argument: given.join(" and ") } : {}),
                 },
             },
         );

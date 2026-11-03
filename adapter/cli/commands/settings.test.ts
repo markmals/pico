@@ -15,7 +15,7 @@ import { DEFAULT_AUTO_BACKGROUND, revisionOf } from "../../settings/settings-doc
 import { settingsFilePath, writeSettings } from "../../settings/settings-store.ts";
 import { settingsGetOutput, settingsUpdateOutput } from "../result-schemas.ts";
 import { createCommandHandlers } from "./handlers.ts";
-import { input, rejection, testHandlers } from "./testing.ts";
+import { input, rejection, testHandlers, testVault } from "./testing.ts";
 
 async function settingsGet(handlers: Handlers) {
     return settingsGetOutput.parse({ apiVersion: 1, ...(await handlers["settings get"](input())) });
@@ -35,12 +35,17 @@ function fileBytes(dataDir: string): string | undefined {
 
 /** A saved default model and thinking level, with auto-background left unset. */
 function savedDefault(defaultModel: string, defaultThinking: string): PicoSettings {
-    return { defaultModel, defaultThinking, autoBackground: null };
+    return { defaultModel, defaultThinking, autoBackground: null, providerCredentials: {} };
 }
 
 /** Settings with nothing saved at all. */
 function savedNothing(): PicoSettings {
-    return { defaultModel: null, defaultThinking: null, autoBackground: null };
+    return {
+        defaultModel: null,
+        defaultThinking: null,
+        autoBackground: null,
+        providerCredentials: {},
+    };
 }
 
 describe("proposal.0007 pico settings get", () => {
@@ -110,11 +115,10 @@ describe("proposal.0007 pico settings get", () => {
     });
 
     test("effective names the model a new session then starts on", async t => {
-        const { handlers, registry, cwd, agentDir, dataDir, authStorage } = await testHandlers(t);
+        const { handlers, registry, cwd, dataDir, authStorage } = await testHandlers(t);
         const startedOn = async () => {
             const session = await createPicoSession({
                 cwd,
-                agentDir,
                 dataDir,
                 mcpServers: [],
                 authStorage,
@@ -347,6 +351,8 @@ function handlersWithoutCatalog(t: Cleanups) {
     const handlers = createCommandHandlers({
         dataDir: workspace.dataDir,
         openCatalog: () => assert.fail("the catalog must not be opened"),
+        openVault: () => assert.fail("the vault must not be opened"),
+        readStdin: () => assert.fail("stdin must not be read"),
     });
     return { ...workspace, handlers };
 }
@@ -369,6 +375,7 @@ describe("proposal.0008 pico settings get reports autoBackground", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: saved,
+                providerCredentials: {},
             });
             const result = await settingsGet(handlers);
 
@@ -396,6 +403,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
+            providerCredentials: {},
         });
 
         const receipt = await update(handlers, { autoBackground: "off" });
@@ -405,6 +413,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: false,
+            providerCredentials: {},
         });
         assert.equal(
             receipt.after.revision,
@@ -421,8 +430,9 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            providerCredentials: {},
         });
-        assert.equal(fileBytes(dataDir), '{\n    "version": 1,\n    "autoBackground": true\n}\n');
+        assert.equal(fileBytes(dataDir), '{\n    "version": 2,\n    "autoBackground": true\n}\n');
     });
 
     test("a model change keeps the saved value", async t => {
@@ -431,6 +441,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/alpha",
             defaultThinking: "off",
             autoBackground: false,
+            providerCredentials: {},
         });
 
         const receipt = await update(handlers, { defaultModel: "pico-test/beta" });
@@ -456,6 +467,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            providerCredentials: {},
         });
         const before = fileBytes(dataDir);
 
@@ -495,4 +507,46 @@ describe("proposal.0008 pico settings update --auto-background", () => {
         assert.equal(failure.code, "FAILED_PRECONDITION");
         assert.equal(fileBytes(dataDir), "not json");
     });
+});
+
+describe("proposal.0009 independent settings decisions stay independent", () => {
+    for (const initial of ["pico-test/beta", "pico-test/alpha"]) {
+        test(`a model save from ${initial} cannot undo a provider selection made during discovery`, async t => {
+            const { handlers, registry, keychain, dataDir } = await testHandlers(t);
+            const vault = testVault(t, dataDir, keychain);
+            const first = vault.create("openai", { type: "api_key", key: "FAKE-first" });
+            const second = vault.create("openai", { type: "api_key", key: "FAKE-second" });
+            writeSettings(dataDir, {
+                ...savedDefault(initial, "off"),
+                providerCredentials: { openai: first.reference },
+            });
+            const started = Promise.withResolvers<void>();
+            const resume = Promise.withResolvers<void>();
+            const delayed = createCommandHandlers({
+                dataDir,
+                openCatalog: async () => {
+                    started.resolve();
+                    await resume.promise;
+                    return { registry, providerCredentials: {} };
+                },
+                openVault: () => testVault(t, dataDir, keychain),
+                readStdin: async () => {
+                    throw new Error("No API key input in this test");
+                },
+            });
+            const pending = update(delayed, {
+                defaultModel: "pico-test/alpha",
+                defaultThinking: "off",
+            }).catch(error => error);
+            await started.promise;
+            await handlers["providers update"](
+                input({ credential: second.reference }, { provider: "openai" }),
+            );
+            const selected = fileBytes(dataDir);
+            resume.resolve();
+            const failure = await pending;
+            assert.equal(failure.code, "CONFLICT");
+            assert.equal(fileBytes(dataDir), selected);
+        });
+    }
 });

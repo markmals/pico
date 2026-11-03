@@ -8,6 +8,11 @@ const errorCode = z.enum([
     "NOT_FOUND",
     "FAILED_PRECONDITION",
     "CONFLICT",
+    "AUTH_REQUIRED",
+    "KEYCHAIN_LOCKED",
+    "KEYCHAIN_ACCESS_DENIED",
+    "CANCELLED",
+    "TIMED_OUT",
     "UNAVAILABLE",
     "IO_ERROR",
     "INTERNAL",
@@ -23,15 +28,18 @@ export const modelSchema = z.object({
     defaultThinking: z.string(),
 });
 
+/** The provider bindings a result was produced with: model provider to credential reference. */
+const providerCredentials = z.record(z.string(), z.string());
+
 export const modelsListOutput = z.object({
     apiVersion,
-    credentialStore: z.string(),
+    providerCredentials,
     items: z.array(modelSchema),
 });
 
 export const modelsGetOutput = z.object({
     apiVersion,
-    credentialStore: z.string(),
+    providerCredentials,
     item: modelSchema,
 });
 
@@ -39,6 +47,7 @@ const savedSettings = z.object({
     defaultModel: z.string().nullable(),
     defaultThinking: z.string().nullable(),
     autoBackground: z.boolean().nullable(),
+    providerCredentials,
 });
 
 const effectiveSettings = z.object({
@@ -131,6 +140,8 @@ export const commandSpecificationOutput = z.object({
     effects,
     dryRun: z.boolean(),
     idempotent: z.boolean(),
+    outputMode: z.enum(["document", "json-lines"]),
+    platform: z.enum(["any", "macos"]),
     output: z.record(z.string(), z.unknown()),
     errors: z.array(
         z.object({
@@ -150,3 +161,150 @@ export const searchOutput = z.object({
     query: z.string(),
     items: z.array(z.object({ command: z.string(), summary: z.string(), usage: z.string() })),
 });
+
+/** One stored credential as a command reports it: identity and account facts, never payload. */
+export const credentialSchema = z.object({
+    reference: z.string(),
+    provider: z.string(),
+    kind: z.enum(["api_key", "oauth"]),
+    state: z.enum(["active", "deleting"]),
+    email: z.string().nullable(),
+    accountId: z.string().nullable(),
+    orgId: z.string().nullable(),
+    orgName: z.string().nullable(),
+});
+
+const loginMethodSchema = z.object({
+    method: z.string(),
+    name: z.string(),
+    provider: z.string(),
+    interaction: z.enum(["browser-callback", "device-code", "api-key", "engine-defined"]),
+    localBrowser: z.boolean().nullable(),
+    supported: z.boolean(),
+    unsupported: z.string().nullable(),
+});
+
+const providerSchema = z.object({
+    provider: z.string(),
+    name: z.string(),
+    apiKey: z.boolean(),
+    apiKeyUnsupported: z.string().nullable(),
+    /** The reference the settings file selects, even when Pico no longer has it stored. */
+    selected: z.string().nullable(),
+    credential: credentialSchema.nullable(),
+    methods: z.array(loginMethodSchema),
+});
+
+export const providersListOutput = z.object({ apiVersion, items: z.array(providerSchema) });
+
+export const providersGetOutput = z.object({ apiVersion, item: providerSchema });
+
+/** Whether a receipt established that the Keychain item behind a reference can be read. */
+const keychainCheck = z.enum(["readable", "written", "deleted", "not-checked"]);
+
+const binding = z.object({ revision, credential: z.string().nullable() });
+
+export const providersUpdateOutput = z.object({
+    apiVersion,
+    settingsFile: z.string(),
+    provider: z.string(),
+    dryRun: z.boolean(),
+    changed: z.boolean(),
+    keychain: keychainCheck,
+    before: binding,
+    after: binding,
+});
+
+export const credentialsListOutput = z.object({
+    apiVersion,
+    revision,
+    items: z.array(credentialSchema),
+});
+
+export const credentialsGetOutput = z.object({
+    apiVersion,
+    revision,
+    keychain: keychainCheck,
+    item: credentialSchema,
+});
+
+export const credentialsCreateOutput = z.object({
+    apiVersion,
+    provider: z.string(),
+    dryRun: z.boolean(),
+    changed: z.boolean(),
+    keychain: keychainCheck,
+    stored: z.boolean(),
+    revision,
+    credential: credentialSchema.nullable(),
+    select: z.string(),
+});
+
+export const credentialsDeleteOutput = z.object({
+    apiVersion,
+    reference: z.string(),
+    dryRun: z.boolean(),
+    changed: z.boolean(),
+    keychain: keychainCheck,
+    revision,
+    credential: credentialSchema.nullable(),
+});
+
+/** `auth login --dry-run`: the attempt Pico would run, with nothing authorized. */
+export const authLoginPreviewOutput = z.object({
+    apiVersion,
+    dryRun: z.literal(true),
+    method: z.string(),
+    provider: z.string(),
+    interaction: loginMethodSchema.shape.interaction,
+    localBrowser: z.boolean().nullable(),
+    deadlineSeconds: z.number(),
+    revision,
+    keychain: z.literal("not-checked"),
+});
+
+const event = { apiVersion, attemptId: z.string(), sequence: z.number().int().nonnegative() };
+
+/**
+ * `auth login`'s event stream, one JSON document per line. It is the only command whose
+ * success is more than one document, and `failed` may follow events already on stdout.
+ */
+export const authLoginEventOutput = z.discriminatedUnion("type", [
+    z.object({
+        ...event,
+        type: z.literal("started"),
+        method: z.string(),
+        provider: z.string(),
+        deadlineSeconds: z.number(),
+    }),
+    z.object({
+        ...event,
+        type: z.literal("authorization"),
+        url: z.string(),
+        launchUrl: z.string().nullable(),
+        instructions: z.string().nullable(),
+        localBrowser: z.boolean(),
+    }),
+    z.object({ ...event, type: z.literal("progress"), message: z.string() }),
+    z.object({
+        ...event,
+        type: z.literal("completed"),
+        stored: z.literal(true),
+        revision,
+        credential: credentialSchema,
+        select: z.string(),
+    }),
+    z.object({
+        ...event,
+        type: z.literal("failed"),
+        error: z.object({
+            code: errorCode,
+            message: z.string(),
+            retryable: z.boolean(),
+            details: z.record(z.string(), z.unknown()),
+        }),
+    }),
+]);
+
+/** `auth login` prints either the preview document or the stream its events make up. */
+export const authLoginOutput = z.union([authLoginPreviewOutput, authLoginEventOutput]);

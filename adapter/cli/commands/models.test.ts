@@ -7,7 +7,7 @@ import { input, rejection, testHandlers } from "./testing.ts";
 
 describe("proposal.0007 pico models", () => {
     test("models list prints the catalog, each model with its thinking choices", async t => {
-        const { handlers, registry, credentialStore } = await testHandlers(t);
+        const { handlers, registry } = await testHandlers(t);
 
         const result = modelsListOutput.parse({
             apiVersion: 1,
@@ -17,7 +17,7 @@ describe("proposal.0007 pico models", () => {
         const expected = (await loadCatalog(registry)).map(catalogEntry);
         assert.deepEqual(result.items, expected);
         assert.ok(result.items.some(item => item.value === "pico-test/beta"));
-        assert.equal(result.credentialStore, credentialStore);
+        assert.deepEqual(result.providerCredentials, {});
     });
 
     test("--provider keeps one provider's models, and an unknown one keeps none", async t => {

@@ -22,10 +22,9 @@ async function promptedSession(
     const model = createMockModel({ responses: [{ content: ["ok"] }] });
     const session = await createPicoSession({
         cwd,
-        agentDir,
         dataDir,
         mcpServers: [],
-        authStorage: await mockAuthStorage(agentDir),
+        authStorage: await mockAuthStorage(dataDir),
         model,
     });
     t.after(() => session.dispose());
@@ -45,10 +44,9 @@ describe("proposal.0001 the user's OMP configuration", () => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t, AGENT_CONFIG);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("write", { path: "note.txt", content: "hi\n" })] },
@@ -67,7 +65,7 @@ describe("proposal.0001 the user's OMP configuration", () => {
 
 describe("proposal.0001 project context", () => {
     test("the worktree's AGENTS.md reaches the model and the main checkout's does not", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const mainCheckout = temporaryDirectory(t, "sesh-root");
         fs.writeFileSync(path.join(cwd, "AGENTS.md"), "# House rules\n\nPICO-WORKTREE-MARKER\n");
         fs.writeFileSync(
@@ -84,10 +82,9 @@ describe("proposal.0001 project context", () => {
         const model = createMockModel({ responses: [{ content: ["ok"] }] });
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());

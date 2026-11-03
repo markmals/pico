@@ -39,9 +39,10 @@ function userProcessRoot(t: Cleanups, workspace: PicoWorkspace): void {
 async function promptedSession(t: Cleanups, workspace: PicoWorkspace) {
     const model = createMockModel({ responses: [{ content: ["ok"] }] });
     const session = await createPicoSession({
-        ...workspace,
+        cwd: workspace.cwd,
+        dataDir: workspace.dataDir,
         mcpServers: [],
-        authStorage: await mockAuthStorage(workspace.agentDir),
+        authStorage: await mockAuthStorage(workspace.dataDir),
         model,
     });
     t.after(() => session.dispose());
@@ -62,9 +63,10 @@ describe("proposal.0007 what a Pico session reads", () => {
         );
 
         const session = await createPicoSession({
-            ...workspace,
+            cwd: workspace.cwd,
+            dataDir: workspace.dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(workspace.agentDir),
+            authStorage: await mockAuthStorage(workspace.dataDir),
             model: createReasoningMockModel({ responses: [{ content: ["ok"] }] }),
         });
         t.after(() => session.dispose());

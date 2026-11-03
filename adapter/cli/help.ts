@@ -10,9 +10,11 @@ const ORIENTATION = [
     "speaking the Agent Client Protocol over stdin and stdout. Its commands show the models",
     "a session can use and change what new sessions start on.",
     "",
-    "Every command prints one JSON document on stdout. A failure prints nothing there and ends",
-    "stderr with a JSON error carrying a code, a message, whether a retry could help, and details;",
-    "the exit status is 2 for a mistake in the command itself and 1 for anything else.",
+    "Commands except auth login print one JSON document on stdout; ordinary failures leave it",
+    "empty. auth login streams JSON Lines, or one preview document with --dry-run.",
+    "A failure ends stderr with a JSON error carrying a code, a message, whether a retry could",
+    "help, and details. That error and the nonzero exit are authoritative if stdout closes.",
+    "The exit status is 2 for a mistake in the command itself and 1 for anything else.",
 ];
 
 const DISCOVERY = [
@@ -82,6 +84,12 @@ function facts(command: CommandSpec): string[] {
         `Effects: ${command.effects}`,
         `Idempotent: ${command.idempotent ? "yes" : "no"}`,
     ];
+    if (command.outputMode === "json-lines") {
+        lines.push(
+            "Output: one JSON document per line while it runs, ending in one completed or failed event",
+        );
+    }
+    if (command.platform !== "any") lines.push(`Needs: ${command.platform}`);
     if (command.dryRun) lines.push("Supports --dry-run, which does everything except write");
     for (const constraint of command.constraints) lines.push(`Requires: ${constraint.description}`);
     return [...lines, ""];

@@ -1,9 +1,10 @@
-import path from "node:path";
-
+import type { MemorySecretStore } from "../../credentials/testing/memory-secret-store.ts";
 import type { CommandInput } from "../command.ts";
 import type { CliError } from "../errors.ts";
 import type { CommandHandlers, HandledCommand } from "./handlers.ts";
 
+import { createMemorySecretStore } from "../../credentials/testing/memory-secret-store.ts";
+import { openCredentialVault } from "../../credentials/vault.ts";
 import { createPicoModelRegistry } from "../../engine/model-catalog.ts";
 import {
     type Cleanups,
@@ -15,20 +16,47 @@ import { testProvider } from "../../engine/testing/test-provider.ts";
 import { COMMANDS } from "../registry.ts";
 import { createCommandHandlers } from "./handlers.ts";
 
-/** Handlers over a scratch data directory and a catalog holding only `pico-test/alpha` and `beta`. */
-export async function testHandlers(t: Cleanups) {
+/**
+ * Handlers over a scratch data directory, a catalog holding only `pico-test/alpha` and `beta`,
+ * and a real credential vault whose Keychain is an isolated in-memory store. Nothing here
+ * reaches the user's Keychain, settings or OMP installation.
+ */
+export async function testHandlers(t: Cleanups, options: { stdin?: string } = {}) {
     withoutProviderCredentials(t);
     const workspace = picoWorkspace(t);
-    const authStorage = await unauthenticatedAuthStorage(workspace.agentDir);
-    t.after(() => authStorage.close());
+    const authStorage = await unauthenticatedAuthStorage(workspace.dataDir);
     const registry = createPicoModelRegistry(authStorage, workspace.dataDir);
     testProvider().register(registry);
-    const credentialStore = path.join(workspace.agentDir, "agent.db");
+    const keychain: MemorySecretStore = createMemorySecretStore();
+    const vaults: { close(): void }[] = [];
+    t.after(() => {
+        for (const vault of vaults.splice(0)) vault.close();
+    });
     const handlers = createCommandHandlers({
         dataDir: workspace.dataDir,
-        openCatalog: async () => ({ registry, credentialStore }),
+        openCatalog: async () => ({ registry, providerCredentials: {} }),
+        openVault: vaultOptions => {
+            const vault = openCredentialVault({
+                dataDir: workspace.dataDir,
+                keychain,
+                allowKeychainUI: vaultOptions?.allowKeychainUI,
+            });
+            vaults.push(vault);
+            return vault;
+        },
+        readStdin: async () => {
+            if (options.stdin === undefined) throw new Error("the test supplied no stdin");
+            return options.stdin;
+        },
     });
-    return { ...workspace, registry, authStorage, credentialStore, handlers };
+    return { ...workspace, registry, authStorage, keychain, handlers };
+}
+
+/** A vault over the same data directory, for a test that sets up or inspects stored state. */
+export function testVault(t: Cleanups, dataDir: string, keychain: MemorySecretStore) {
+    const vault = openCredentialVault({ dataDir, keychain });
+    t.after(() => vault.close());
+    return vault;
 }
 
 export function input(

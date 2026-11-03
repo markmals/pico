@@ -19,13 +19,12 @@ import { ALPHA_DEFAULT, TEST_PROVIDER, testProvider } from "./testing/test-provi
 async function sessionOnTestProvider(t: Cleanups) {
     withoutProviderCredentials(t);
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
-    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     const provider = testProvider();
     provider.register(modelRegistry);
     const session = await createPicoSession({
         cwd,
-        agentDir,
         dataDir,
         mcpServers: [],
         authStorage,

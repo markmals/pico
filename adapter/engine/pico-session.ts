@@ -4,16 +4,18 @@ import type { AgentSession, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 import type { ConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
-import { createAgentSession, getAgentDir, SessionManager } from "@oh-my-pi/pi-coding-agent";
+import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
+import type { SecretStore } from "../credentials/keychain.ts";
+import type { PicoCredentials } from "./credential-policy.ts";
 import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedChange } from "./write-bridge.ts";
 
 import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
 import { BackgroundJobs, STOP_GRACE_MS } from "./background-jobs.ts";
-import { openCredentialStore } from "./credential-store.ts";
+import { openPicoCredentials } from "./credential-policy.ts";
 import { attempt, describeCause, PicoSessionError } from "./errors.ts";
 import { connectHostMcpServers } from "./host-mcp-servers.ts";
 import {
@@ -35,12 +37,12 @@ export interface PicoSessionOptions {
     cwd: string;
     /** The stdio MCP servers the client sent. Nothing else is connected. */
     mcpServers: McpServerStdio[];
-    /** The user's OMP agent directory; Pico opens only its credential store from it (proposal.0007). */
-    agentDir?: string;
     /** Pico's data directory, which must exist: the model cache and the SDK's own root live here. */
     dataDir: string;
-    /** Defaults to the user's OMP credential store. */
+    /** Defaults to Pico's own Keychain-backed credentials for `dataDir` (proposal.0009). */
     authStorage?: AuthStorage;
+    /** An in-process Keychain for tests; production always uses the native bridge (proposal.0009). */
+    keychain?: SecretStore;
     /** A model outside every catalog, for tests that script the engine directly. */
     model?: Model<Api>;
     /** Pico's saved default for a new session; omitted for a reopened one or when none is saved. */
@@ -108,10 +110,19 @@ export interface PicoSession {
 
 export async function createPicoSession(options: PicoSessionOptions): Promise<PicoSession> {
     const { cwd, mcpServers } = options;
-    const agentDir = options.agentDir ?? getAgentDir();
-    // Only a store Pico opened is Pico's to close; an injected one belongs to its caller.
-    const authStorage = options.authStorage ?? (await openCredentialStore(agentDir));
-    const ownedStore = options.authStorage === undefined ? authStorage : undefined;
+    // Only credentials Pico opened are Pico's to close; an injected store belongs to its caller.
+    // Opening them can fail on its own — unusable settings, an unreachable Keychain — and that
+    // is a session that did not start, not a raw storage error.
+    const owned =
+        options.authStorage === undefined
+            ? await attemptOpen(() =>
+                  openPicoCredentials({
+                      dataDir: options.dataDir,
+                      keychain: options.keychain,
+                  }),
+              )
+            : undefined;
+    const authStorage = options.authStorage ?? owned!.authStorage;
 
     let mcp: HostMcpServers | undefined;
     let engine: AgentSession | undefined;
@@ -121,7 +132,9 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
         const mcpToolNames = mcp.tools.map(tool => tool.name);
         const modelRegistry =
-            options.modelRegistry ?? createPicoModelRegistry(authStorage, options.dataDir);
+            options.modelRegistry ??
+            owned?.registry ??
+            createPicoModelRegistry(authStorage, options.dataDir);
         // Resolved before the background refresh starts: OMP's registry does not serialize
         // refreshes, and a lookup racing one sees an empty catalog on a cold cache.
         const start = options.startOn && (await savedDefaultChoice(modelRegistry, options.startOn));
@@ -161,7 +174,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             const reason = created.modelFallbackMessage ? ` ${created.modelFallbackMessage}` : "";
             throw new PicoSessionError(
                 `No model has usable credentials, so Pico has nothing to start a session in ${cwd} on, and it does not substitute one.${reason} ` +
-                    "Sign in to a provider with Oh My Pi, then start a new session.",
+                    "Connect a provider with `pico auth login` or `pico credentials create`, select it with `pico providers update`, then start a new session.",
             );
         }
         // A fallback message alongside a resolved model means Oh My Pi picked a different
@@ -198,7 +211,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         // the startup failure is what the caller needs to see, not a teardown one.
         await attempt(() => engine?.dispose());
         await attempt(() => mcp?.manager.disconnectAll());
-        await attempt(() => ownedStore?.close());
+        await attempt(() => owned?.close());
         throw error instanceof PicoSessionError
             ? error
             : new PicoSessionError(describeCause(error));
@@ -238,7 +251,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             const disconnected = await attempt(() => liveMcp.manager.disconnectAll());
             disposalPhase = "disposing the engine";
             const engineDisposed = await attempt(() => liveEngine.dispose());
-            const storeClosed = await attempt(() => ownedStore?.close());
+            const storeClosed = await attempt(() => owned?.close());
             const failure = disconnected ?? engineDisposed ?? storeClosed;
             if (failure) {
                 // Leave the phase naming the step that failed, for the shutdown log.
@@ -279,6 +292,20 @@ function mcpToolIdentities(tools: readonly CustomTool[]): Map<string, McpToolIde
 }
 
 /**
+ * Opens Pico's credentials, reporting a failure as the session failure it is. The vault
+ * releases whatever it opened before throwing, so nothing is left behind to close here.
+ */
+async function attemptOpen(open: () => Promise<PicoCredentials>): Promise<PicoCredentials> {
+    try {
+        return await open();
+    } catch (error) {
+        throw error instanceof PicoSessionError
+            ? error
+            : new PicoSessionError(describeCause(error));
+    }
+}
+
+/**
  * Resolves the selected model's real credential — running a command-backed key
  * and refreshing OAuth in place, exactly as a request would — so a session only
  * exists when its first prompt can reach the provider. The session id is the
@@ -297,8 +324,8 @@ async function verifyCredentials(engine: AgentSession, model: Model<Api>): Promi
     }
     if (credential === undefined) {
         throw new PicoSessionError(
-            `Pico could not use the credentials for ${named}: Oh My Pi resolved no usable API key for ${model.provider}. ` +
-                "Sign in to that provider in Oh My Pi first.",
+            `Pico could not use the credentials for ${named}: no credential Pico has selected for ${model.provider} can serve a request. ` +
+                "Select one with `pico providers update`, and check it with `pico credentials get`.",
         );
     }
 }

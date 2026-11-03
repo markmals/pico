@@ -32,7 +32,7 @@ export type OptionSpec = {
 };
 
 export type ConstraintSpec = {
-    kind: "at-least-one-of";
+    kind: "at-least-one-of" | "exactly-one-of";
     options: readonly string[];
     description: string;
 };
@@ -52,6 +52,13 @@ export type CommandSpec = {
     effects: Effects;
     dryRun: boolean;
     idempotent: boolean;
+    /**
+     * How success reaches stdout: one JSON document, or one JSON document per line for the
+     * single command that reports a flow while the human works through it.
+     */
+    outputMode: "document" | "json-lines";
+    /** The platform the command needs; `any` is every platform Pico runs on. */
+    platform: "any" | "macos";
     output: z.ZodType;
     errors: readonly ErrorSpec[];
     examples: readonly ExampleSpec[];

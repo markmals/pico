@@ -3,7 +3,6 @@ import type { MockModel, MockResponseSource } from "@oh-my-pi/pi-ai/providers/mo
 import type { AuthStorage, SessionManager } from "@oh-my-pi/pi-coding-agent";
 
 import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +10,7 @@ import { join } from "node:path";
 import type { PicoSession } from "../engine/pico-session.ts";
 
 import { createPicoSession } from "../engine/pico-session.ts";
+import { mockAuthStorage } from "../engine/testing/session-fixture.ts";
 
 registerMockApi();
 
@@ -39,20 +39,18 @@ export function temporaryDataDir(): string {
 }
 
 interface Credentials {
-    readonly agentDir: string;
     readonly dataDir: string;
     readonly authStorage: AuthStorage;
 }
 
 let sharedCredentials: Promise<Credentials> | undefined;
 
-/** One credential store for the whole process: opening it costs more than a session does. */
+/** One set of Pico credentials for the whole process: opening them costs more than a session does. */
 function credentials(): Promise<Credentials> {
     sharedCredentials ??= (async () => {
-        const agentDir = temporaryDirectory("pico-agent-dir-");
-        const authStorage = await discoverAuthStorage(agentDir);
-        authStorage.keys.setRuntime("mock", "test");
-        return { agentDir, dataDir: temporaryDataDir(), authStorage };
+        const dataDir = temporaryDataDir();
+        const authStorage = await mockAuthStorage(dataDir);
+        return { dataDir, authStorage };
     })();
     return sharedCredentials;
 }
@@ -68,7 +66,7 @@ export interface MockEngine {
 }
 
 export async function mockEngine(responses: MockResponseSource): Promise<MockEngine> {
-    const { agentDir, dataDir, authStorage } = await credentials();
+    const { dataDir, authStorage } = await credentials();
     const model = createMockModel({ responses });
     return {
         model,
@@ -76,7 +74,6 @@ export async function mockEngine(responses: MockResponseSource): Promise<MockEng
             createPicoSession({
                 cwd,
                 mcpServers,
-                agentDir,
                 dataDir,
                 authStorage,
                 model,

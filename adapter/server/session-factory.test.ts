@@ -1,16 +1,15 @@
 import type { NewSessionResponse, SessionConfigOption } from "@agentclientprotocol/sdk";
 
-import { discoverAuthStorage, SessionManager } from "@oh-my-pi/pi-coding-agent";
+import { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { cfgBashAutoBackgroundEnabled } from "@oh-my-pi/pi-coding-agent/exec/settings";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { writeFileSync } from "node:fs";
 
 import type { PicoSession } from "../engine/pico-session.ts";
 import type { ConnectedClient } from "./agent-harness.ts";
 
 import { createPicoModelRegistry } from "../engine/model-catalog.ts";
+import { unauthenticatedAuthStorage } from "../engine/testing/session-fixture.ts";
 import { testProvider } from "../engine/testing/test-provider.ts";
 import { settingsFilePath, writeSettings } from "../settings/settings-store.ts";
 import { connectPicoAgent } from "./agent-harness.ts";
@@ -30,14 +29,13 @@ afterEach(async () => {
 afterAll(removeTemporaryDirectories);
 
 async function connect(dataDir: string) {
-    const agentDir = realpathSync(mkdtempSync(join(tmpdir(), "pico-agent-dir-")));
-    const authStorage = await discoverAuthStorage(agentDir);
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     testProvider().register(modelRegistry);
     const client = connectPicoAgent({
         version: "0.0.0-test",
         dataDir,
-        createSession: picoSessionFactory({ dataDir, agentDir, authStorage, modelRegistry }),
+        createSession: picoSessionFactory({ dataDir, authStorage, modelRegistry }),
     });
     open.push(client);
     await client.initialize();
@@ -58,6 +56,7 @@ describe("proposal.0007 sessions start from the settings file", () => {
             defaultModel: "pico-test/alpha",
             defaultThinking: "off",
             autoBackground: null,
+            providerCredentials: {},
         });
         const first = (await client.agent.request("session/new", {
             cwd,
@@ -67,6 +66,7 @@ describe("proposal.0007 sessions start from the settings file", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
+            providerCredentials: {},
         });
         const second = (await client.agent.request("session/new", {
             cwd,
@@ -77,28 +77,40 @@ describe("proposal.0007 sessions start from the settings file", () => {
         expect(currentModel(second.configOptions)).toBe("pico-test/beta");
     });
 
-    test("an invalid file fails a new session, and a session reopens on its own model", async () => {
+    test("an unusable file fails a new session and a reopened one, and fixing it restores the journaled model", async () => {
         const dataDir = temporaryDataDir();
         const cwd = temporaryProject();
-        const first = await connect(dataDir);
-        writeSettings(dataDir, {
+        const client = await connect(dataDir);
+        const saved = {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
-        });
-        const created = (await first.agent.request("session/new", {
+            providerCredentials: {},
+        };
+        writeSettings(dataDir, saved);
+        const created = (await client.agent.request("session/new", {
             cwd,
             mcpServers: [],
         })) as NewSessionResponse;
-        await first.close();
 
+        // The file becomes unusable while the adapter is running: no binding can be resolved
+        // from it, so neither a new session nor a reopened one may authorize a request
+        // (proposal.0009 replaces proposal.0007's "a reopened session ignores the file").
         writeFileSync(settingsFilePath(dataDir), "not json");
-        const second = await connect(dataDir);
 
-        await expect(second.agent.request("session/new", { cwd, mcpServers: [] })).rejects.toThrow(
+        await expect(client.agent.request("session/new", { cwd, mcpServers: [] })).rejects.toThrow(
             settingsFilePath(dataDir),
         );
-        const reopened = (await second.agent.request("session/resume", {
+        await expect(
+            client.agent.request("session/resume", {
+                sessionId: created.sessionId,
+                cwd,
+                mcpServers: [],
+            }),
+        ).rejects.toThrow(settingsFilePath(dataDir));
+
+        writeSettings(dataDir, saved);
+        const reopened = (await client.agent.request("session/resume", {
             sessionId: created.sessionId,
             cwd,
             mcpServers: [],
@@ -111,11 +123,10 @@ describe("proposal.0008 every attach reads the auto-background setting", () => {
     test("new and reopened sessions attach with the value saved at that moment", async () => {
         const dataDir = temporaryDataDir();
         const cwd = temporaryProject();
-        const agentDir = realpathSync(mkdtempSync(join(tmpdir(), "pico-agent-dir-")));
-        const authStorage = await discoverAuthStorage(agentDir);
+        const authStorage = await unauthenticatedAuthStorage(dataDir);
         const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
         testProvider().register(modelRegistry);
-        const create = picoSessionFactory({ dataDir, agentDir, authStorage, modelRegistry });
+        const create = picoSessionFactory({ dataDir, authStorage, modelRegistry });
         const autoBackground = (session: PicoSession) =>
             cfgBashAutoBackgroundEnabled.get(session.engine.settings);
 

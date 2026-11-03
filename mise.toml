@@ -119,7 +119,7 @@ description = "Write the executable .build/pico-acp that Sesh launches"
 run = 'bun tools/write-launcher.ts "$(mise which bun)"'
 
 [tasks."acp:smoke"]
-description = "Drive .build/pico-acp through a real ACP session with your own OMP credentials"
+description = "Drive .build/pico-acp through a real ACP session with the selected Pico credentials"
 depends = ["acp:launcher"]
 run = "bun adapter/smoke/run.ts"
 
@@ -154,7 +154,7 @@ depends = ["pico:build"]
 run = 'bun adapter/smoke/verify.ts "{{config_root}}/.build/pico"'
 
 [tasks."pico:smoke"]
-description = "Drive .build/pico through a real ACP session with your own OMP credentials"
+description = "Drive .build/pico through a real ACP session with the selected Pico credentials"
 depends = ["pico:build"]
 run = 'bun adapter/smoke/run.ts "{{config_root}}/.build/pico"'
 
@@ -168,6 +168,29 @@ uvx --from git+https://github.com/agentclientprotocol/acp-tck@b7f40fb3c003c45926
     --cancel-prompt 'Use the bash tool to run exactly this command and wait for it to finish: sleep 60' \
     -- "{{config_root}}/.build/pico"
 """
+
+# ── The Keychain bridge ──────────────────────────────────────────────────────
+# The macOS addon `adapter/credentials/keychain.ts` loads and the executable carries.
+# `pico:build` compiles it through `tools/build-pico.ts`; these tasks are for working on
+# the bridge itself, and every one of them needs Xcode.
+
+[tasks."keychain:build"]
+description = "Compile the macOS Keychain bridge into .build/keychain/pico_keychain.node"
+run = "bun tools/build-keychain.ts"
+
+[tasks."keychain:verify"]
+description = "Exercise the Keychain bridge against a synthetic service in your login keychain"
+depends = ["keychain:build"]
+# The service name is generated per run and every item is deleted again, but this still
+# writes to a real Keychain, which is why `mise run test` never sets this variable.
+run = "PICO_KEYCHAIN_INTEGRATION=1 bun test ./adapter/credentials/keychain.actual.test.ts"
+
+[tasks."pico:keychain-verify"]
+description = "Drive the compiled credential path against a synthetic Keychain service"
+depends = ["keychain:build"]
+# The driver compiles its own probe executables, so it does not depend on `pico:build`.
+# Pass `-- --allow-keychain-ui` to answer an OS permission dialog yourself.
+run = "bun tools/verify-keychain.ts"
 
 # ── The macOS companion app ──────────────────────────────────────────────────
 # Project.swift points the Pico target at app/, so these tasks generate the Xcode

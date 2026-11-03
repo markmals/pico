@@ -1,28 +1,51 @@
-import path from "node:path";
-
 import type { OpenedCatalog } from "./handlers.ts";
 
-import { CredentialStoreError, openCredentialStore } from "../../engine/credential-store.ts";
-import { createPicoModelRegistry } from "../../engine/model-catalog.ts";
+import { CredentialError } from "../../credentials/errors.ts";
+import { openPicoCredentials } from "../../engine/credential-policy.ts";
+import { SettingsIoError, SettingsUnusableError } from "../../settings/settings-store.ts";
 import { CliError } from "../errors.ts";
 
-/** SQLite's words for a store another process holds; only then can a retry succeed. */
-const BUSY = /SQLITE_BUSY|database is (busy|locked)/i;
-
-/** The catalog `pico` commands read: the user's OMP credential store, as sessions open it. */
-export function userCatalog(userAgentDir: string, dataDir: string): () => Promise<OpenedCatalog> {
+/**
+ * The catalog `pico` commands read: Pico's own Keychain-backed credentials and the providers
+ * its settings bind them to, exactly as a session resolves them (proposal.0009).
+ */
+export function picoCatalog(dataDir: string): () => Promise<OpenedCatalog> {
     return async () => {
         try {
-            const authStorage = await openCredentialStore(userAgentDir);
-            const registry = createPicoModelRegistry(authStorage, dataDir);
-            return { registry, credentialStore: path.join(userAgentDir, "agent.db") };
+            const credentials = await openPicoCredentials({ dataDir });
+            return {
+                registry: credentials.registry,
+                providerCredentials: credentials.providerCredentials(),
+            };
         } catch (error) {
-            if (!(error instanceof CredentialStoreError)) throw error;
-            throw new CliError("UNAVAILABLE", error.message, {
-                // The store's own cause alone decides: the message also carries the user's path.
-                retryable: BUSY.test(error.storeCause),
-                details: { credentialStore: error.storePath, cause: error.storeCause },
-            });
+            throw catalogError(error);
         }
     };
+}
+
+/**
+ * The vault's own code survives: a locked Keychain, a denied item and a missing credential are
+ * different conditions a caller acts on differently. Settings Pico cannot use are a precondition
+ * the caller fixes in the file itself.
+ */
+function catalogError(error: unknown): unknown {
+    if (error instanceof CredentialError) {
+        return new CliError(error.code, error.message, {
+            retryable: error.retryable,
+            details: error.details,
+        });
+    }
+    if (error instanceof SettingsUnusableError) {
+        return new CliError(
+            "FAILED_PRECONDITION",
+            `Pico's settings file ${error.path} cannot be used: ${error.problem}. Fix or remove it first.`,
+            { details: { settingsFile: error.path, problem: error.problem } },
+        );
+    }
+    if (error instanceof SettingsIoError) {
+        return new CliError("IO_ERROR", `Pico ${error.message}`, {
+            details: { path: error.path, cause: error.cause },
+        });
+    }
+    return error;
 }

@@ -9,6 +9,8 @@ import { COMMANDS } from "./registry.ts";
 
 const SAMPLE_VALUES = {
     model: "anthropic/claude-sonnet-5-5",
+    provider: "openai",
+    reference: "0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b",
     revision: `sha256:${"a".repeat(64)}`,
     text: "high",
 };
@@ -29,15 +31,19 @@ function sampleArgumentWords(command: CommandSpec): string[] {
     );
 }
 
-/** What a command needs besides the option under test, so a constraint does not refuse it. */
-function constraintArguments(command: CommandSpec, option: OptionSpec): string[] {
-    return command.constraints.flatMap(constraint => {
+/** What a command needs besides the option under test, so it is not refused for something else. */
+function otherRequirements(command: CommandSpec, option: OptionSpec): string[] {
+    const required = command.options.flatMap(declared =>
+        declared.required && declared.name !== option.name ? sampleOptionArguments(declared) : [],
+    );
+    const constrained = command.constraints.flatMap(constraint => {
         if (constraint.options.includes(option.name)) return [];
         const satisfying = command.options.find(
             declared => declared.name === constraint.options[0],
         );
         return satisfying ? sampleOptionArguments(satisfying) : [];
     });
+    return [...required, ...constrained];
 }
 
 /** Splits an example command line the way a shell does, so examples are tested as typed. */
@@ -62,7 +68,7 @@ describe("proposal.0007 command line parser", () => {
                 const args = [
                     ...command.path,
                     ...sampleArgumentWords(command),
-                    ...constraintArguments(command, option),
+                    ...otherRequirements(command, option),
                     ...sampleOptionArguments(option),
                 ];
                 const parsed = parseArguments(args);
@@ -282,5 +288,66 @@ describe("proposal.0008 an option that accepts named states", () => {
             accepted: ["on", "off"],
         });
         expect(exitCodeOf(error.code)).toBe(2);
+    });
+});
+
+describe("proposal.0009 options that exclude one another", () => {
+    const reference = "0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b";
+
+    test("providers update takes a credential or a disconnection, never both", () => {
+        const error = failure([
+            "providers",
+            "update",
+            "openai",
+            "--credential",
+            reference,
+            "--disconnect",
+        ]);
+
+        expect(error.code).toBe("INVALID_ARGUMENT");
+        expect(error.message).toContain("exactly one of --credential or --disconnect");
+        expect(error.details).toEqual({
+            command: "providers update",
+            accepted: ["--credential", "--disconnect"],
+            argument: "--credential and --disconnect",
+        });
+        expect(exitCodeOf(error.code)).toBe(2);
+    });
+
+    test("providers update with neither is refused the same way", () => {
+        const error = failure(["providers", "update", "openai"]);
+
+        expect(error.code).toBe("INVALID_ARGUMENT");
+        expect(error.details).toEqual({
+            command: "providers update",
+            accepted: ["--credential", "--disconnect"],
+        });
+    });
+
+    test("either one alone parses, keeping the provider as the argument", () => {
+        for (const options of [["--credential", reference], ["--disconnect"]]) {
+            const parsed = parseArguments(["providers", "update", "openai", ...options]);
+
+            expect(parsed.kind === "command" && parsed.input.arguments).toEqual({
+                provider: "openai",
+            });
+        }
+    });
+
+    test("a reference that is not one Pico issues is refused before anything opens", () => {
+        const error = failure(["credentials", "get", "not-a-reference"]);
+
+        expect(error.code).toBe("INVALID_ARGUMENT");
+        expect(error.details).toEqual({
+            argument: "reference",
+            expected: "a credential reference, as pico credentials list prints it",
+        });
+    });
+
+    test("credentials create refuses to run without the option that takes the key", () => {
+        const error = failure(["credentials", "create", "--provider", "openai"]);
+
+        expect(error.code).toBe("INVALID_ARGUMENT");
+        expect(error.details).toEqual({ argument: "--stdin" });
     });
 });

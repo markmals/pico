@@ -69,7 +69,7 @@ function rejected<T>(result: T | Failure): Failure["error"] {
 async function fixture(t: TestContext) {
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
     useAsProcessAgentDir(t, agentDir);
-    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     const provider = testProvider();
     provider.register(modelRegistry);
@@ -89,7 +89,6 @@ async function fixture(t: TestContext) {
                 if (state.factoryFailure) throw new Error(state.factoryFailure);
                 return await createPicoSession({
                     cwd: directory,
-                    agentDir,
                     dataDir,
                     authStorage,
                     modelRegistry,

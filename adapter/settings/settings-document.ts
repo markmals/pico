@@ -4,13 +4,15 @@ import { z } from "zod/v4";
 export const SETTINGS_FILENAME = "settings.json";
 
 /**
- * A saved default model and its thinking level, both null when none is saved, and whether a slow
- * command moves to the background on its own, null when the file does not set it.
+ * A saved default model and its thinking level, both null when none is saved, whether a slow
+ * command moves to the background on its own, null when the file does not set it, and the
+ * credential each model provider is bound to: a Pico reference, never a secret (proposal.0009).
  */
 export interface PicoSettings {
     defaultModel: string | null;
     defaultThinking: string | null;
     autoBackground: boolean | null;
+    providerCredentials: Record<string, string>;
 }
 
 export type SettingsState =
@@ -21,29 +23,48 @@ export type SettingsState =
 /** Pico's own auto-background value, used by a session whose settings file leaves it unset. */
 export const DEFAULT_AUTO_BACKGROUND = true;
 
-const VERSION = 1;
+/** The version a save writes. Version 1, which has no bindings, is still read (proposal.0009). */
+const VERSION = 2;
+
+/** A provider id and a credential reference are both opaque, non-empty, non-secret text. */
+const identifier = z.string().min(1);
+
+/** The members every settings version defines. */
+const sharedMembers = {
+    defaultModel: identifier.optional(),
+    defaultThinking: identifier.optional(),
+    autoBackground: z.boolean().optional(),
+};
+
+/** A default model and its thinking level are saved together or not at all (proposal.0007). */
+function pairedDefault(
+    context: z.core.ParsePayload<{ defaultModel?: string; defaultThinking?: string }>,
+): void {
+    const { defaultModel, defaultThinking } = context.value;
+    if ((defaultModel === undefined) === (defaultThinking === undefined)) return;
+    const missing = defaultModel === undefined ? "defaultModel" : "defaultThinking";
+    const present = missing === "defaultModel" ? "defaultThinking" : "defaultModel";
+    context.issues.push({
+        code: "custom",
+        input: context.value,
+        path: [missing],
+        message: `missing member, required beside "${present}"`,
+    });
+}
 
 const settingsDocumentV1 = z
+    .strictObject({ version: z.literal(1), ...sharedMembers })
+    .check(pairedDefault);
+
+const settingsDocumentV2 = z
     .strictObject({
         version: z.literal(VERSION),
-        defaultModel: z.string().min(1).optional(),
-        defaultThinking: z.string().min(1).optional(),
-        autoBackground: z.boolean().optional(),
+        ...sharedMembers,
+        providerCredentials: z.record(identifier, identifier).optional(),
     })
-    .check(context => {
-        const { defaultModel, defaultThinking } = context.value;
-        if ((defaultModel === undefined) === (defaultThinking === undefined)) return;
-        const missing = defaultModel === undefined ? "defaultModel" : "defaultThinking";
-        const present = missing === "defaultModel" ? "defaultThinking" : "defaultModel";
-        context.issues.push({
-            code: "custom",
-            input: context.value,
-            path: [missing],
-            message: `missing member, required beside "${present}"`,
-        });
-    });
+    .check(pairedDefault);
 
-type SettingsDocumentV1 = z.infer<typeof settingsDocumentV1>;
+type SettingsDocument = z.infer<typeof settingsDocumentV2>;
 
 /** Reads the settings file's bytes, or `undefined` when there is no file. */
 export function readSettingsState(bytes: Uint8Array | undefined): SettingsState {
@@ -51,7 +72,12 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
         return {
             status: "missing",
             revision: "none",
-            item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+            item: {
+                defaultModel: null,
+                defaultThinking: null,
+                autoBackground: null,
+                providerCredentials: {},
+            },
         };
     }
     const revision = revisionOf(bytes);
@@ -67,7 +93,11 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
         return { status: "unsupported", revision, problem };
     }
 
-    const document = settingsDocumentV1.safeParse(parsed.object);
+    // Version 1 knows no bindings, and reading it neither invents nor rewrites any (proposal.0009).
+    const document =
+        version === 1
+            ? settingsDocumentV1.safeParse(parsed.object)
+            : settingsDocumentV2.safeParse(parsed.object);
     if (!document.success) {
         return { status: "invalid", revision, problem: describeIssue(document.error.issues[0]) };
     }
@@ -78,6 +108,10 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
             defaultModel: document.data.defaultModel ?? null,
             defaultThinking: document.data.defaultThinking ?? null,
             autoBackground: document.data.autoBackground ?? null,
+            providerCredentials:
+                "providerCredentials" in document.data
+                    ? { ...document.data.providerCredentials }
+                    : {},
         },
     };
 }
@@ -92,16 +126,38 @@ export function revisionOf(bytes: Uint8Array | undefined): string {
     return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
-function settingsDocument(item: PicoSettings): SettingsDocumentV1 {
+function settingsDocument(item: PicoSettings): SettingsDocument {
     const { defaultModel, defaultThinking, autoBackground } = item;
-    const background = autoBackground === null ? {} : { autoBackground };
-    if (defaultModel !== null && defaultThinking !== null) {
-        return { version: VERSION, defaultModel, defaultThinking, ...background };
-    }
-    if (defaultModel !== null || defaultThinking !== null) {
+    if ((defaultModel === null) !== (defaultThinking === null)) {
         throw new Error("a default model and its thinking level are saved together");
     }
-    return { version: VERSION, ...background };
+    const providerCredentials = canonicalBindings(item.providerCredentials);
+    return {
+        version: VERSION,
+        ...(defaultModel !== null && defaultThinking !== null
+            ? { defaultModel, defaultThinking }
+            : {}),
+        ...(autoBackground === null ? {} : { autoBackground }),
+        ...(providerCredentials && { providerCredentials }),
+    };
+}
+
+/**
+ * The bindings in one provider order, so the same selection always serializes to the same bytes
+ * and therefore the same revision, and `undefined` when nothing is bound.
+ */
+function canonicalBindings(bindings: Record<string, string>): Record<string, string> | undefined {
+    const providers = Object.keys(bindings).sort();
+    if (providers.length === 0) return undefined;
+    const canonical: Record<string, string> = {};
+    for (const provider of providers) {
+        const reference = bindings[provider];
+        if (provider.length === 0 || reference === undefined || reference.length === 0) {
+            throw new Error("a provider binding names a provider and a credential reference");
+        }
+        canonical[provider] = reference;
+    }
+    return canonical;
 }
 
 type ParsedDocument = { object: Record<string, unknown> } | { problem: string };
@@ -137,6 +193,14 @@ function describeIssue(issue: z.core.$ZodIssue): string {
     const path = `$${issue.path.map(segment => `.${String(segment)}`).join("")}`;
     if (issue.code === "unrecognized_keys") {
         return `${path}: unknown member ${JSON.stringify(issue.keys[0])}`;
+    }
+    if (issue.code === "invalid_key") {
+        // The key is the last path segment, and an empty one would name nothing on its own.
+        const member = `$${issue.path
+            .slice(0, -1)
+            .map(segment => `.${String(segment)}`)
+            .join("")}`;
+        return `${member}: invalid provider ${JSON.stringify(issue.path.at(-1))}`;
     }
     return `${path}: ${issue.message}`;
 }

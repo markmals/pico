@@ -3,9 +3,21 @@ export type ErrorCode =
     | "NOT_FOUND"
     | "FAILED_PRECONDITION"
     | "CONFLICT"
+    | "AUTH_REQUIRED"
+    | "KEYCHAIN_LOCKED"
+    | "KEYCHAIN_ACCESS_DENIED"
+    | "CANCELLED"
+    | "TIMED_OUT"
     | "UNAVAILABLE"
     | "IO_ERROR"
     | "INTERNAL";
+
+/** The codes a caller can retry unchanged: the condition can pass on its own. */
+const RETRYABLE: Partial<Record<ErrorCode, true>> = {
+    CONFLICT: true,
+    KEYCHAIN_LOCKED: true,
+    TIMED_OUT: true,
+};
 
 export type ErrorDocument = {
     apiVersion: 1;
@@ -36,7 +48,7 @@ export class CliError extends Error {
         this.name = "CliError";
         this.code = code;
         this.details = options?.details ?? {};
-        this.retryable = options?.retryable ?? code === "CONFLICT";
+        this.retryable = options?.retryable ?? retryableByDefault(code);
     }
 }
 
@@ -45,7 +57,7 @@ export function exitCodeOf(code: ErrorCode): number {
 }
 
 export function retryableByDefault(code: ErrorCode): boolean {
-    return code === "CONFLICT";
+    return RETRYABLE[code] === true;
 }
 
 export function errorDocument(error: CliError): ErrorDocument {

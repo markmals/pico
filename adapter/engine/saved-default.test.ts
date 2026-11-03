@@ -49,6 +49,7 @@ describe("proposal.0007 the default a new session starts on", () => {
                 defaultModel: "a/one",
                 defaultThinking: "low",
                 autoBackground: null,
+                providerCredentials: {},
             });
             expect(savedDefaultForNewSession(directory)).toEqual({
                 defaultModel: "a/one",
@@ -58,6 +59,7 @@ describe("proposal.0007 the default a new session starts on", () => {
                 defaultModel: "b/two",
                 defaultThinking: "off",
                 autoBackground: null,
+                providerCredentials: {},
             });
             expect(savedDefaultForNewSession(directory)).toEqual({
                 defaultModel: "b/two",
@@ -83,7 +85,7 @@ describe("proposal.0007 the default a new session starts on", () => {
     test("a file from a newer Pico fails the session with its path and problem", () => {
         const directory = dataDir();
         try {
-            writeFileSync(settingsFilePath(directory), '{ "version": 2 }');
+            writeFileSync(settingsFilePath(directory), '{ "version": 3 }');
             const error = failure(directory);
             expect(error.message).toContain(settingsFilePath(directory));
             expect(error.message).toMatch(/newer/);
@@ -140,7 +142,7 @@ describe("proposal.0008 the auto-background setting a session attaches with", ()
     });
 
     test("an unusable file reopens a session with Pico's default and one line on stderr", () => {
-        for (const contents of ["not json", '{ "version": 2 }', '{ "version": 1, "x": 1 }']) {
+        for (const contents of ["not json", '{ "version": 3 }', '{ "version": 1, "x": 1 }']) {
             withDirectory(directory => {
                 writeFileSync(settingsFilePath(directory), contents);
                 const logged = spyOn(console, "error").mockImplementation(() => {});

@@ -46,6 +46,8 @@ export function commandSpecification(words: readonly string[]): CommandSpecifica
         effects: command.effects,
         dryRun: command.dryRun,
         idempotent: command.idempotent,
+        outputMode: command.outputMode,
+        platform: command.platform,
         output: z.toJSONSchema(command.output) as Record<string, unknown>,
         errors: command.errors.map(error => ({
             code: error.code,

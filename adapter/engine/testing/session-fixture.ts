@@ -5,13 +5,18 @@ import type { MockHandler, MockModel, MockModelOptions } from "@oh-my-pi/pi-ai/p
 import type { AgentSession, AgentSessionEvent } from "@oh-my-pi/pi-coding-agent";
 
 import { createMockModel, registerMockApi } from "@oh-my-pi/pi-ai/providers/mock";
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { MemorySecretStore } from "../../credentials/testing/memory-secret-store.ts";
+import type { CredentialVault } from "../../credentials/vault.ts";
 import type { PicoSession, RecordedChange } from "../pico-session.ts";
+
+import { createMemorySecretStore } from "../../credentials/testing/memory-secret-store.ts";
+import { openCredentialVault } from "../../credentials/vault.ts";
+import { readSettings, writeSettings } from "../../settings/settings-store.ts";
 
 export { createMockModel };
 
@@ -107,26 +112,83 @@ export function picoWorkspace(t: Cleanups, agentConfig?: string): PicoWorkspace 
     return { cwd, agentDir, dataDir };
 }
 
-/** A credential store in `agentDir` holding the runtime key the mock provider needs. */
-export async function mockAuthStorage(agentDir: string): Promise<AuthStorage> {
-    const authStorage = await discoverAuthStorage(agentDir);
+/**
+ * Pico's own credentials over `dataDir`, backed by an in-process Keychain: no test reaches the
+ * real Keychain or the user's Oh My Pi store (proposal.0009).
+ */
+export async function picoCredentials(dataDir: string): Promise<PicoCredentialsFixture> {
+    const keychain = createMemorySecretStore();
+    const vault = openCredentialVault({ dataDir, keychain });
+    const authStorage = await vault.authStorage(() => selectedReferences(dataDir));
+    return {
+        keychain,
+        vault,
+        authStorage,
+        bind: (provider, key = "test") => {
+            const metadata = vault.create(provider, { type: "api_key", key });
+            const state = readSettings(dataDir);
+            const item = "item" in state ? state.item : undefined;
+            writeSettings(dataDir, {
+                defaultModel: item?.defaultModel ?? null,
+                defaultThinking: item?.defaultThinking ?? null,
+                autoBackground: item?.autoBackground ?? null,
+                providerCredentials: {
+                    ...item?.providerCredentials,
+                    [provider]: metadata.reference,
+                },
+            });
+            return metadata.reference;
+        },
+        close: () => {
+            authStorage.close();
+            vault.close();
+        },
+    };
+}
+
+/**
+ * A Keychain holding one credential for `provider`, already bound in `dataDir`'s settings, for a
+ * session that opens Pico's credentials itself. Pass the Keychain back as `keychain`.
+ */
+export async function boundCredential(
+    dataDir: string,
+    provider: string,
+    key = "test",
+): Promise<{ keychain: MemorySecretStore; reference: string }> {
+    const credentials = await picoCredentials(dataDir);
+    try {
+        return { keychain: credentials.keychain, reference: credentials.bind(provider, key) };
+    } finally {
+        credentials.close();
+    }
+}
+
+export interface PicoCredentialsFixture {
+    /** The payloads the vault stored, so a test can remove or corrupt one the way a human would. */
+    readonly keychain: MemorySecretStore;
+    readonly vault: CredentialVault;
+    readonly authStorage: AuthStorage;
+    /** Stores an API key for `provider` and binds it in `dataDir`'s settings. */
+    bind(provider: string, key?: string): string;
+    close(): void;
+}
+
+/** The references Pico's settings currently select, as the session's own storage reads them. */
+function selectedReferences(dataDir: string): readonly string[] {
+    const state = readSettings(dataDir);
+    return "item" in state ? Object.values(state.item.providerCredentials) : [];
+}
+
+/** Pico credentials holding the runtime key the mock provider needs, for a scripted session. */
+export async function mockAuthStorage(dataDir: string): Promise<AuthStorage> {
+    const { authStorage } = await picoCredentials(dataDir);
     authStorage.keys.setRuntime("mock", "test");
     return authStorage;
 }
 
-/** A credential store in `agentDir` with no key for the mock provider. */
-export function unauthenticatedAuthStorage(agentDir: string): Promise<AuthStorage> {
-    return discoverAuthStorage(agentDir);
-}
-
-/**
- * Persists the mock provider's key in the credential store `agentDir` holds, for a
- * session that opens its own store: Pico reads no `models.yml` (proposal.0007).
- */
-export async function storeMockProviderKey(agentDir: string): Promise<void> {
-    const store = await discoverAuthStorage(agentDir);
-    await store.credentials.set("mock", { type: "api_key", key: "test" });
-    store.close();
+/** Pico credentials with no key for the mock provider. */
+export async function unauthenticatedAuthStorage(dataDir: string): Promise<AuthStorage> {
+    return (await picoCredentials(dataDir)).authStorage;
 }
 
 /**
@@ -146,12 +208,10 @@ export function useAsProcessAgentDir(t: Cleanups, agentDir: string): void {
     });
 }
 
-/** Creates the credential store in `agentDir`, then denies writes to it the way Sesh's Autonomous sandbox does. */
-export async function lockCredentialStore(agentDir: string): Promise<void> {
-    const storage = await discoverAuthStorage(agentDir);
-    storage.close();
-    for (const entry of fs.readdirSync(agentDir)) fs.chmodSync(path.join(agentDir, entry), 0o444);
-    fs.chmodSync(agentDir, 0o555);
+/** Denies writes to Pico's data directory the way Sesh's Autonomous sandbox denies `~/.omp`. */
+export function denyDataDirectoryWrites(dataDir: string): void {
+    for (const entry of fs.readdirSync(dataDir)) fs.chmodSync(path.join(dataDir, entry), 0o444);
+    fs.chmodSync(dataDir, 0o555);
 }
 
 /** API keys OMP reads straight from the environment, which would otherwise resolve a model for a bare agent directory. */

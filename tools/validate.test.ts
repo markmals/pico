@@ -513,6 +513,33 @@ test("parseFrontmatter rejects malformed input and duplicate keys", () => {
     });
 });
 
+test("parseFrontmatter reads a list value the formatter wrapped onto indented lines", () => {
+    let source = [
+        "---",
+        "id: guide.wrapped",
+        "describes:",
+        "    [proposal.0001, proposal.0002,",
+        "    proposal.0003]",
+        "title: After the list",
+        "---",
+    ].join("\n");
+
+    assert.deepEqual(parseFrontmatter(source), {
+        frontmatter: {
+            id: "guide.wrapped",
+            describes: ["proposal.0001", "proposal.0002", "proposal.0003"],
+            title: "After the list",
+        },
+        content: source,
+    });
+});
+
+test("parseFrontmatter rejects an indented line that continues no key", () => {
+    assert.deepEqual(parseFrontmatter("---\n    [proposal.0001]\n---"), {
+        error: 'cannot parse frontmatter line "    [proposal.0001]"',
+    });
+});
+
 test("every record template has parsable frontmatter", () => {
     let templates = readdirSync(templateDirectory, { withFileTypes: true })
         .filter(entry => entry.isFile())

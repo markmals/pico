@@ -66,6 +66,11 @@ function readInput(command: CommandSpec, tokens: readonly string[]): CommandInpu
                 },
             );
         }
+        if (optionKey(name) in options) {
+            throw new CliError("INVALID_ARGUMENT", `${name} is given more than once`, {
+                details: { argument: name },
+            });
+        }
         if (option.type === "boolean") {
             if (inlineValue !== undefined) {
                 throw new CliError("INVALID_ARGUMENT", `${name} takes no value`, {

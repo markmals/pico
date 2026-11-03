@@ -95,10 +95,18 @@ describe("proposal.0007 invocation invariants", () => {
             const invocation = planInvocation(args, false);
             if (invocation.kind !== "respond" || invocation.exitCode !== 0) continue;
 
+            const stdout = invocation.stdout ?? "";
             expect({ args, stderr: invocation.stderr }).toEqual({ args, stderr: undefined });
-            expect({ args, ends: (invocation.stdout ?? "").endsWith("\n") }).toEqual({
+            expect({ args, ends: stdout.endsWith("\n") }).toEqual({ args, ends: true });
+            if (args.includes("--help")) continue;
+            // Compact output: exactly one line, and that line is one JSON document.
+            expect({ args, lines: stdout.trimEnd().split("\n").length }).toEqual({
                 args,
-                ends: true,
+                lines: 1,
+            });
+            expect({ args, document: typeof JSON.parse(stdout) }).toEqual({
+                args,
+                document: "object",
             });
         }
     });

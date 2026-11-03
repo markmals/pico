@@ -28,11 +28,12 @@ function skill(directory: string, name: string): void {
     );
 }
 
-/** The process layout `pico` runs with: the SDK's own root is Pico's engine directory. */
-function splitProcessRoot(t: Cleanups, workspace: PicoWorkspace): void {
-    const engineDir = path.join(workspace.dataDir, "engine");
-    fs.mkdirSync(engineDir, { recursive: true });
-    useAsProcessAgentDir(t, engineDir);
+/**
+ * The SDK's process root left at the user's own agent directory, so user-level OMP files are
+ * within reach of discovery and only Pico's isolation can keep them out of a session.
+ */
+function userProcessRoot(t: Cleanups, workspace: PicoWorkspace): void {
+    useAsProcessAgentDir(t, workspace.agentDir);
 }
 
 async function promptedSession(t: Cleanups, workspace: PicoWorkspace) {
@@ -54,7 +55,7 @@ describe("proposal.0007 what a Pico session reads", () => {
             t,
             "modelRoles:\n  default: anthropic/user-default\ndefaultThinkingLevel: low\n",
         );
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         write(
             path.join(workspace.cwd, ".omp", "config.yml"),
             "modelRoles:\n  smol: anthropic/project-smol\n",
@@ -75,7 +76,7 @@ describe("proposal.0007 what a Pico session reads", () => {
 
     test("models and providers from the user's models.yml are not offered", async t => {
         const workspace = picoWorkspace(t);
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         write(
             path.join(workspace.agentDir, "models.yml"),
             [
@@ -101,7 +102,7 @@ describe("proposal.0007 what a Pico session reads", () => {
 
     test("user and project OMP extensions do not load", async t => {
         const workspace = picoWorkspace(t);
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         const userLog = path.join(workspace.cwd, "user-extension.log");
         const projectLog = path.join(workspace.cwd, "project-extension.log");
         installRecordingExtension(path.join(workspace.agentDir, "extensions"), userLog);
@@ -115,7 +116,7 @@ describe("proposal.0007 what a Pico session reads", () => {
 
     test("skills, rules, context and system prompt files kept for OMP do not reach the model", async t => {
         const workspace = picoWorkspace(t);
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         const { agentDir, cwd } = workspace;
         skill(path.join(agentDir, "skills"), "omp-user-skill");
         skill(path.join(cwd, ".omp", "skills"), "omp-project-skill");
@@ -142,7 +143,7 @@ describe("proposal.0007 what a Pico session reads", () => {
 
     test("prompt templates and slash commands kept for OMP are not offered", async t => {
         const workspace = picoWorkspace(t);
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         const { agentDir, cwd } = workspace;
         write(path.join(agentDir, "prompts", "omp-user-prompt.md"), "A user prompt.\n");
         write(path.join(cwd, ".omp", "prompts", "omp-project-prompt.md"), "A project prompt.\n");
@@ -165,7 +166,7 @@ describe("proposal.0007 what a Pico session reads", () => {
 
     test("the project's AGENTS.md and .agents skills still reach the model", async t => {
         const workspace = picoWorkspace(t);
-        splitProcessRoot(t, workspace);
+        userProcessRoot(t, workspace);
         write(path.join(workspace.cwd, "AGENTS.md"), "Project context: mangosteen.\n");
         skill(path.join(workspace.cwd, ".agents", "skills"), "agents-project-skill");
 

@@ -14,10 +14,10 @@ function withLadder(efforts: string[]): Model<Api> {
 }
 
 describe("proposal.0007 thinking choices for a model", () => {
-    test("a model without reasoning offers Off and Auto", () => {
+    test("a model without reasoning offers only Off", () => {
         expect(
             thinkingChoices(createMockModel({ id: "plain" })).map(choice => choice.value),
-        ).toEqual(["off", "auto"]);
+        ).toEqual(["off"]);
     });
 
     test("a reasoning model offers Off, Auto, then its levels in OMP's order", () => {

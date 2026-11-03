@@ -7,6 +7,7 @@ import {
     readFileSync,
     realpathSync,
     rmSync,
+    writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,7 +111,12 @@ describe("proposal.0002 the pico executable", () => {
     );
 });
 
-function lastErrorDocument(stderr: string): { apiVersion: number; error: { code: string } } {
+interface ErrorDocument {
+    apiVersion: number;
+    error: { code: string; details: Record<string, unknown> };
+}
+
+function lastErrorDocument(stderr: string): ErrorDocument {
     const lines = stderr.trimEnd().split("\n");
     return JSON.parse(lines.at(-1) ?? "");
 }
@@ -163,5 +169,25 @@ describe("proposal.0007 the pico command line", () => {
         expect(result.exitCode).toBe(1);
         expect(result.stdout).toBe("");
         expect(lastErrorDocument(result.stderr).error.code).toBe("NOT_FOUND");
+    }, 30_000);
+
+    test("a command whose engine directory cannot be made still ends stderr with its error", async () => {
+        const home = scratchHome();
+        const dataDir = join(home, "Library", "Application Support", "Pico");
+        mkdirSync(dataDir, { recursive: true });
+        writeFileSync(join(dataDir, "engine"), "not a directory");
+
+        for (const args of [
+            ["settings", "get"],
+            ["models", "list"],
+        ]) {
+            const result = await runPico(args, home);
+
+            expect(result.exitCode).toBe(1);
+            expect(result.stdout).toBe("");
+            const { error } = lastErrorDocument(result.stderr);
+            expect(error.code).toBe("IO_ERROR");
+            expect(error.details.path).toBe(join(dataDir, "engine"));
+        }
     }, 30_000);
 });

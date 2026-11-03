@@ -172,6 +172,29 @@ describe("proposal.0007 command line parser", () => {
         });
     });
 
+    test("an option given twice is refused, naming it, in either spelling and for flags", () => {
+        const cases: [string[], string][] = [
+            [
+                ["settings", "update", "--default-model", "a/b", "--default-model", "c/d"],
+                "--default-model",
+            ],
+            [
+                ["settings", "update", "--default-model=a/b", "--default-model", "c/d"],
+                "--default-model",
+            ],
+            [
+                ["settings", "update", "--default-model", "a/b", "--dry-run", "--dry-run"],
+                "--dry-run",
+            ],
+        ];
+        for (const [args, repeated] of cases) {
+            const error = failure(args);
+
+            expect(error.code).toBe("INVALID_ARGUMENT");
+            expect(error.details.argument).toBe(repeated);
+        }
+    });
+
     test("a missing required argument is refused", () => {
         expect(failure(["models", "get"]).details.argument).toBe("model");
         expect(failure(["cli", "search"]).details.argument).toBe("query");

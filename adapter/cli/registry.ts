@@ -155,6 +155,7 @@ const modelsList: CommandSpec = {
             code: "UNAVAILABLE",
             when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
     ],
     examples: [
@@ -210,6 +211,7 @@ const modelsGet: CommandSpec = {
             code: "UNAVAILABLE",
             when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
     ],
     examples: [
@@ -255,7 +257,7 @@ const settingsGet: CommandSpec = {
             code: "UNAVAILABLE",
             when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
-        { code: "IO_ERROR", when: "The settings file could not be read." },
+        { code: "IO_ERROR", when: "The settings file or Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
     ],
     examples: [
@@ -373,7 +375,10 @@ const settingsUpdate: CommandSpec = {
             code: "UNAVAILABLE",
             when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
-        { code: "IO_ERROR", when: "The settings file could not be read or written." },
+        {
+            code: "IO_ERROR",
+            when: "The settings file or Pico's data directory could not be read or written.",
+        },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
     ],
     examples: [

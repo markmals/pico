@@ -7,6 +7,7 @@ import type { CommandHandlers as Handlers } from "./handlers.ts";
 import { builtInChoice, modelValue } from "../../engine/model-catalog.ts";
 import { createPicoSession } from "../../engine/pico-session.ts";
 import { savedDefaultForNewSession } from "../../engine/saved-default.ts";
+import { configOptionsOf } from "../../server/config-options.ts";
 import { revisionOf } from "../../settings/settings-document.ts";
 import { settingsFilePath, writeSettings } from "../../settings/settings-store.ts";
 import { settingsGetOutput, settingsUpdateOutput } from "../result-schemas.ts";
@@ -105,12 +106,23 @@ describe("proposal.0007 pico settings get", () => {
                 startOn: savedDefaultForNewSession(dataDir),
             });
             t.after(() => session.dispose());
-            return modelValue(session.engine.model!);
+            const thinking = configOptionsOf(session.engine).find(entry => entry.id === "thinking");
+            return {
+                defaultModel: modelValue(session.engine.model!),
+                defaultThinking: thinking?.currentValue,
+            };
+        };
+        const effective = async () => {
+            const reported = (await settingsGet(handlers)).effective;
+            return {
+                defaultModel: reported?.defaultModel,
+                defaultThinking: reported?.defaultThinking,
+            };
         };
 
-        assert.equal(await startedOn(), (await settingsGet(handlers)).effective?.defaultModel);
+        assert.deepEqual(await startedOn(), await effective());
         writeSettings(dataDir, { defaultModel: "pico-test/beta", defaultThinking: "medium" });
-        assert.equal(await startedOn(), (await settingsGet(handlers)).effective?.defaultModel);
+        assert.deepEqual(await startedOn(), await effective());
     });
 });
 
@@ -145,11 +157,11 @@ describe("proposal.0007 pico settings update", () => {
     test("a model alone keeps a level it offers and otherwise takes its own default", async t => {
         const { handlers, dataDir } = await testHandlers(t);
 
-        writeSettings(dataDir, { defaultModel: "pico-test/alpha", defaultThinking: "auto" });
+        writeSettings(dataDir, { defaultModel: "pico-test/alpha", defaultThinking: "off" });
         const kept = await update(handlers, { defaultModel: "pico-test/beta" });
         assert.deepEqual(kept.after.item, {
             defaultModel: "pico-test/beta",
-            defaultThinking: "auto",
+            defaultThinking: "off",
         });
 
         writeSettings(dataDir, { defaultModel: "pico-test/beta", defaultThinking: "low" });
@@ -193,7 +205,7 @@ describe("proposal.0007 pico settings update", () => {
         assert.equal(fileBytes(dataDir), undefined);
     });
 
-    test("a level the model does not offer is refused with the levels it does", async t => {
+    test("a level a model without reasoning cannot use is refused with the one it offers", async t => {
         const { handlers, dataDir } = await testHandlers(t);
         writeSettings(dataDir, { defaultModel: "pico-test/beta", defaultThinking: "low" });
         const before = fileBytes(dataDir);
@@ -201,12 +213,12 @@ describe("proposal.0007 pico settings update", () => {
         const failure = await rejection(
             handlers,
             "settings update",
-            input({ defaultModel: "pico-test/alpha", defaultThinking: "high" }),
+            input({ defaultModel: "pico-test/alpha", defaultThinking: "auto" }),
         );
 
         assert.equal(failure.code, "INVALID_ARGUMENT");
         assert.equal(failure.details.argument, "--default-thinking");
-        assert.deepEqual(failure.details.accepted, ["off", "auto"]);
+        assert.deepEqual(failure.details.accepted, ["off"]);
         assert.equal(fileBytes(dataDir), before);
     });
 

@@ -1,11 +1,13 @@
 import type { NewSessionResponse, SessionConfigOption } from "@agentclientprotocol/sdk";
 
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
+import { discoverAuthStorage, SessionManager } from "@oh-my-pi/pi-coding-agent";
+import { cfgBashAutoBackgroundEnabled } from "@oh-my-pi/pi-coding-agent/exec/settings";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { PicoSession } from "../engine/pico-session.ts";
 import type { ConnectedClient } from "./agent-harness.ts";
 
 import { createPicoModelRegistry } from "../engine/model-catalog.ts";
@@ -102,5 +104,31 @@ describe("proposal.0007 sessions start from the settings file", () => {
             mcpServers: [],
         })) as { configOptions?: SessionConfigOption[] | null };
         expect(currentModel(reopened.configOptions)).toBe("pico-test/beta");
+    });
+});
+
+describe("proposal.0008 every attach reads the auto-background setting", () => {
+    test("new and reopened sessions attach with the value saved at that moment", async () => {
+        const dataDir = temporaryDataDir();
+        const cwd = temporaryProject();
+        const agentDir = realpathSync(mkdtempSync(join(tmpdir(), "pico-agent-dir-")));
+        const authStorage = await discoverAuthStorage(agentDir);
+        const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
+        testProvider().register(modelRegistry);
+        const create = picoSessionFactory({ dataDir, agentDir, authStorage, modelRegistry });
+        const autoBackground = (session: PicoSession) =>
+            cfgBashAutoBackgroundEnabled.get(session.engine.settings);
+
+        writeFileSync(settingsFilePath(dataDir), '{ "version": 1, "autoBackground": false }\n');
+        const fresh = await create(cwd, [], SessionManager.inMemory(cwd), true);
+        writeFileSync(settingsFilePath(dataDir), '{ "version": 1, "autoBackground": true }\n');
+        const reopened = await create(cwd, [], SessionManager.inMemory(cwd), false);
+        try {
+            expect(autoBackground(fresh)).toBe(false);
+            expect(autoBackground(reopened)).toBe(true);
+        } finally {
+            await fresh.dispose();
+            await reopened.dispose();
+        }
     });
 });

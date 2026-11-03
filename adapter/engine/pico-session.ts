@@ -230,7 +230,10 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             if (disposed) return;
             disposed = true;
             disposalPhase = "stopping background jobs";
-            const jobsStopped = await jobs.stop();
+            let jobsStopped = false;
+            const stopFailed = await attempt(async () => {
+                jobsStopped = await jobs.stop();
+            });
             disposalPhase = "disconnecting MCP servers";
             const disconnected = await attempt(() => liveMcp.manager.disconnectAll());
             disposalPhase = "disposing the engine";
@@ -245,10 +248,13 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
                         : "disconnecting MCP servers";
                 throw failure.error;
             }
-            if (!jobsStopped) {
+            if (stopFailed || !jobsStopped) {
                 disposalPhase = "stopping background jobs";
-                throw new PicoSessionError(
-                    `A background job's processes were still running ${STOP_GRACE_MS}ms after Pico stopped them.`,
+                throw (
+                    stopFailed?.error ??
+                    new PicoSessionError(
+                        `A background job's processes were still running ${STOP_GRACE_MS}ms after Pico stopped them.`,
+                    )
                 );
             }
             disposalPhase = undefined;

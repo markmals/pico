@@ -125,11 +125,11 @@ The agent can run a command in the background while it carries on with other wor
 - While the command runs, its call shows as running, with the output so far and a line naming its background job, such as "Running in the background as job bg_1."
 - When the command ends, the call shows its full output and finishes as succeeded, or as failed when the command exits with an error, runs past its time limit ("[Command timed out after …]") or is stopped ("[Command cancelled]").
 
-A background command belongs to the turn that started it. Sesh shows the turn as running until every background command in it has ended, even after the agent has finished its reply. When a command ends, the agent picks up its result and carries on in the same turn, and whatever it does then appears in the conversation like the rest of the turn. A command with no time limit keeps the turn running until it exits or you press Stop, so a server or file watcher can't be left running after a turn; start those yourself.
+A background command belongs to the turn that started it. Sesh shows the turn as running until every background command in it has ended, even after the agent has finished its reply. When a command ends, the agent picks up its result and carries on in the same turn, and whatever it does then appears in the conversation like the rest of the turn. A command with no time limit keeps the turn running until it exits or you press Stop; start servers and file watchers yourself rather than asking the agent to keep them running.
 
 To block until a background command ends, the agent uses `wait`. It appears as a tool call titled with what the agent said it was doing, or "Wait for background jobs", and lists each job it is waiting for with its ID, status and command, for example `bg_2 — running — ./slow.sh`. It finishes when a job ends, with the job's output.
 
-Pressing Stop kills every command running in the background, along with everything it started, including programs that ignore the request to stop. Their tool calls show as failed. When Sesh disconnects or Pico shuts down, the same happens before `pico` exits, so nothing the agent started keeps running.
+Pressing Stop kills every command still running in the background and the processes it runs, including programs that ignore the request to stop, and so does the agent killing one of its own jobs. Their tool calls show as failed. When Sesh disconnects or Pico shuts down, the same happens before `pico` exits. Pico can't see a process a command leaves behind and that outlives it, such as one started with `&` in a command that has already ended, or one that detaches itself as a daemon; such a process keeps running until you stop it.
 
 To keep slow commands in the foreground:
 

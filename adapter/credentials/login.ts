@@ -75,6 +75,11 @@ export interface LoginOptions {
     deadlineMs?: number;
 }
 
+interface LoginInteraction {
+    asked: boolean;
+    callbackTimedOut: boolean;
+}
+
 /**
  * Runs one login with the engine's own flow and commits its result to Pico's vault.
  *
@@ -119,7 +124,7 @@ export async function runLogin(options: LoginOptions): Promise<CredentialMetadat
         ? AbortSignal.any([options.signal, attempt.signal])
         : attempt.signal;
     const signal = AbortSignal.any([cancellation, deadline]);
-    const refusals = { asked: false };
+    const interaction: LoginInteraction = { asked: false, callbackTimedOut: false };
 
     try {
         // The attempt is bounded by Pico, not by the provider: a flow that never settles still ends.
@@ -127,7 +132,7 @@ export async function runLogin(options: LoginOptions): Promise<CredentialMetadat
             exchange(
                 method.method,
                 method.provider,
-                controllerFor(method, emit, signal, refusals, attempt),
+                controllerFor(method, emit, signal, interaction, attempt),
             ),
             ended(signal, deadline, method.method),
         ]);
@@ -146,7 +151,7 @@ export async function runLogin(options: LoginOptions): Promise<CredentialMetadat
         });
         return stored;
     } catch (failure) {
-        throw loginFailure(failure, method.method, method.provider, refusals, signal, deadline);
+        throw loginFailure(failure, method.method, method.provider, interaction, signal, deadline);
     } finally {
         // Releases the attempt's listeners even when the flow is still waiting on the provider.
         attempt.abort();
@@ -206,11 +211,11 @@ function controllerFor(
     method: LoginMethodInfo,
     emit: (event: LoginEventBody) => void,
     signal: AbortSignal,
-    refusals: { asked: boolean },
+    interaction: LoginInteraction,
     attempt: AbortController,
 ): OAuthLoginController {
     const refuse = (what: string) => {
-        refusals.asked = true;
+        interaction.asked = true;
         attempt.abort();
         return Promise.reject(
             new LoginError(
@@ -235,15 +240,21 @@ function controllerFor(
         onBrowserSession: () => refuse("a browser session"),
         onManualCodeInput:
             method.interaction === "browser-callback"
-                ? waitSignal => waitWithoutAnswer(waitSignal ?? signal)
+                ? waitSignal => waitWithoutAnswer(waitSignal ?? signal, interaction)
                 : () => refuse("a pasted authorization code"),
         signal,
     };
 }
 
-function waitWithoutAnswer(signal: AbortSignal): Promise<never> {
+function waitWithoutAnswer(signal: AbortSignal, interaction: LoginInteraction): Promise<never> {
     const { promise, reject } = Promise.withResolvers<never>();
-    const stop = () => reject(new LoginError("CANCELLED", "The browser callback wait ended."));
+    const stop = () => {
+        const reason: unknown = signal.reason;
+        if (reason instanceof DOMException && reason.name === "TimeoutError") {
+            interaction.callbackTimedOut = true;
+        }
+        reject(new LoginError("CANCELLED", "The browser callback wait ended."));
+    };
     if (signal.aborted) stop();
     else signal.addEventListener("abort", stop, { once: true });
     return promise;
@@ -267,15 +278,24 @@ function loginFailure(
     failure: unknown,
     method: string,
     provider: string,
-    refusals: { asked: boolean },
+    interaction: LoginInteraction,
     signal: AbortSignal,
     deadline: AbortSignal,
 ): unknown {
     const details: Record<string, unknown> = { method, provider };
-    if (refusals.asked) {
+    if (interaction.asked) {
         return new LoginError(
             "FAILED_PRECONDITION",
             `${method} needs an answer Pico does not give, so nothing was stored.`,
+            details,
+        );
+    }
+    if (interaction.callbackTimedOut) {
+        details.kind = "timeout";
+        details.stage = "browser-callback";
+        return new LoginError(
+            "TIMED_OUT",
+            `${method}'s browser callback timed out; start a fresh login attempt.`,
             details,
         );
     }

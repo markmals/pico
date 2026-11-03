@@ -320,6 +320,36 @@ describe("proposal.0009 login ends on its own terms", () => {
         expect(opened.list()).toEqual([]);
     });
 
+    test("the SDK's earlier browser callback deadline is reported as timed out", async () => {
+        const configuredDeadlineMs = 123_456;
+        const overall = new AbortController();
+        const callback = new AbortController();
+        const timeout = spyOn(AbortSignal, "timeout").mockImplementation(delay =>
+            delay === configuredDeadlineMs ? overall.signal : callback.signal,
+        );
+        try {
+            const { vault: opened } = vault();
+            const error = await runLogin({
+                method: "anthropic",
+                deadlineMs: configuredDeadlineMs,
+                vault: opened,
+                emit: event => {
+                    if (event.type === "authorization") {
+                        queueMicrotask(() =>
+                            callback.abort(new DOMException("Callback expired", "TimeoutError")),
+                        );
+                    }
+                },
+            }).catch(failure => failure as LoginError);
+
+            expect((error as LoginError).code).toBe("TIMED_OUT");
+            expect((error as LoginError).retryable).toBe(true);
+            expect(opened.list()).toEqual([]);
+        } finally {
+            timeout.mockRestore();
+        }
+    });
+
     test("a cancelled attempt publishes no credential", async () => {
         const controller = new AbortController();
         // The flow never settles: ending the attempt is the caller's job, not the provider's.

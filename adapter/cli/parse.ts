@@ -102,6 +102,12 @@ function splitOption(token: string): [string, string | undefined] {
 function checkedValue(name: string, option: OptionSpec, value: string): string {
     const format = option.format ?? "text";
     if (!isValidValue(format, value)) throw malformedValue(name, format);
+    const { accepted } = option;
+    if (accepted?.kind === "values" && !accepted.values.includes(value)) {
+        throw new CliError("INVALID_ARGUMENT", `${name} takes ${accepted.values.join(" or ")}`, {
+            details: { argument: name, accepted: [...accepted.values] },
+        });
+    }
     return value;
 }
 

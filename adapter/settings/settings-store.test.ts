@@ -20,8 +20,16 @@ import {
     writeSettings,
 } from "./settings-store.ts";
 
-const SONNET = { defaultModel: "anthropic/claude-sonnet-5-5", defaultThinking: "high" };
-const HAIKU = { defaultModel: "anthropic/claude-haiku-5", defaultThinking: "low" };
+const SONNET = {
+    defaultModel: "anthropic/claude-sonnet-5-5",
+    defaultThinking: "high",
+    autoBackground: null,
+};
+const HAIKU = {
+    defaultModel: "anthropic/claude-haiku-5",
+    defaultThinking: "low",
+    autoBackground: null,
+};
 
 /** A save cannot finish only because the directory refuses it, which root is never told. */
 const AS_ROOT = process.getuid?.() === 0;
@@ -86,7 +94,7 @@ describe("proposal.0007 saving settings", () => {
         expect(readSettings(dataDir)).toEqual({
             status: "missing",
             revision: "none",
-            item: { defaultModel: null, defaultThinking: null },
+            item: { defaultModel: null, defaultThinking: null, autoBackground: null },
         });
     });
 

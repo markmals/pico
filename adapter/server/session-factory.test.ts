@@ -52,12 +52,20 @@ describe("proposal.0007 sessions start from the settings file", () => {
         const client = await connect(dataDir);
         const cwd = temporaryProject();
 
-        writeSettings(dataDir, { defaultModel: "pico-test/alpha", defaultThinking: "off" });
+        writeSettings(dataDir, {
+            defaultModel: "pico-test/alpha",
+            defaultThinking: "off",
+            autoBackground: null,
+        });
         const first = (await client.agent.request("session/new", {
             cwd,
             mcpServers: [],
         })) as NewSessionResponse;
-        writeSettings(dataDir, { defaultModel: "pico-test/beta", defaultThinking: "low" });
+        writeSettings(dataDir, {
+            defaultModel: "pico-test/beta",
+            defaultThinking: "low",
+            autoBackground: null,
+        });
         const second = (await client.agent.request("session/new", {
             cwd,
             mcpServers: [],
@@ -71,7 +79,11 @@ describe("proposal.0007 sessions start from the settings file", () => {
         const dataDir = temporaryDataDir();
         const cwd = temporaryProject();
         const first = await connect(dataDir);
-        writeSettings(dataDir, { defaultModel: "pico-test/beta", defaultThinking: "low" });
+        writeSettings(dataDir, {
+            defaultModel: "pico-test/beta",
+            defaultThinking: "low",
+            autoBackground: null,
+        });
         const created = (await first.agent.request("session/new", {
             cwd,
             mcpServers: [],

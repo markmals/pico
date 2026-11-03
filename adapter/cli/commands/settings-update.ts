@@ -19,13 +19,15 @@ import { ioError, readSettingsFile } from "./settings-file.ts";
 interface UpdateOptions {
     defaultModel?: string;
     defaultThinking?: string;
+    autoBackground?: string;
     ifRevision?: string;
     dryRun?: boolean;
 }
 
 /**
- * Checks in the proposal's order: the file, its revision, then the catalog; only then writes,
- * and only when the document would change and this is not a dry run.
+ * Checks in the proposal's order: the file, its revision, then the catalog, which is opened only
+ * when the default model or thinking level changes; only then writes, and only when the document
+ * would change and this is not a dry run.
  */
 export function settingsUpdate(context: HandlerContext): CommandHandler {
     return async input => {
@@ -46,7 +48,7 @@ export function settingsUpdate(context: HandlerContext): CommandHandler {
                 { details: { expected: options.ifRevision, actual: state.revision } },
             );
         }
-        const after = await chosenDefault(context, state.item, options, settingsFile);
+        const after = await chosenSettings(context, state.item, options, settingsFile);
         const before = { revision: state.revision, item: state.item };
         const revision = revisionOf(new TextEncoder().encode(serializeSettings(after)));
         if (revision === state.revision) {
@@ -69,12 +71,30 @@ export function settingsUpdate(context: HandlerContext): CommandHandler {
     };
 }
 
-async function chosenDefault(
+/** The settings a save would hold: the saved ones with whatever the options change. */
+async function chosenSettings(
     context: HandlerContext,
     saved: PicoSettings,
     options: UpdateOptions,
     settingsFile: string,
 ): Promise<PicoSettings> {
+    const autoBackground =
+        options.autoBackground === undefined
+            ? saved.autoBackground
+            : options.autoBackground === "on";
+    if (options.defaultModel === undefined && options.defaultThinking === undefined) {
+        return { ...saved, autoBackground };
+    }
+    const chosen = await chosenDefault(context, saved, options, settingsFile);
+    return { ...chosen, autoBackground };
+}
+
+async function chosenDefault(
+    context: HandlerContext,
+    saved: PicoSettings,
+    options: UpdateOptions,
+    settingsFile: string,
+): Promise<{ defaultModel: string; defaultThinking: string }> {
     const value = options.defaultModel ?? saved.defaultModel;
     if (value === null) {
         throw new CliError(

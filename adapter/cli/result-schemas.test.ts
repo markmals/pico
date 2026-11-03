@@ -60,12 +60,17 @@ describe("proposal.0007 declared result shapes", () => {
                 settingsFile: SETTINGS_FILE,
                 status: "valid",
                 revision: REVISION,
-                item: { defaultModel: "anthropic/claude-sonnet-5-5", defaultThinking: "high" },
+                item: {
+                    defaultModel: "anthropic/claude-sonnet-5-5",
+                    defaultThinking: "high",
+                    autoBackground: null,
+                },
                 effective: {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     source: "settings",
                     available: true,
+                    autoBackground: true,
                 },
             }).success,
         ).toBe(true);
@@ -78,12 +83,13 @@ describe("proposal.0007 declared result shapes", () => {
                 settingsFile: SETTINGS_FILE,
                 status: "missing",
                 revision: "none",
-                item: { defaultModel: null, defaultThinking: null },
+                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
                 effective: {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     source: "built-in",
                     available: true,
+                    autoBackground: true,
                 },
             }).success,
         ).toBe(true);
@@ -93,12 +99,13 @@ describe("proposal.0007 declared result shapes", () => {
                 settingsFile: SETTINGS_FILE,
                 status: "missing",
                 revision: REVISION,
-                item: { defaultModel: null, defaultThinking: null },
+                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
                 effective: {
                     defaultModel: null,
                     defaultThinking: null,
                     source: "built-in",
                     available: false,
+                    autoBackground: true,
                 },
             }).success,
         ).toBe(false);
@@ -120,7 +127,7 @@ describe("proposal.0007 declared result shapes", () => {
         expect(
             settingsGetOutput.safeParse({
                 ...invalid,
-                item: { defaultModel: null, defaultThinking: null },
+                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
             }).success,
         ).toBe(false);
     });
@@ -131,10 +138,17 @@ describe("proposal.0007 declared result shapes", () => {
             settingsFile: SETTINGS_FILE,
             dryRun: false,
             changed: true,
-            before: { revision: "none", item: { defaultModel: null, defaultThinking: null } },
+            before: {
+                revision: "none",
+                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+            },
             after: {
                 revision: REVISION,
-                item: { defaultModel: "anthropic/claude-sonnet-5-5", defaultThinking: "high" },
+                item: {
+                    defaultModel: "anthropic/claude-sonnet-5-5",
+                    defaultThinking: "high",
+                    autoBackground: null,
+                },
             },
         };
 
@@ -143,6 +157,79 @@ describe("proposal.0007 declared result shapes", () => {
             settingsUpdateOutput.safeParse({
                 ...receipt,
                 after: { ...receipt.after, revision: "sha256:beef" },
+            }).success,
+        ).toBe(false);
+    });
+});
+
+describe("proposal.0008 autoBackground in the declared result shapes", () => {
+    const SAVED = {
+        apiVersion: 1,
+        settingsFile: SETTINGS_FILE,
+        status: "valid",
+        revision: REVISION,
+        item: { defaultModel: null, defaultThinking: null, autoBackground: false },
+        effective: {
+            defaultModel: "anthropic/claude-sonnet-5-5",
+            defaultThinking: "high",
+            source: "built-in",
+            available: true,
+            autoBackground: false,
+        },
+    };
+
+    test("settings get carries the saved value and the value a session would use", () => {
+        expect(settingsGetOutput.safeParse(SAVED).success).toBe(true);
+        expect(
+            settingsGetOutput.safeParse({
+                ...SAVED,
+                item: { ...SAVED.item, autoBackground: null },
+            }).success,
+        ).toBe(true);
+    });
+
+    test("both members are required, and only the saved one may be null", () => {
+        expect(
+            settingsGetOutput.safeParse({
+                ...SAVED,
+                item: { defaultModel: null, defaultThinking: null },
+            }).success,
+        ).toBe(false);
+        expect(
+            settingsGetOutput.safeParse({
+                ...SAVED,
+                effective: { ...SAVED.effective, autoBackground: undefined },
+            }).success,
+        ).toBe(false);
+        expect(
+            settingsGetOutput.safeParse({
+                ...SAVED,
+                effective: { ...SAVED.effective, autoBackground: null },
+            }).success,
+        ).toBe(false);
+    });
+
+    test("a receipt carries the saved value before and after", () => {
+        const receipt = {
+            apiVersion: 1,
+            settingsFile: SETTINGS_FILE,
+            dryRun: false,
+            changed: true,
+            before: {
+                revision: "none",
+                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+            },
+            after: {
+                revision: REVISION,
+                item: { defaultModel: null, defaultThinking: null, autoBackground: false },
+            },
+        };
+
+        expect(settingsUpdateOutput.safeParse(receipt).success).toBe(true);
+        expect(
+            settingsUpdateOutput.safeParse({
+                ...receipt,
+                after: { ...receipt.after, item: { defaultModel: null, defaultThinking: null } },
             }).success,
         ).toBe(false);
     });

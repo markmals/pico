@@ -7,7 +7,12 @@ export interface FakeLmStudioOptions {
     memoryToken: string;
     /** The assistant text that ends the turn, once the tool results are in. */
     reply: string;
+    /** Where the background job {@link BACKGROUND_JOB_PROMPT} starts writes its process id. */
+    jobPidFile: string;
 }
+
+/** A prompt that makes the model start a background job ignoring SIGTERM (proposal.0008). */
+export const BACKGROUND_JOB_PROMPT = "Start the background job.";
 
 export interface FakeLmStudio {
     /** The value for `LM_STUDIO_BASE_URL`; OMP appends `/models` and `/chat/completions` to it. */
@@ -62,10 +67,20 @@ async function serve(request: Request, options: FakeLmStudioOptions): Promise<Re
     return new Response("not found", { status: 404 });
 }
 
-/** The scripted model: write the token and open a todo for it, then answer, then remember. */
+/**
+ * The scripted model: write the token and open a todo for it, then answer, then remember. A
+ * conversation opened with {@link BACKGROUND_JOB_PROMPT} starts a background job instead.
+ */
 function script(messages: ChatMessage[], options: FakeLmStudioOptions): ScriptedTurn {
-    const { memoryToken, reply } = options;
+    const { memoryToken, reply, jobPidFile } = options;
     const users = messages.filter(message => message.role === "user");
+    if (JSON.stringify(users[0]?.content).includes(BACKGROUND_JOB_PROMPT)) {
+        if (messages.at(-1)?.role !== "user") return { text: "Waiting for the background job." };
+        const command = `/bin/sh -c 'trap "" TERM; echo $$ > ${jobPidFile}; exec /bin/sleep 300'`;
+        return {
+            toolCalls: [{ id: "verify-job", name: "bash", arguments: { command, async: true } }],
+        };
+    }
     if (users.length > 1) {
         const remembered = users
             .slice(0, -1)

@@ -126,3 +126,12 @@ export function toolResult(
 ): Record<string, unknown> {
     return { content: [{ type: "text", text }], details };
 }
+
+/** The `details` Oh My Pi reports for a `bash` call's background job, on its result and its updates. */
+export function backgroundDetails(
+    state: "running" | "completed" | "failed" | "cancelled",
+    jobId = "bg_1",
+    rest: Record<string, unknown> = {},
+): Record<string, unknown> {
+    return { async: { state, jobId, type: "bash" }, ...rest };
+}

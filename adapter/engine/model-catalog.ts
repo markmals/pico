@@ -6,6 +6,7 @@ import { ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { pickDefaultAvailableModel } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
 import path from "node:path";
 
+import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
 import { picoSettings } from "./pico-settings.ts";
 
 /** OMP's built-in `defaultThinkingLevel`, which a Pico session starts from with no level chosen. */
@@ -29,7 +30,7 @@ export interface StartingChoice {
 /** OMP's model registry as Pico runs it: no models.yml, its cache in Pico's data directory. */
 export function createPicoModelRegistry(authStorage: AuthStorage, dataDir: string): ModelRegistry {
     return new ModelRegistry(authStorage, undefined, {
-        settings: picoSettings(),
+        settings: picoSettings(DEFAULT_AUTO_BACKGROUND),
         ignoreLocalModelConfig: true,
         cacheDbPath: path.join(dataDir, "models.db"),
     });

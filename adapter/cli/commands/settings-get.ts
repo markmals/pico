@@ -2,7 +2,7 @@ import type { CommandHandler } from "../execute.ts";
 import type { HandlerContext } from "./handlers.ts";
 
 import { settingsFilePath } from "../../settings/settings-store.ts";
-import { effectiveDefault, readSettingsFile } from "./settings-file.ts";
+import { effectiveSettings, readSettingsFile } from "./settings-file.ts";
 
 export function settingsGet(context: HandlerContext): CommandHandler {
     return async () => {
@@ -18,7 +18,7 @@ export function settingsGet(context: HandlerContext): CommandHandler {
             status: state.status,
             revision: state.revision,
             item: state.item,
-            effective: await effectiveDefault(registry, state.item),
+            effective: await effectiveSettings(registry, state.item),
         };
     };
 }

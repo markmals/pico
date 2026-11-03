@@ -41,6 +41,9 @@ describe("proposal.0001 shutdown", () => {
                     takeChanges: toolCallId => session.takeChanges(toolCallId),
                     writesSettled: () => session.writesSettled(),
                     mcpToolIdentity: toolName => session.mcpToolIdentity(toolName),
+                    settleBackgroundWork: stopRequested =>
+                        session.settleBackgroundWork(stopRequested),
+                    stopBackgroundJobs: () => session.stopBackgroundJobs(),
                     selectModel: model => session.selectModel(model),
                     selectThinkingLevel: level => session.selectThinkingLevel(level),
                     dispose: async () => {

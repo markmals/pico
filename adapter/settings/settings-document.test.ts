@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { SettingsState } from "./settings-document.ts";
 
-import { readSettingsState, revisionOf, serializeSettings } from "./settings-document.ts";
+import {
+    DEFAULT_AUTO_BACKGROUND,
+    readSettingsState,
+    revisionOf,
+    serializeSettings,
+} from "./settings-document.ts";
 
 function documentBytes(text: string): Uint8Array {
     return new TextEncoder().encode(text);
@@ -22,7 +27,7 @@ describe("proposal.0007 settings file states", () => {
         expect(readSettingsState(undefined)).toEqual({
             status: "missing",
             revision: "none",
-            item: { defaultModel: null, defaultThinking: null },
+            item: { defaultModel: null, defaultThinking: null, autoBackground: null },
         });
     });
 
@@ -30,7 +35,11 @@ describe("proposal.0007 settings file states", () => {
         expect(readSettingsState(WITH_DEFAULT)).toEqual({
             status: "valid",
             revision: revisionOf(WITH_DEFAULT),
-            item: { defaultModel: "anthropic/claude-sonnet-5-5", defaultThinking: "high" },
+            item: {
+                defaultModel: "anthropic/claude-sonnet-5-5",
+                defaultThinking: "high",
+                autoBackground: null,
+            },
         });
     });
 
@@ -38,7 +47,7 @@ describe("proposal.0007 settings file states", () => {
         expect(readSettingsState(documentBytes('{"version":1}'))).toEqual({
             status: "valid",
             revision: "sha256:2430f1a2ad2982d0067885488a4c89e21ad1d7c83b115ba8f1b20acc88dfaea8",
-            item: { defaultModel: null, defaultThinking: null },
+            item: { defaultModel: null, defaultThinking: null, autoBackground: null },
         });
     });
 
@@ -128,6 +137,7 @@ describe("proposal.0007 serializing settings", () => {
         const text = serializeSettings({
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
+            autoBackground: null,
         });
 
         expect(text).toBe(
@@ -143,17 +153,33 @@ describe("proposal.0007 serializing settings", () => {
     });
 
     test("no saved default omits the pair", () => {
-        expect(serializeSettings({ defaultModel: null, defaultThinking: null })).toBe(
-            '{\n    "version": 1\n}\n',
-        );
+        expect(
+            serializeSettings({
+                defaultModel: null,
+                defaultThinking: null,
+                autoBackground: null,
+            }),
+        ).toBe('{\n    "version": 1\n}\n');
     });
 
     test("a model without its thinking level cannot be serialized", () => {
-        expect(() => serializeSettings({ defaultModel: "a/b", defaultThinking: null })).toThrow();
+        expect(() =>
+            serializeSettings({
+                defaultModel: "a/b",
+                defaultThinking: null,
+                autoBackground: null,
+            }),
+        ).toThrow();
     });
 
     test("a thinking level without its model cannot be serialized", () => {
-        expect(() => serializeSettings({ defaultModel: null, defaultThinking: "high" })).toThrow();
+        expect(() =>
+            serializeSettings({
+                defaultModel: null,
+                defaultThinking: "high",
+                autoBackground: null,
+            }),
+        ).toThrow();
     });
 });
 
@@ -166,5 +192,109 @@ describe("proposal.0007 settings revisions", () => {
         expect(revisionOf(documentBytes("abc"))).toBe(
             "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
         );
+    });
+});
+
+describe("proposal.0008 the autoBackground setting", () => {
+    test("Pico's own default is on", () => {
+        expect(DEFAULT_AUTO_BACKGROUND).toBe(true);
+    });
+
+    test("a file holding only autoBackground is valid and carries it, on or off", () => {
+        for (const saved of [true, false]) {
+            const document = documentBytes(`{"version":1,"autoBackground":${saved}}`);
+
+            expect(readSettingsState(document)).toEqual({
+                status: "valid",
+                revision: revisionOf(document),
+                item: { defaultModel: null, defaultThinking: null, autoBackground: saved },
+            });
+        }
+    });
+
+    test("a file holding both the pair and autoBackground carries all three", () => {
+        const document = documentBytes(
+            '{"version":1,"defaultModel":"a/b","defaultThinking":"high","autoBackground":false}',
+        );
+
+        expect(readSettingsState(document)).toEqual({
+            status: "valid",
+            revision: revisionOf(document),
+            item: { defaultModel: "a/b", defaultThinking: "high", autoBackground: false },
+        });
+    });
+
+    test("a file that never set it, and no file at all, leave it unset", () => {
+        const absent = readSettingsState(documentBytes('{"version":1}'));
+        const missing = readSettingsState(undefined);
+
+        expect([absent, missing].map(state => ("item" in state ? state.item : state))).toEqual([
+            { defaultModel: null, defaultThinking: null, autoBackground: null },
+            { defaultModel: null, defaultThinking: null, autoBackground: null },
+        ]);
+    });
+
+    test("a value that is not a boolean is invalid, and its problem names the member", () => {
+        for (const value of ['"on"', "1", "null", "[]", "{}"]) {
+            const state = readSettingsState(
+                documentBytes(`{"version":1,"autoBackground":${value}}`),
+            );
+
+            expect([value, state.status]).toEqual([value, "invalid"]);
+            expect(problemOf(state)).toStartWith("$.autoBackground: ");
+        }
+    });
+
+    test("a set value is written after the default model pair", () => {
+        const text = serializeSettings({
+            defaultModel: "anthropic/claude-sonnet-5-5",
+            defaultThinking: "high",
+            autoBackground: false,
+        });
+
+        expect(text).toBe(
+            [
+                "{",
+                '    "version": 1,',
+                '    "defaultModel": "anthropic/claude-sonnet-5-5",',
+                '    "defaultThinking": "high",',
+                '    "autoBackground": false',
+                "}",
+                "",
+            ].join("\n"),
+        );
+    });
+
+    test("an unset value is left out, so a file that never set it keeps proposal 0007's bytes", () => {
+        const withDefault = serializeSettings({
+            defaultModel: "anthropic/claude-sonnet-5-5",
+            defaultThinking: "high",
+            autoBackground: null,
+        });
+
+        expect(withDefault).toBe(
+            '{\n    "version": 1,\n    "defaultModel": "anthropic/claude-sonnet-5-5",\n    "defaultThinking": "high"\n}\n',
+        );
+        expect(
+            serializeSettings({
+                defaultModel: null,
+                defaultThinking: null,
+                autoBackground: null,
+            }),
+        ).toBe('{\n    "version": 1\n}\n');
+    });
+
+    test("it is saved without a default model, and reads back the same", () => {
+        const item = { defaultModel: null, defaultThinking: null, autoBackground: true };
+        const bytes = new TextEncoder().encode(serializeSettings(item));
+
+        expect(new TextDecoder().decode(bytes)).toBe(
+            '{\n    "version": 1,\n    "autoBackground": true\n}\n',
+        );
+        expect(readSettingsState(bytes)).toEqual({
+            status: "valid",
+            revision: revisionOf(bytes),
+            item,
+        });
     });
 });

@@ -3,6 +3,7 @@ import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { Cleanups } from "../engine/testing/session-fixture.ts";
@@ -28,7 +29,11 @@ afterEach(async () => {
 
 /** The fake server, published to OMP's built-in LM Studio provider until `scope` cleans up. */
 function useFakeLmStudio(scope: Cleanups = cleanups): void {
-    const server = startFakeLmStudio({ memoryToken: MEMORY_TOKEN, reply: REPLY });
+    const server = startFakeLmStudio({
+        memoryToken: MEMORY_TOKEN,
+        reply: REPLY,
+        jobPidFile: path.join(tmpdir(), "pico-fake-lm-studio-job.pid"),
+    });
     const previous = process.env.LM_STUDIO_BASE_URL;
     process.env.LM_STUDIO_BASE_URL = server.baseUrl;
     scope.after(() => {

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { CommandSpec, OptionSpec } from "./command.ts";
 
 import { commandId, optionKey } from "./command.ts";
-import { CliError } from "./errors.ts";
+import { CliError, exitCodeOf } from "./errors.ts";
 import { parseArguments } from "./parse.ts";
 import { COMMANDS } from "./registry.ts";
 
@@ -13,9 +13,14 @@ const SAMPLE_VALUES = {
     text: "high",
 };
 
+function sampleOptionValue(option: OptionSpec): string {
+    if (option.accepted?.kind === "values") return option.accepted.values[0] as string;
+    return SAMPLE_VALUES[option.format ?? "text"];
+}
+
 function sampleOptionArguments(option: OptionSpec): string[] {
     if (option.type === "boolean") return [option.name];
-    return [option.name, SAMPLE_VALUES[option.format ?? "text"]];
+    return [option.name, sampleOptionValue(option)];
 }
 
 function sampleArgumentWords(command: CommandSpec): string[] {
@@ -70,8 +75,7 @@ describe("proposal.0007 command line parser", () => {
                 if (parsed.kind !== "command") continue;
                 expect({ args, value: parsed.input.options[optionKey(option.name)] }).toEqual({
                     args,
-                    value:
-                        option.type === "boolean" ? true : SAMPLE_VALUES[option.format ?? "text"],
+                    value: option.type === "boolean" ? true : sampleOptionValue(option),
                 });
             }
         }
@@ -83,7 +87,13 @@ describe("proposal.0007 command line parser", () => {
         expect(error.code).toBe("INVALID_ARGUMENT");
         expect(error.details).toEqual({
             argument: "--default-mode",
-            accepted: ["--default-model", "--default-thinking", "--if-revision", "--dry-run"],
+            accepted: [
+                "--default-model",
+                "--default-thinking",
+                "--auto-background",
+                "--if-revision",
+                "--dry-run",
+            ],
         });
     });
 
@@ -118,14 +128,14 @@ describe("proposal.0007 command line parser", () => {
         }
     });
 
-    test("settings update with neither default is refused", () => {
+    test("settings update with none of its three settings is refused", () => {
         const error = failure(["settings", "update"]);
 
         expect(error.code).toBe("INVALID_ARGUMENT");
         expect(error.message).toContain("--default-model");
         expect(error.details).toEqual({
             command: "settings update",
-            accepted: ["--default-model", "--default-thinking"],
+            accepted: ["--default-model", "--default-thinking", "--auto-background"],
         });
     });
 
@@ -248,5 +258,29 @@ describe("proposal.0007 command line parser", () => {
             defaultThinking: "high",
             dryRun: false,
         });
+    });
+});
+
+describe("proposal.0008 an option that accepts named states", () => {
+    test("--auto-background takes on and off", () => {
+        for (const state of ["on", "off"]) {
+            const parsed = parseArguments(["settings", "update", "--auto-background", state]);
+
+            expect([state, parsed.kind === "command" && parsed.input.options]).toEqual([
+                state,
+                { autoBackground: state, dryRun: false },
+            ]);
+        }
+    });
+
+    test("any other value is refused, with the states the option accepts", () => {
+        const error = failure(["settings", "update", "--auto-background", "maybe"]);
+
+        expect(error.code).toBe("INVALID_ARGUMENT");
+        expect(error.details).toEqual({
+            argument: "--auto-background",
+            accepted: ["on", "off"],
+        });
+        expect(exitCodeOf(error.code)).toBe(2);
     });
 });

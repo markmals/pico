@@ -7,8 +7,12 @@ import type { PicoSession, RecordedChange } from "../engine/pico-session.ts";
 import type { EditedFiles } from "./tool-call-translation.ts";
 
 import {
+    backgroundContent,
+    backgroundJob,
+    backgroundOutcome,
     editedFiles,
     failureText,
+    jobLines,
     resultDetails,
     resultText,
     startLocations,
@@ -33,7 +37,9 @@ const NOTHING_CHANGED: EditedFiles = { changes: [], locations: [] };
  * reported about it before that, and it settles once — whether the engine ends
  * it, repeats itself, or the turn is cancelled out from under it. A `todo`
  * call's whole effect reaches the client as its plan, so it is reported only
- * when it fails or is cancelled (proposal.0006).
+ * when it fails or is cancelled (proposal.0006). A command that moves to a
+ * background job is the one call the engine's end event does not settle: the
+ * job's own updates carry its output and its outcome (proposal.0008).
  */
 export class SessionEventMapper {
     readonly #session: SessionView;
@@ -41,6 +47,10 @@ export class SessionEventMapper {
     readonly #running = new Set<string>();
     /** Running `todo` calls, each with the `tool_call` it is reported by if it does not succeed. */
     readonly #heldTodoCalls = new Map<string, SessionUpdate>();
+    /** Calls whose command moved to a background job, by that job's id. */
+    readonly #backgroundJobs = new Map<string, string>();
+    /** The text each running call last showed, which a job line then follows. */
+    readonly #progressText = new Map<string, string>();
 
     constructor(session: SessionView) {
         this.#session = session;
@@ -58,18 +68,7 @@ export class SessionEventMapper {
                     event.intent,
                 );
             case "tool_execution_update":
-                // A killed command still drains its output after the engine reported
-                // the end; a settled call must not come back to life.
-                return this.#running.has(event.toolCallId) &&
-                    !this.#heldTodoCalls.has(event.toolCallId)
-                    ? [
-                          {
-                              sessionUpdate: "tool_call_update",
-                              toolCallId: event.toolCallId,
-                              content: [textContent(resultText(event.partialResult))],
-                          },
-                      ]
-                    : [];
+                return this.#updateToolCall(event.toolCallId, event.toolName, event.partialResult);
             case "tool_execution_end":
                 return this.#endToolCall(
                     event.toolCallId,
@@ -95,7 +94,67 @@ export class SessionEventMapper {
         });
         this.#running.clear();
         this.#heldTodoCalls.clear();
+        this.#backgroundJobs.clear();
+        this.#progressText.clear();
         return updates;
+    }
+
+    #updateToolCall(toolCallId: string, toolName: string, partialResult: unknown): SessionUpdate[] {
+        // A killed command still drains its output after the engine reported the
+        // end; a settled call must not come back to life.
+        if (!this.#running.has(toolCallId) || this.#heldTodoCalls.has(toolCallId)) return [];
+        const jobId = this.#backgroundJobs.get(toolCallId);
+        if (jobId !== undefined) return this.#reportJob(toolCallId, jobId, partialResult);
+        if (toolName === "wait") {
+            return this.#reportWaitedJobs(toolCallId, jobLines(resultDetails(partialResult)));
+        }
+        const text = resultText(partialResult);
+        this.#progressText.set(toolCallId, text);
+        return [{ sessionUpdate: "tool_call_update", toolCallId, content: [textContent(text)] }];
+    }
+
+    /**
+     * `wait`'s own progress: the jobs it is waiting on, which carry no output of
+     * their own. A snapshot that reads as the last one leaves the call untouched,
+     * so it does not change every half second.
+     */
+    #reportWaitedJobs(toolCallId: string, lines: string): SessionUpdate[] {
+        if (!lines || lines === this.#progressText.get(toolCallId)) return [];
+        this.#progressText.set(toolCallId, lines);
+        return [{ sessionUpdate: "tool_call_update", toolCallId, content: [textContent(lines)] }];
+    }
+
+    /** A job's own frame: its output while it runs, and its outcome when it ends. */
+    #reportJob(toolCallId: string, jobId: string, partialResult: unknown): SessionUpdate[] {
+        const text = resultText(partialResult);
+        const details = resultDetails(partialResult);
+        const outcome = backgroundOutcome(backgroundJob(details));
+        if (outcome) {
+            this.#closeCall(toolCallId);
+            return [
+                {
+                    sessionUpdate: "tool_call_update",
+                    toolCallId,
+                    status: outcome,
+                    rawOutput: details,
+                    content: [textContent(text)],
+                },
+            ];
+        }
+        this.#progressText.set(toolCallId, text);
+        return [
+            {
+                sessionUpdate: "tool_call_update",
+                toolCallId,
+                content: backgroundContent(text, jobId),
+            },
+        ];
+    }
+
+    #closeCall(toolCallId: string): void {
+        this.#running.delete(toolCallId);
+        this.#backgroundJobs.delete(toolCallId);
+        this.#progressText.delete(toolCallId);
     }
 
     #mapStreamDelta(delta: StreamDelta): SessionUpdate[] {
@@ -151,9 +210,14 @@ export class SessionEventMapper {
         isError: boolean,
     ): SessionUpdate[] {
         if (!this.#running.has(toolCallId)) return [];
-        this.#running.delete(toolCallId);
 
         const details = resultDetails(result);
+        const job = backgroundJob(details);
+        // The command now runs as a job: its call stays open and shows the job's
+        // own output and outcome, not Oh My Pi's model-facing notice.
+        if (job?.state === "running") return this.#startBackgroundJob(toolCallId, job.jobId);
+        this.#closeCall(toolCallId);
+
         // The writes attributed to this call are consumed even when it failed, so
         // none of them can be reported against a later call to the same file.
         const written = CHANGING_TOOLS.includes(toolName)
@@ -174,6 +238,18 @@ export class SessionEventMapper {
         if (!held) return [update];
         this.#heldTodoCalls.delete(toolCallId);
         return isError ? [held, update] : [];
+    }
+
+    #startBackgroundJob(toolCallId: string, jobId: string): SessionUpdate[] {
+        this.#backgroundJobs.set(toolCallId, jobId);
+        return [
+            {
+                sessionUpdate: "tool_call_update",
+                toolCallId,
+                status: "in_progress",
+                content: backgroundContent(this.#progressText.get(toolCallId) ?? "", jobId),
+            },
+        ];
     }
 
     #changedFiles(

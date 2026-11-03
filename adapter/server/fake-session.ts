@@ -24,6 +24,8 @@ export interface FakeEngine {
     disposalPhase?: DisposalPhase;
     /** The engine's current todo list. Defaults to an empty list. */
     todoPhases?: () => TodoPhase[];
+    /** Stops the session's background jobs; resolves false when they did not stop. Defaults to `true` at once. */
+    stopBackgroundJobs?: () => Promise<boolean>;
 }
 
 export interface FakeSession {
@@ -79,6 +81,8 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
             },
             takeChanges: () => [],
             writesSettled: () => behaviour.writesSettled?.() ?? Promise.resolve(),
+            settleBackgroundWork: () => Promise.resolve(),
+            stopBackgroundJobs: () => behaviour.stopBackgroundJobs?.() ?? Promise.resolve(true),
             mcpToolIdentity: () => undefined,
             selectModel: () => Promise.reject(new Error("the fake session cannot switch models")),
             selectThinkingLevel: () => {

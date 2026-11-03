@@ -25,6 +25,7 @@ import path from "node:path";
 import type { FakeLmStudio } from "./fake-lm-studio.ts";
 
 import manifest from "../../package.json" with { type: "json" };
+import { verifyBackgroundJobs } from "./background-jobs.ts";
 import { Checklist } from "./checklist.ts";
 import { checkCommands, VERIFY_MODEL } from "./commands.ts";
 import { startFakeLmStudio } from "./fake-lm-studio.ts";
@@ -46,6 +47,8 @@ export interface Scratch {
     project: string;
     env: Record<string, string>;
     memoryToken: string;
+    /** Where the offline model's background job writes its process id. */
+    jobPidFile: string;
     model: FakeLmStudio;
 }
 
@@ -56,11 +59,13 @@ function scratch(): Scratch {
     const memoryToken = randomUUID();
     mkdirSync(project);
     mkdirSync(home);
-    const model = startFakeLmStudio({ memoryToken, reply: REPLY });
+    const jobPidFile = path.join(root, "background-job.pid");
+    const model = startFakeLmStudio({ memoryToken, reply: REPLY, jobPidFile });
     return {
         home,
         project,
         memoryToken,
+        jobPidFile,
         model,
         env: {
             HOME: home,
@@ -254,6 +259,7 @@ async function main(): Promise<void> {
         await checkCommands(executable, scratchDirs, checklist);
         const sessionId = await checkTurn(executable, scratchDirs, checklist);
         if (sessionId) await verifyRestoration(executable, scratchDirs, sessionId, checklist);
+        await verifyBackgroundJobs(executable, scratchDirs, checklist);
         checkDataDir(scratchDirs, checklist);
         process.stdout.write(`${checklist.report()}\n`);
         process.stdout.write(

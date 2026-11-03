@@ -31,9 +31,16 @@ function randomText(next: (bound: number) => number): string {
     return text;
 }
 
+const AUTO_BACKGROUND: (boolean | null)[] = [true, false, null];
+
 function randomItem(next: (bound: number) => number): PicoSettings {
-    if (next(5) === 0) return { defaultModel: null, defaultThinking: null };
-    return { defaultModel: randomText(next), defaultThinking: randomText(next) };
+    const autoBackground = AUTO_BACKGROUND[next(AUTO_BACKGROUND.length)] as boolean | null;
+    if (next(5) === 0) return { defaultModel: null, defaultThinking: null, autoBackground };
+    return {
+        defaultModel: randomText(next),
+        defaultThinking: randomText(next),
+        autoBackground,
+    };
 }
 
 const VERSIONS: unknown[] = [1, 1, 1, 1, 2, 7, 1000, 1.5, "1", 0, -3, true, null, { major: 1 }];
@@ -48,12 +55,16 @@ const MEMBER_VALUES: unknown[] = [
     [],
 ];
 const UNKNOWN_KEYS = ["flavour", "defaultmodel", "extra", "VERSION"];
+const BACKGROUND_VALUES: unknown[] = [true, false, "on", "off", 1, 0, null, []];
 
 function randomCandidate(next: (bound: number) => number): Record<string, unknown> {
     const candidate: Record<string, unknown> = {};
     if (next(12) !== 0) candidate["version"] = VERSIONS[next(VERSIONS.length)];
     if (next(3) !== 0) candidate["defaultModel"] = MEMBER_VALUES[next(MEMBER_VALUES.length)];
     if (next(3) !== 0) candidate["defaultThinking"] = MEMBER_VALUES[next(MEMBER_VALUES.length)];
+    if (next(3) === 0) {
+        candidate["autoBackground"] = BACKGROUND_VALUES[next(BACKGROUND_VALUES.length)];
+    }
     if (next(4) === 0) candidate[UNKNOWN_KEYS[next(UNKNOWN_KEYS.length)] as string] = "anything";
     return candidate;
 }
@@ -65,8 +76,10 @@ function expectedStatus(candidate: Record<string, unknown>): string {
         return "unsupported";
     }
     if (version !== 1) return "invalid";
-    const defined = ["version", "defaultModel", "defaultThinking"];
+    const defined = ["version", "defaultModel", "defaultThinking", "autoBackground"];
     if (Object.keys(candidate).some(key => !defined.includes(key))) return "invalid";
+    const background = candidate["autoBackground"];
+    if (background !== undefined && typeof background !== "boolean") return "invalid";
     const model = candidate["defaultModel"];
     const thinking = candidate["defaultThinking"];
     if (model === undefined && thinking === undefined) return "valid";
@@ -84,7 +97,15 @@ const CASES = 400;
 
 describe("proposal.0007 settings file invariants", () => {
     test("every item Pico serializes reads back as the same valid settings, at those bytes' revision", () => {
-        const counts = { withDefault: 0, withoutDefault: 0, needingEscapes: 0, nonAscii: 0 };
+        const counts = {
+            withDefault: 0,
+            withoutDefault: 0,
+            needingEscapes: 0,
+            nonAscii: 0,
+            backgroundOn: 0,
+            backgroundOff: 0,
+            backgroundUnset: 0,
+        };
 
         for (let seed = 1; seed <= CASES; seed++) {
             const next = randomSource(seed);
@@ -96,6 +117,9 @@ describe("proposal.0007 settings file invariants", () => {
                 counts.needingEscapes++;
             }
             if (/[^\u0020-\u007e]/.test(saved)) counts.nonAscii++;
+            if (item.autoBackground === true) counts.backgroundOn++;
+            if (item.autoBackground === false) counts.backgroundOff++;
+            if (item.autoBackground === null) counts.backgroundUnset++;
             const bytes = new TextEncoder().encode(serializeSettings(item));
 
             expect(readSettingsState(bytes)).toEqual({
@@ -109,6 +133,9 @@ describe("proposal.0007 settings file invariants", () => {
         expect(counts.withoutDefault).toBeGreaterThan(0);
         expect(counts.needingEscapes).toBeGreaterThan(0);
         expect(counts.nonAscii).toBeGreaterThan(0);
+        expect(counts.backgroundOn).toBeGreaterThan(0);
+        expect(counts.backgroundOff).toBeGreaterThan(0);
+        expect(counts.backgroundUnset).toBeGreaterThan(0);
     });
 
     test("a JSON object is valid only when it is exactly a version 1 document, and a later integer version is unsupported", () => {

@@ -4,6 +4,7 @@ import type { SessionManager } from "@oh-my-pi/pi-coding-agent";
 import type { ToolPresentation } from "./tool-presentation.ts";
 
 import {
+    backgroundJob,
     failureText,
     resultDetails,
     resultText,
@@ -94,6 +95,15 @@ export function* replayHistory(
             yield saved?.start ?? toolStart(id, message.toolName, undefined, cwd);
         }
         settled.add(id);
+        // A command that moved to a background job ended as its job did, not with the
+        // result the model got when it was backgrounded.
+        if (
+            message.toolName === "bash" &&
+            backgroundJob(resultDetails(message))?.state === "running"
+        ) {
+            yield saved?.end ?? unknownOutcome(id, "bash");
+            continue;
+        }
         // Presentation can be saved before its tool result; a recovered error takes precedence.
         if (!message.isError && saved?.end?.status === "completed") {
             yield saved.end;
@@ -123,17 +133,21 @@ export function* replayHistory(
         if (settled.has(id)) continue;
         const held = heldTodoCalls.get(id);
         if (held) yield held;
-        yield {
-            sessionUpdate: "tool_call_update",
-            toolCallId: id,
-            status: "failed",
-            content: [
-                textContent(
-                    `The previous process ended before ${names.get(id) ?? "this tool"} returned; its outcome is unknown.`,
-                ),
-            ],
-        };
+        yield unknownOutcome(id, names.get(id) ?? "this tool");
     }
+}
+
+function unknownOutcome(id: string, toolName: string): SessionUpdate {
+    return {
+        sessionUpdate: "tool_call_update",
+        toolCallId: id,
+        status: "failed",
+        content: [
+            textContent(
+                `The previous process ended before ${toolName} returned; its outcome is unknown.`,
+            ),
+        ],
+    };
 }
 
 function toolStart(id: string, name: string, args: unknown, cwd: string): SessionUpdate {

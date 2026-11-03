@@ -10,7 +10,9 @@ import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedChange } from "./write-bridge.ts";
 
+import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
+import { BackgroundJobs, STOP_GRACE_MS } from "./background-jobs.ts";
 import { openCredentialStore } from "./credential-store.ts";
 import { attempt, describeCause, PicoSessionError } from "./errors.ts";
 import { connectHostMcpServers } from "./host-mcp-servers.ts";
@@ -43,6 +45,8 @@ export interface PicoSessionOptions {
     model?: Model<Api>;
     /** Pico's saved default for a new session; omitted for a reopened one or when none is saved. */
     startOn?: SavedDefault;
+    /** Whether a slow plain command moves to the background; Pico's settings decide it, on when unset. */
+    autoBackground?: boolean;
     /** Defaults to Pico's registry over the credential store; tests add their own provider to one. */
     modelRegistry?: ModelRegistry;
     /** Engine-owned journal; omit for ephemeral sessions. The engine closes a supplied manager. */
@@ -62,7 +66,10 @@ export interface McpToolIdentity {
 }
 
 /** The teardown step `dispose()` is on, for shutdown diagnostics. */
-export type DisposalPhase = "disconnecting MCP servers" | "disposing the engine";
+export type DisposalPhase =
+    | "stopping background jobs"
+    | "disconnecting MCP servers"
+    | "disposing the engine";
 
 export interface PicoSession {
     readonly engine: AgentSession;
@@ -79,13 +86,23 @@ export interface PicoSession {
     /** The server and tool an active `mcp__…` tool came from, as its connection reported them. */
     mcpToolIdentity(toolName: string): McpToolIdentity | undefined;
     /**
+     * Resolves once no background job runs, no finished job's result is still on its way to the
+     * model, and the engine is idle, or as soon as `stopRequested()` holds (proposal.0008).
+     */
+    settleBackgroundWork(stopRequested: () => boolean): Promise<void>;
+    /**
+     * Stops every running background job and keeps finished jobs' results from starting a run;
+     * resolves false when a job's processes are still running after 5 seconds.
+     */
+    stopBackgroundJobs(): Promise<boolean>;
+    /**
      * Selects and journals a session-local model without changing OMP defaults.
      * Credential failure throws PicoSessionError without switching models.
      */
     selectModel(model: Model<Api>): Promise<void>;
     /** Selects and journals this session's thinking level without changing OMP defaults. */
     selectThinkingLevel(level: ConfiguredThinkingLevel): void;
-    /** Disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
+    /** Stops background jobs, disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
 }
 
@@ -100,7 +117,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
     let engine: AgentSession | undefined;
     const writes = new WriteBridge();
     try {
-        const settings = picoSettings();
+        const settings = picoSettings(options.autoBackground ?? DEFAULT_AUTO_BACKGROUND);
         mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
         const mcpToolNames = mcp.tools.map(tool => tool.name);
         const modelRegistry =
@@ -190,6 +207,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
     const liveEngine = engine;
     const liveMcp = mcp;
     const identities = mcpToolIdentities(mcp.tools);
+    const jobs = new BackgroundJobs(liveEngine);
     let disposed = false;
     let disposalPhase: DisposalPhase | undefined;
     return {
@@ -201,6 +219,8 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         takeChanges: toolCallId => writes.takeChanges(toolCallId),
         writesSettled: () => writes.writesSettled(),
         mcpToolIdentity: toolName => identities.get(toolName),
+        settleBackgroundWork: stopRequested => jobs.settle(stopRequested),
+        stopBackgroundJobs: () => jobs.stop(),
         selectModel: async model => {
             await verifyCredentials(liveEngine, model);
             await liveEngine.setModelTemporary(model);
@@ -209,6 +229,8 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
         dispose: async () => {
             if (disposed) return;
             disposed = true;
+            disposalPhase = "stopping background jobs";
+            const jobsStopped = await jobs.stop();
             disposalPhase = "disconnecting MCP servers";
             const disconnected = await attempt(() => liveMcp.manager.disconnectAll());
             disposalPhase = "disposing the engine";
@@ -222,6 +244,12 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
                         ? "disposing the engine"
                         : "disconnecting MCP servers";
                 throw failure.error;
+            }
+            if (!jobsStopped) {
+                disposalPhase = "stopping background jobs";
+                throw new PicoSessionError(
+                    `A background job's processes were still running ${STOP_GRACE_MS}ms after Pico stopped them.`,
+                );
             }
             disposalPhase = undefined;
         },

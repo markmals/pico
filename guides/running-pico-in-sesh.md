@@ -2,7 +2,15 @@
 id: guide.running-pico-in-sesh
 title: Running Pico in Sesh
 describes:
-    [proposal.0001, proposal.0002, proposal.0003, proposal.0004, proposal.0006, proposal.0007]
+    [
+        proposal.0001,
+        proposal.0002,
+        proposal.0003,
+        proposal.0004,
+        proposal.0006,
+        proposal.0007,
+        proposal.0008,
+    ]
 ---
 
 # Running Pico in Sesh
@@ -11,7 +19,7 @@ describes:
 
 Pico is an ACP agent that Sesh launches as a custom agent. Each Sesh session gets an Oh My Pi (OMP) agent that uses your existing OMP credentials and Pico's own settings, with a fixed set of tools:
 
-- **Files and commands:** `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`.
+- **Files and commands:** `read`, `grep`, `glob`, `edit`, `write`, `bash` and `web_search`, and `wait` for commands running in the background (see [Background commands](#background-commands)).
 - **A task list:** `todo`, which Sesh shows as the session's plan (see [The task list](#the-task-list)).
 - **Sesh's own tools,** when Sesh provides them: asking you questions, notifications, artifacts, session information and renaming, and starting and following other sessions. They appear as `mcp__sesh_ask_user`, `mcp__sesh_notify` and so on, titled like `sesh: ask_user`.
 
@@ -34,7 +42,7 @@ Pico runs on Apple silicon Macs with macOS 14 or later, and installs with Homebr
 2. In Sesh, open **Settings › Machines**, select this Mac, click **Details…**, then **Add an Agent… › Custom…**. Name it "Pico" and choose `/opt/homebrew/bin/pico` as the executable.
 3. Start a new session with that agent in a project, and send a prompt. The reply streams in, and each tool call appears as the agent runs it.
 4. To choose a model for one session, use Sesh's **Model** menu for the agent. It lists every model Pico can use with your credentials (shown as `provider/model`), and the **Thinking** menu lists Off, Auto and the levels the chosen model supports; a model that can't reason offers only Off. Your choice applies to that session only, survives reconnecting to it, and changes nothing in Pico's settings or your OMP configuration. You can change it mid-turn; the next request to the model uses it. From the command line, `sesh new --agent <id> --config model=<provider/model> --config thinking=<level> …` does the same when the session starts. To change the model new sessions start on, see [Choosing the default model](#choosing-the-default-model).
-5. To stop the agent mid-turn, press Stop. A running command is killed, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
+5. To stop the agent mid-turn, press Stop. A running command is killed, including any the agent is running in the background, every unfinished tool call shows as failed, and you can send the next prompt straight away. The agent still remembers what happened in the stopped turn.
 
 Sesh starts `pico` itself and talks to it over its standard input and output. Running `pico` with no arguments in a terminal prints its help and a reminder that Sesh launches it, then exits with status 2. `pico` also has commands of its own for Pico's settings and model list; see [The `pico` command](#the-pico-command).
 
@@ -69,7 +77,7 @@ What a session starts on:
 - **With no default saved,** a new session starts on OMP's own pick: the first model it lists that you have credentials for, at that model's default thinking level. `pico settings get` names that model under `effective`. There is no command to remove a default once saved; deleting `settings.json` (see [Pico's own files](#picos-own-files)) is the only way back to OMP's pick.
 - **A model you choose in Sesh** wins for that session. Sessions already open, and conversations you reopen, keep the model and thinking level they had, whatever the default is now.
 
-If `settings.json` has been edited by hand and can't be read, or was written by a newer Pico, new sessions fail to start with the file's path and the problem, and `pico settings update` refuses to change it until you fix or delete it. Reopening an existing conversation still works.
+If `settings.json` has been edited by hand and can't be read, or was written by a newer Pico, new sessions fail to start with the file's path and the problem, and `pico settings update` refuses to change it until you fix or delete it. Reopening an existing conversation still works (see [Background commands](#background-commands) for the one setting it reads).
 
 ### What Pico reads from OMP
 
@@ -92,7 +100,7 @@ Besides running as Sesh's agent, `pico` answers commands about its settings and 
 - `pico schema <command>` describes a command's options, output and errors as JSON, for scripts and agents.
 - `pico models list` and `pico models get <provider/model>` show the models you can use and their thinking levels.
 - `pico settings get` shows Pico's settings, whether the file is valid, and what new sessions start on.
-- `pico settings update` changes the default model or thinking level.
+- `pico settings update` changes the default model or thinking level, and whether slow commands move to the background.
 
 Apart from `--help` and `--version`, every command prints one JSON document on standard output. A failure prints nothing there; instead, the last line of standard error is a JSON error with a `code` (such as `INVALID_ARGUMENT` or `NOT_FOUND`), a `message`, whether retrying could help, and details, and the command exits with status 2 for a mistake in the command itself, including an option given twice, or 1 for anything else. No command asks a question or waits for input.
 
@@ -110,13 +118,36 @@ For work with several steps, the agent keeps a task list with OMP's `todo` tool.
 
 Pico always offers the task list, even if your OMP configuration turns `todo` off, and it never sends OMP's todo reminders: when the agent stops with items still open, the turn ends there. Making a list also starts no background requests to rename the conversation, which OMP would otherwise send to a model. Your OMP configuration is not changed.
 
+### Background commands
+
+The agent can run a command in the background while it carries on with other work, by asking `bash` for `async`. A command still running after 60 seconds also moves to the background on its own, unless you turn that off (below). Either way, the command stays one tool call in the conversation, titled with the command:
+
+- While the command runs, its call shows as running, with the output so far and a line naming its background job, such as "Running in the background as job bg_1."
+- When the command ends, the call shows its full output and finishes as succeeded, or as failed when the command exits with an error, runs past its time limit ("[Command timed out after …]") or is stopped ("[Command cancelled]").
+
+A background command belongs to the turn that started it. Sesh shows the turn as running until every background command in it has ended, even after the agent has finished its reply. When a command ends, the agent picks up its result and carries on in the same turn, and whatever it does then appears in the conversation like the rest of the turn. A command with no time limit keeps the turn running until it exits or you press Stop, so a server or file watcher can't be left running after a turn; start those yourself.
+
+To block until a background command ends, the agent uses `wait`. It appears as a tool call titled with what the agent said it was doing, or "Wait for background jobs", and lists each job it is waiting for with its ID, status and command, for example `bg_2 — running — ./slow.sh`. It finishes when a job ends, with the job's output.
+
+Pressing Stop kills every command running in the background, along with everything it started, including programs that ignore the request to stop. Their tool calls show as failed. When Sesh disconnects or Pico shuts down, the same happens before `pico` exits, so nothing the agent started keeps running.
+
+To keep slow commands in the foreground:
+
+```sh
+pico settings update --auto-background off
+```
+
+A plain command then runs until it ends or times out, and only a command the agent explicitly runs in the background moves there. `--auto-background on` turns it back on, which is also what Pico does until you set it. Changing it needs no model or credentials. `pico settings get` shows your saved value as `autoBackground` under `item` (`null` when you haven't set it), and the value sessions use under `effective`.
+
+The setting applies to the next session you start or reopen, without restarting anything; a session that is already open keeps the value it opened with. If `settings.json` can't be read, new sessions fail to start (see [Choosing the default model](#choosing-the-default-model)), but a conversation you reopen still opens, with auto-background on, and `pico` writes the file's problem to its standard error.
+
 ### Reopening a conversation
 
 When Sesh reconnects to an existing Pico session after the adapter stops, Pico restores the agent's saved context instead of starting another conversation. Sesh still owns the conversation UI and workspace; Pico's saved state lets the agent remember earlier messages, tool results and its session-local model and thinking choices. Starting a new Sesh session creates a different agent conversation, even in the same project.
 
 The project must still exist at the same directory. A moved or removed worktree, unavailable saved model, unusable credentials, damaged history, or another process already using that agent session produces an error rather than a new empty conversation or a substituted model. Pico never imports your terminal OMP sessions.
 
-An ACP client can resume without receiving old messages, or load the full saved conversation when it needs history replay. Loading includes messages retained before compaction, one card per tool invocation, and the saved final results and captured diffs rather than a reconstruction from today's files. Successful task-list updates have no card, as when they happened, and no earlier plan is replayed. A tool interrupted by the previous process is shown as failed with an unknown outcome when its result was not recorded; loading never runs it again or promises that its side effects were undone. Transient output that was not committed before a crash may be missing, and a missing saved diff says so.
+An ACP client can resume without receiving old messages, or load the full saved conversation when it needs history replay. Loading includes messages retained before compaction, one card per tool invocation, and the saved final results and captured diffs rather than a reconstruction from today's files. Successful task-list updates have no card, as when they happened, and no earlier plan is replayed. A tool interrupted by the previous process is shown as failed with an unknown outcome when its result was not recorded; loading never runs it again or promises that its side effects were undone. A background command shows how it ended, or, if the previous process stopped while it was still running, fails with an unknown outcome. Transient output that was not committed before a crash may be missing, and a missing saved diff says so.
 
 Both loading and resuming end by sending the conversation's current plan once, even when it has no items. Resuming sends nothing else.
 
@@ -138,7 +169,7 @@ Other ACP clients can use `session/list` to discover Pico's saved conversations,
 Pico keeps the files it creates in `~/Library/Application Support/Pico`, which it creates with access for your user only:
 
 - `natives/<version>/`: OMP's native addon, which `pico` carries inside itself and writes out here the first time it needs it. Pico checks the file against its own copy every time it starts and rewrites it if it differs. It removes another version's folder once nothing has used it for 10 minutes, and leaves OMP's other folders here, such as `grammars/`, alone.
-- `settings.json`: Pico's settings, written only by `pico settings update`. It doesn't exist until you first save a default.
+- `settings.json`: Pico's settings, written only by `pico settings update`. It doesn't exist until you first save a setting.
 - `models.db`: the cache of OMP's model list.
 - `sessions/`: the private OMP-format journals for Pico's agent conversations and their artifacts, grouped by working directory.
 - `engine/`: SDK supporting history state, including saved blobs and any title index. This is separate from the original OMP configuration and credential store.
@@ -198,7 +229,8 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 
 - **No Python or JavaScript eval** and **no built-in language server.** For code intelligence, the agent runs your `intellisense` CLI through `bash`, like any other command. Edits get no automatic diagnostics or formatting.
 - **No OMP subagents** (`task`, or OMP's worker sessions). To split work up, the agent starts real Sesh sessions with Sesh's own tools. If it tries a tool it doesn't have, that tool call shows as failed and nothing runs.
-- **Not available yet:** OMP's `ask`, `find`, `wait`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug` and its memory tools. OMP extensions don't load in Pico at all, so neither their tools nor their hooks run (see [What Pico reads from OMP](#what-pico-reads-from-omp)).
+- **Not available yet:** OMP's `ask`, `find`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug` and its memory tools. OMP extensions don't load in Pico at all, so neither their tools nor their hooks run (see [What Pico reads from OMP](#what-pico-reads-from-omp)).
+- **No background services.** OMP's service mode, which keeps a server running between turns, is off: every background command ends with its turn (see [Background commands](#background-commands)).
 - **Questions to you** go through Sesh's `ask_user` tool, so you can answer them from your phone.
 
 ## Limits and edge cases
@@ -223,5 +255,5 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 - **Prompts:** text, in the order you send it, and links to files, which the agent receives as a named reference rather than the file's contents. Images, audio and embedded file contents are rejected with an error naming the unsupported type.
 - **One turn at a time:** a prompt sent while a turn is still running is rejected with an error; the running turn continues.
 - **History after restart:** Pico restores saved agent context when the client reconnects to the same identifier. Sessions created before Pico had persistence cannot be recovered. See [Reopening a conversation](#reopening-a-conversation) for restoration errors and interrupted tools.
-- **A stuck cancellation:** if pressing Stop can't stop the agent, the turn ends as cancelled within at most 10 seconds and that session is closed. Later prompts in it fail with an error saying so; start a new session.
+- **A stuck cancellation:** if pressing Stop can't stop the agent or a command it is running in the background, the turn ends as cancelled within at most 10 seconds and that session is closed. Later prompts in it fail with an error saying so; start a new session.
 - **Removing Pico:** run `brew uninstall pico`, delete `~/Library/Application Support/Pico` if you also want to delete its saved conversations and supporting files, and remove the agent in Sesh's machine settings. A checkout install is removed by deleting `.build/`. This does not delete OMP's own history or credentials, undo changes made in your projects, or remove Sesh's own displayed history.

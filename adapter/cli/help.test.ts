@@ -66,7 +66,9 @@ describe("proposal.0007 command line help", () => {
         expect(help).toContain("pico models list");
         expect(help).toContain("--dry-run");
         expect(help).toContain("default: false");
-        expect(help).toContain("at least one of --default-model or --default-thinking");
+        expect(help).toContain(
+            "at least one of --default-model, --default-thinking or --auto-background",
+        );
     });
 
     test("a command's help says whether it supports a dry run", () => {
@@ -91,5 +93,17 @@ describe("proposal.0007 command line help", () => {
             expect(text.endsWith("\n")).toBe(true);
             expect(text.endsWith("\n\n")).toBe(false);
         }
+    });
+});
+
+describe("proposal.0008 the auto-background option in help", () => {
+    test("settings update's help shows the option, its states and the widened requirement", () => {
+        const help = commandHelp(findCommand(["settings", "update"]) as never);
+
+        expect(help).toContain("--auto-background <state>");
+        expect(help).toContain("values: on, off");
+        expect(help).toContain(
+            "at least one of --default-model, --default-thinking or --auto-background",
+        );
     });
 });

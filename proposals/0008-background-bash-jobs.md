@@ -65,12 +65,12 @@ That breaks proposal 0001's rule that every executed tool is one visible tool ca
 
 ### Quality bar
 
-Every command the model runs, in the foreground or in the background, is one tool call whose output and final status Sesh shows. Everything the model does after a job ends happens in a turn the user started and can stop. No turn ends with a job still running, and no process a job started outlives its session.
+Every command the model runs, in the foreground or in the background, is one tool call whose output and final status Sesh shows. Everything the model does after a job ends happens in a turn the user started and can stop. No turn ends with a job still running, and no process a running job, or a job the agent killed, is running outlives its session. Processes a command leaves behind once it has finished, and processes that detach themselves, are outside this guarantee (see Disconnect and shutdown).
 
 ### Remaining uncertainty
 
 - How Sesh presents a turn held open for many minutes, including any client-side limit, has not been observed. The preview checks it.
-- Whether `process.pids()` includes grandchildren in other process groups, and empties only once they have exited, is unverified. The implementation must prove the SIGTERM-ignoring case rather than assume it.
+- Resolved during implementation: `process.pids()` lists a command's direct children, each the leader of its own process group, and only while the job's run is in flight; it is empty once the job settles, even while a SIGTERM-ignoring process is still alive. A job the model cancels through `proc://` still lists its processes when the next tool call starts.
 
 ## Existing baseline
 
@@ -165,7 +165,7 @@ A call starts a background job when its `tool_execution_end` result carries `det
 - The update whose state is `completed` settles the call `completed`. A state of `failed` (an exit status or a timeout) or `cancelled` settles it `failed`. Its content is OMP's final text, and its raw output is the update's `details`. Pico records that terminal update as the call's saved presentation ([proposal 0004](0004-session-restoration.md)).
 - The call is still reported once and settled once. Updates that arrive after it settled are ignored.
 - A foreground `bash` call and every other tool keep their current reporting.
-- When the model kills a job with `write proc://<id>/kill`, the `write` is reported as usual, and the job's own call settles `failed` from its `cancelled` update.
+- When the model kills a job with `write proc://<id>/kill`, the `write` is reported as usual, and the job's own call settles `failed` from its `cancelled` update. Pico records the processes that job still lists when a tool call starts, and every later stop waits for them like a running job's.
 
 ### `wait`
 
@@ -199,9 +199,10 @@ A call starts a background job when its `tool_execution_end` result carries `det
 
 ### Disconnect and shutdown
 
-- Disposing a session cancels every job it owns: on client disconnect, at shutdown, and when a stuck cancellation closes it. Disposal completes only once those jobs' processes have exited, including processes that ignore SIGTERM.
+- Disposing a session cancels every job it owns: on client disconnect, at shutdown, and when a stuck cancellation closes it. Disposal completes only once those jobs' processes have exited, including processes that ignore SIGTERM, and so do the processes of jobs the model killed.
 - `PicoSession.disposalPhase` gains a phase, "stopping background jobs". If teardown hits `main.ts`'s 5-second limit, the shutdown diagnostic names it like the existing phases.
-- No process a job started outlives Pico's exit.
+- No process of a running job, or of a job the model killed, outlives Pico's exit; their process groups go with them.
+- **Outside the guarantee** (Mark, 2026-11-03): a process a command leaves running after the command has finished (`cmd &`), and a process that detaches itself into a session of its own (a daemon). OMP stops listing them, so Pico cannot see them; they can outlive the session and Pico's exit. Beads `pico-sfs` tracks them, together with the same case for foreground commands. The guide says so.
 
 ### Reopening a session
 
@@ -263,7 +264,7 @@ Behavioral coverage lives beside the affected modules:
     - a failed delivery run cancels remaining jobs and answers with the failure.
 - **Cancellation and teardown:**
     - cancelling during a job and during `wait` kills the job, settles the calls failed, and lets the next prompt run;
-    - a job whose process tree ignores SIGTERM leaves no process after cancellation, after disposal, or after the `pico` executable exits on disconnect;
+    - a job whose process tree ignores SIGTERM, and a job the model killed, leave no process after cancellation, after disposal, or after the `pico` executable exits on disconnect;
     - the fifth stuck-cancellation case closes the session.
 - **Replay:** a settled background call replays its saved outcome; an unsettled one replays as unknown.
 - **Guidance** reaches the system prompt.
@@ -331,6 +332,7 @@ This builds on proposal 0007's settings file and commands, already merged. It ad
 - Jobs or services that outlive a turn could return if ACP gains agent-started turns, or if Sesh grows a surface for long-lived processes, such as its dev-server list.
 - The job limit or the threshold could become Pico settings beside `autoBackground`.
 - The Mac app's Shell row could show and change `autoBackground` once the app reads and writes Pico's settings.
+- A mechanism that sees every process a command starts, such as a process group or session Pico owns for each command, or OMP support for it, could close the gap `pico-sfs` tracks for both background and foreground commands.
 
 ## Alternatives considered
 
@@ -343,9 +345,12 @@ This builds on proposal 0007's settings file and commands, already merged. It ad
 - **OMP's ACP mode as is.** Its bounded delivery drain still lets a late job start a run outside any turn the client started, and it shows the model-facing notice.
 - **A separate tool call per job.** This would invent a call the model never made, against the rule that subprocess activity stays within its call.
 - **Keep service mode.** Services can outlive the session and the process, and issue #27 requires launch to stay off so `wait` cannot reach anything but jobs.
+- **Sample job processes on engine events and SIGKILL the leftovers.** Tried during review: a silent job's leftover child never appears in a sample, and killing a recorded id risks hitting an unrelated process that reused it. Mark accepted the narrower guarantee instead (2026-11-03).
 
 ## Open questions
 
 None.
 
 Mark settled the defect handling (fold it in), job lifetime (turn-owned) and the settings split (async pinned on, launch pinned off, auto-background from Pico's configuration) on 2026-11-02. After proposal 0007 merged, Mark settled the setting's shape (on/off, Pico default on at a fixed 60 seconds), extending settings version 1, and reopen behavior (current file, Pico's default when unusable), and directed that Pico use only its own settings.
+
+During review, the adversarial passes showed that OMP lists a job's processes only while its run is in flight, so Pico cannot see a process a finished command leaves behind or a daemon. Sampling process ids on engine events and sending SIGKILL to the recorded leftovers was tried and removed: it missed silent jobs and risked killing a reused process id. On 2026-11-03 Mark accepted the narrower guarantee recorded under Disconnect and shutdown, with `pico-sfs` tracking the rest.

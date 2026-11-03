@@ -2,7 +2,7 @@
 id: proposal.0008
 title: Background Bash Jobs and Wait
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/45
 issues: [https://github.com/markmals/pico/issues/27, https://github.com/markmals/pico/issues/12]
 supersedes: []
@@ -354,3 +354,5 @@ None.
 Mark settled the defect handling (fold it in), job lifetime (turn-owned) and the settings split (async pinned on, launch pinned off, auto-background from Pico's configuration) on 2026-11-02. After proposal 0007 merged, Mark settled the setting's shape (on/off, Pico default on at a fixed 60 seconds), extending settings version 1, and reopen behavior (current file, Pico's default when unusable), and directed that Pico use only its own settings.
 
 During review, the adversarial passes showed that OMP lists a job's processes only while its run is in flight, so Pico cannot see a process a finished command leaves behind or a daemon. Sampling process ids on engine events and sending SIGKILL to the recorded leftovers was tried and removed: it missed silent jobs and risked killing a reused process id. On 2026-11-03 Mark accepted the narrower guarantee recorded under Disconnect and shutdown, with `pico-sfs` tracking the rest.
+
+Mark accepted the implementation on 2026-11-03 and authorized merging PR #45 and cleaning up afterwards. Delivery is merge-only; no tag, package release or Homebrew publication is authorized.

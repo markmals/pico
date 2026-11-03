@@ -48,6 +48,8 @@ When behavior warrants a test, that test is evidence only if you watched it fail
 | **Verify GREEN** | Run the test and the relevant suite. Confirm they pass with no warnings, leaked logs, or skipped success. |
 | **Refactor** | Remove duplication and improve the design while tests stay green. Add no behavior. For the next behavior, start again at RED. |
 
+For an interface, assert what the user can do and observe — reaching an action, seeing a state, being told about an error — not its look and feel, so polish does not break the tests.
+
 Never commit while red. At a green natural boundary, follow [`.agents/rules/commit-discipline.md`](../../rules/commit-discipline.md).
 
 ### Invariants require properties
@@ -86,6 +88,8 @@ Guides live at `guides/<slug>.md`. Find the guide that already owns the workflow
 
 Preserve required guide frontmatter. Its `id` matches the path, `title` remains accurate, and `describes` preserves earlier proposal ids while adding the current one.
 
+What the user does comes from the proposal. The names and placement of on-screen elements a guide mentions follow the running UI, and you update them when polish changes them; that is not writing a guide from finished code.
+
 | Include | Exclude |
 | --- | --- |
 | Inputs, prerequisites, actions, outcomes, errors, constraints, defaults, and durable effects | Internal implementation details users cannot observe |
@@ -108,7 +112,7 @@ This comparison is load-bearing. Without it, the guide is decorative and the tes
 
 ## 3. Code
 
-Implement only Detailed design and its applicable failing tests and guide. Keep the production change minimal; do not add behavior those artifacts do not require.
+Implement only Detailed design and its applicable failing tests and guide. Keep the production change minimal; do not add behavior those artifacts do not require. Look and feel the proposal leaves open is yours to choose, fitting the project's existing interface and its platform's conventions, and the human's to refine with [`.agents/skills/polishing-a-ui/SKILL.md`](../polishing-a-ui/SKILL.md).
 
 When a test is difficult to write, simplify the interface rather than compensate with excessive mocking or setup. Test real code; isolate only inputs you cannot control, such as network, time, or randomness.
 

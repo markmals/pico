@@ -27,7 +27,7 @@ Begin after applicable validation has fresh evidence under `.agents/rules/verifi
 
 ## 1. Self-check
 
-Read the proposal, the changed tests, the affected guides, and the diff together. For each observable behavior in Detailed design — including boundary cases, errors, defaults, and side effects that could disagree — confirm that it is tested, described where a user would look when it is user-facing, and implemented. Then look the other way: anything implemented that the proposal and guides do not describe is scope creep or a gap in the proposal. Do not tick a behavior off because a source probably implies it.
+Read the proposal, the changed tests, the affected guides, and the diff together. For each observable behavior in Detailed design — including boundary cases, errors, defaults, and side effects that could disagree — confirm that it is tested, described where a user would look when it is user-facing, and implemented. Then look the other way: anything implemented that the proposal and guides do not describe is scope creep or a gap in the proposal. Look and feel the proposal leaves open is neither, and neither is a look-and-feel detail the proposal pinned that the human has since changed through polish. Do not tick a behavior off because a source probably implies it.
 
 Then ask whether this is the implementation that should remain, with [`.agents/skills/simplifying-code/SKILL.md`](../simplifying-code/SKILL.md) as the lens. Does the structure fit the domain the proposal describes, or does it leak implementation conveniences into public behavior? Is there a simpler realization that expresses the proposal better, a false distinction the working system exposed, or complexity inherited from the baseline that no longer earns its place?
 
@@ -45,7 +45,7 @@ You MAY edit tests, guides, and code to remove a disagreement. You MUST NOT revi
 
 ## 2. Dispatch and consume one adversarial review
 
-Dispatch one subagent with fresh context for `adversarial-review`. Use the strongest available portability rung: different model family, then different model, then a fresh-context run. Give it the current proposal, the commit range, the affected tests and guides, and the commands that verify the work. Tell it to try to show the work is not done — behavior missing or wrong relative to the proposal, edge cases the tests miss, tests that would still pass with a broken implementation, security or data-loss risks — to confirm findings by running code, to ignore style, naming, and formatting, and to report without editing.
+Dispatch one subagent with fresh context for `adversarial-review`. Use the strongest available portability rung: different model family, then different model, then a fresh-context run. Give it the current proposal, the commit range, the affected tests and guides, and the commands that verify the work. Tell it to try to show the work is not done — behavior missing or wrong relative to the proposal, edge cases the tests miss, tests that would still pass with a broken implementation, security or data-loss risks — to confirm findings by running code, to ignore style, naming, formatting, and look and feel, and to report without editing.
 
 Do not replace this dispatch with your own review. Consume its report:
 
@@ -130,6 +130,10 @@ At the end of Phase 3, these three actions form one transition and MUST NOT be s
 Do not leave the proposal, report, and pull-request state disagreeing. Ready means the work is reviewable, not correct or accepted.
 
 Acceptance in Phase 4 is the human's — never an agent accepting its own completion claim. Phase 4 then starts Phase 5 completion.
+
+### Look-and-feel feedback in review
+
+While the proposal is `active-review`, apply feedback that touches only look and feel with [`.agents/skills/polishing-a-ui/SKILL.md`](../polishing-a-ui/SKILL.md): change the code, run the gates, push, refresh the preview, and say what changed. Do not edit the proposal, change its status, post another readiness report, or rerun the adversarial review. Feedback that changes what the feature does, or a design decision the proposal records, goes through the proposal first, after the human returns the work with `returned-for-revisions`. Split feedback that mixes both.
 
 ### Recover an already accepted draft pull request
 

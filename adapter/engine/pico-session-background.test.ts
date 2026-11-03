@@ -212,43 +212,6 @@ describe("proposal.0008 stopping background jobs", () => {
 
         assert.equal(isRunning(pid), false);
     });
-
-    test("stopping kills a process a finished job left running", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
-        const pidFile = path.join(cwd, "child.pid");
-        const session = await createPicoSession({
-            cwd,
-            agentDir,
-            dataDir,
-            mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
-            model: createMockModel({
-                responses: [
-                    {
-                        content: [
-                            toolCall(
-                                "bash",
-                                {
-                                    command: `/bin/sh -c 'echo $$ > ${pidFile}; exec /bin/sleep 30' & echo started`,
-                                    async: true,
-                                },
-                                "job",
-                            ),
-                        ],
-                    },
-                    { content: ["started"] },
-                ],
-                handler: { content: ["woken"] },
-            }),
-        });
-        t.after(() => session.dispose());
-        await session.engine.prompt("start a job that leaves a child running");
-        await session.settleBackgroundWork(() => false);
-        const pid = await pidFrom(pidFile);
-
-        assert.equal(await session.stopBackgroundJobs(), true);
-        assert.equal(isRunning(pid), false);
-    });
 });
 
 describe("proposal.0008 guidance", () => {

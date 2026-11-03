@@ -318,8 +318,16 @@ export class SessionRuntime {
 
     /** Stops the turn's background jobs once; every later caller shares that outcome. */
     #stopJobs(turn: Turn): Promise<boolean> {
-        turn.jobsStopped ??= this.#session.stopBackgroundJobs();
+        turn.jobsStopped ??= this.#stopBackgroundJobs();
         return turn.jobsStopped;
+    }
+
+    /** A stop that fails has not shown the jobs stopped, so it counts as one that could not stop them. */
+    #stopBackgroundJobs(): Promise<boolean> {
+        return this.#session.stopBackgroundJobs().catch((error: unknown) => {
+            console.error(`pico: stopping background jobs failed: ${describe(error)}`);
+            return false;
+        });
     }
 
     /**
@@ -362,7 +370,7 @@ export class SessionRuntime {
         }
         // A job that ignores SIGTERM outlives its cancellation for a moment, and one can start while
         // the abort unwinds; the turn is not cancelled while any of their processes runs.
-        if (!(await jobsStopped) || !(await this.#session.stopBackgroundJobs())) {
+        if (!(await jobsStopped) || !(await this.#stopBackgroundJobs())) {
             return this.#close(
                 turn,
                 "a background job's processes were still running after the cancellation stopped it",

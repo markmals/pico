@@ -165,10 +165,9 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
     if (end === -1) return { error: "unterminated YAML frontmatter" };
 
     let frontmatter: Frontmatter = {};
-    for (let line of lines.slice(1, end)) {
-        let trimmed = line.trim();
-        if (trimmed === "" || trimmed.startsWith("#")) continue;
-
+    let entries = joinWrappedLines(lines.slice(1, end));
+    if ("error" in entries) return entries;
+    for (let line of entries.lines) {
         let match = line.match(/^([a-z][a-z-]*):[ \t]*(.*)$/);
         if (!match) return { error: `cannot parse frontmatter line "${line}"` };
 
@@ -192,6 +191,26 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
     }
 
     return { frontmatter, content: source };
+}
+
+/**
+ * Frontmatter lines with indented continuations folded into the key line they continue, as
+ * Oxfmt writes a list value too long for one line; blank lines and comments are dropped.
+ */
+function joinWrappedLines(lines: readonly string[]): { lines: string[] } | { error: string } {
+    let joined: string[] = [];
+    for (let line of lines) {
+        let trimmed = line.trim();
+        if (trimmed === "" || trimmed.startsWith("#")) continue;
+        if (!/^\s/.test(line)) {
+            joined.push(line);
+            continue;
+        }
+        let previous = joined.pop();
+        if (previous === undefined) return { error: `cannot parse frontmatter line "${line}"` };
+        joined.push(`${previous} ${trimmed}`);
+    }
+    return { lines: joined };
 }
 
 export function validateArtifacts(inputArtifacts: readonly Artifact[]): Violation[] {

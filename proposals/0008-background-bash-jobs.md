@@ -2,7 +2,7 @@
 id: proposal.0008
 title: Background Bash Jobs and Wait
 authors: [Mark Malstrom]
-status: draft
+status: awaiting-implementation
 pull-request: https://github.com/markmals/pico/pull/45
 issues: [https://github.com/markmals/pico/issues/27, https://github.com/markmals/pico/issues/12]
 supersedes: []

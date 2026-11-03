@@ -120,7 +120,7 @@ Pico always offers the task list, even if your OMP configuration turns `todo` of
 
 ### Background commands
 
-The agent can run a command in the background while it carries on with other work, by asking `bash` for `async`. A command still running after 60 seconds also moves to the background on its own, unless you turn that off (below). Either way, the command stays one tool call in the conversation, titled with the command:
+The agent can run a command in the background while it carries on with other work, by asking `bash` for `async`. A command still running after 60 seconds, or one second before its own time limit when that comes first, also moves to the background on its own, unless you turn that off (below). Either way, the command stays one tool call in the conversation, titled with the command:
 
 - While the command runs, its call shows as running, with the output so far and a line naming its background job, such as "Running in the background as job bg_1."
 - When the command ends, the call shows its full output and finishes as succeeded, or as failed when the command exits with an error, runs past its time limit ("[Command timed out after …]") or is stopped ("[Command cancelled]").

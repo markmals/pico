@@ -298,6 +298,28 @@ describe("proposal.0009 login refuses every question", () => {
 });
 
 describe("proposal.0009 login ends on its own terms", () => {
+    test("the built-in Anthropic browser flow waits for its callback instead of asking for a paste", async () => {
+        const cancellation = new AbortController();
+        const { vault: opened } = vault();
+        const { events, emit } = recorder();
+
+        const error = await runLogin({
+            method: "anthropic",
+            vault: opened,
+            signal: cancellation.signal,
+            emit: event => {
+                emit(event);
+                if (event.type === "authorization") {
+                    queueMicrotask(() => cancellation.abort());
+                }
+            },
+        }).catch(failure => failure as LoginError);
+
+        expect(events.some(event => event.type === "authorization")).toBe(true);
+        expect((error as LoginError).code).toBe("CANCELLED");
+        expect(opened.list()).toEqual([]);
+    });
+
     test("a cancelled attempt publishes no credential", async () => {
         const controller = new AbortController();
         // The flow never settles: ending the attempt is the caller's job, not the provider's.

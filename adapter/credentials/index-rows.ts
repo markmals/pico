@@ -223,7 +223,18 @@ export class CredentialIndex {
         this.#database.run("DELETE FROM credentials WHERE reference = ?", [reference]);
     }
 
-    /** References of creations whose attempt can no longer finish, oldest first. */
+    claimExpiredCreation(reference: string, nowMs: number): boolean {
+        return (
+            this.#database.run(
+                `UPDATE credentials
+             SET state = 'deleting', attempt_expires_at_ms = 0, updated_at_ms = ?
+             WHERE reference = ? AND state = 'pending' AND attempt_expires_at_ms <= ?`,
+                [nowMs, reference, nowMs],
+            ).changes > 0
+        );
+    }
+
+    /** Expired pending references, oldest first; cleanup still needs an atomic claim. */
     abandonedCreations(nowMs: number): string[] {
         return this.#database
             .query<{ reference: string }, [number]>(

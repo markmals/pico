@@ -206,6 +206,55 @@ describe("proposal.0009 credential storage failures", () => {
         vault.close();
     });
 
+    test("recovery owns a reservation before its Keychain deletion can race publication", () => {
+        const dataDir = temporaryDataDir();
+        const keychain = createMemorySecretStore();
+        const reference = interruptedCreation(dataDir, keychain, { itemWritten: true });
+        const remove = keychain.delete.bind(keychain);
+        let publicationState: string | undefined;
+        keychain.delete = target => {
+            if (target === reference) {
+                withCredentialLock(dataDir, () => {
+                    const index = new CredentialIndex(lockedConnection(dataDir));
+                    index.publish(reference, {});
+                    publicationState = index.findByReference(reference)?.state;
+                });
+            }
+            return remove(target);
+        };
+        const vault = openCredentialVault({ dataDir, keychain });
+
+        const stored = vault.create("openai", apiKeyCredential());
+
+        expect(publicationState).toBe("deleting");
+        expect(vault.read(stored.reference).credential).toMatchObject({ key: API_KEY });
+        vault.close();
+    });
+
+    test("a stale recovery candidate cannot claim a successfully published credential", () => {
+        const dataDir = temporaryDataDir();
+        const keychain = createMemorySecretStore();
+        const reference = interruptedCreation(dataDir, keychain, { itemWritten: true });
+        withCredentialLock(dataDir, () => {
+            const index = new CredentialIndex(lockedConnection(dataDir));
+            expect(index.abandonedCreations(Date.now())).toEqual([reference]);
+            index.publish(reference, {});
+        });
+
+        const claimed = withCredentialLock(dataDir, () =>
+            new CredentialIndex(lockedConnection(dataDir)).claimExpiredCreation(
+                reference,
+                Date.now(),
+            ),
+        );
+        const vault = openCredentialVault({ dataDir, keychain });
+
+        expect(claimed).toBe(false);
+        expect(vault.metadata(reference)?.state).toBe("active");
+        expect(vault.read(reference).credential).toMatchObject({ key: API_KEY });
+        vault.close();
+    });
+
     test("recovery of an abandoned creation touches only that Pico-owned item", () => {
         const dataDir = temporaryDataDir();
         const keychain = createMemorySecretStore();

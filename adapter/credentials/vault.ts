@@ -327,27 +327,32 @@ class KeychainVault implements CredentialVault {
         });
     }
 
-    /** Removes a reservation whose Keychain write never happened. */
     #abandon(reference: string): void {
         withCredentialLock(this.#dataDir, () => {
-            new CredentialIndex(lockedConnection(this.#dataDir)).remove(reference);
+            const index = new CredentialIndex(lockedConnection(this.#dataDir));
+            index.remove(reference);
+            index.bumpRevision();
         });
     }
 
-    /**
-     * Finishes creations a stopped process left unpublished: their items are Pico's
-     * own, named by the reservation that survived, and nothing else is touched.
-     */
+    /** Claims recovery ownership before native cleanup can race a late publication. */
     #recoverAbandonedCreations(): void {
         const abandoned = withCredentialLock(this.#dataDir, () => {
             const index = new CredentialIndex(lockedConnection(this.#dataDir));
             return index.hasSchema() ? index.abandonedCreations(Date.now()) : [];
         });
         for (const reference of abandoned) {
+            const claimed = withCredentialLock(this.#dataDir, () => {
+                const index = new CredentialIndex(lockedConnection(this.#dataDir));
+                const changed = index.claimExpiredCreation(reference, Date.now());
+                if (changed) index.bumpRevision();
+                return changed;
+            });
+            if (!claimed) continue;
             try {
                 this.#keychainStore().delete(reference);
             } catch {
-                // The reservation stays; the next credential operation tries again.
+                // Keep the deleting reference visible for an explicit cleanup retry.
                 continue;
             }
             this.#abandon(reference);

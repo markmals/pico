@@ -12,17 +12,19 @@ supersedes: []
 
 ## Summary
 
-Pico gets a versioned settings file. `pico` validates and saves it atomically through agent-first commands: discoverable, schema-described and JSON by default. The Mac app uses the same commands. Its first setting is the default model and reasoning level for new Sesh sessions. Pico sessions stop reading the user's OMP configuration.
+Pico gets a versioned settings file. `pico` validates and saves it atomically through agent-first commands: discoverable, schema-described and JSON by default. Its first setting is the default model and reasoning level for new Sesh sessions. Pico sessions stop reading the user's OMP configuration. Connecting the Mac app follows separately.
 
 ## Motivation
 
 Pico has no configuration of its own. Every session starts from the user's OMP configuration for its working directory: the model and thinking level OMP's settings resolve, every other OMP setting, custom models from `models.yml`, user and project extensions and hooks, and OMP's skills, rules, prompts and commands ([proposal 0001](0001-acp-adapter-core.md#sessionnew)). Pico adds its fixed policy on top and writes nothing. To make Pico start on a different model, a user has to change OMP's configuration, which also changes terminal OMP, or pick a model in every Sesh session.
 
-The Mac app was built to fix that, but its controls are unconnected ([proposal 0005](0005-mac-app-ui-workspace.md)). It has a Models pane with a default-model picker, a reasoning-level picker and an Available models list, and a General pane with a Settings file row. All of them wait for [issue #12](https://github.com/markmals/pico/issues/12): one versioned configuration contract that the app and the adapter both understand, with validated, atomic saves, app defaults kept apart from a session's own choices, and secrets kept out of ordinary files.
+The Mac app was built to fix that, but its controls are unconnected ([proposal 0005](0005-mac-app-ui-workspace.md)). Its Models pane and Settings file row wait for [issue #12](https://github.com/markmals/pico/issues/12): one versioned configuration contract that the app and the adapter both understand, with validated, atomic saves, app defaults kept apart from a session's own choices, and secrets kept out of ordinary files.
 
-Mark chose the first slice of #12 on 2026-11-02: the contract and the default model. Credential references come next, in their own proposal designed with the Autonomous credential store ([#7](https://github.com/markmals/pico/issues/7)), so #12 stays open after this one. Mark also decided that once Pico has its own configuration, OMP-specific configuration must stop affecting Pico: OMP's settings files, `models.yml`, OMP extensions, and the skills, rules, prompts and commands OMP finds under `~/.omp` and a project's `.omp`. Pico's settings, Pico's fixed policy and OMP's built-in defaults decide how a Pico session behaves. Mark also chose to remove the app's sample-data mode instead of keeping it next to real values.
+Mark chose the first slice of #12 on 2026-11-02: the contract and the default model. Credential references come next, in their own proposal designed with the Autonomous credential store ([#7](https://github.com/markmals/pico/issues/7)), so #12 stays open after this one. Mark also decided that once Pico has its own configuration, OMP-specific configuration must stop affecting Pico: OMP's settings files, `models.yml`, OMP extensions, and the skills, rules, prompts and commands OMP finds under `~/.omp` and a project's `.omp`. Pico's settings, Pico's fixed policy and OMP's built-in defaults decide how a Pico session behaves.
 
-The app is not the only client of these settings. An agent working in Sesh, including one running on Pico, may be asked which model new sessions use, or to change it. Mark asked on 2026-11-02 that Pico's commands follow agent-first command-line guidance: an agent with no prior knowledge of `pico` should be able to discover, inspect, validate, preview, run and verify each operation from the executable alone.
+The contract the app and the adapter share is `pico`'s command line. The app is not its only client: an agent working in Sesh, including one running on Pico, may be asked which model new sessions use, or to change it. Mark asked on 2026-11-02 that Pico's commands follow agent-first command-line guidance: an agent with no prior knowledge of `pico` should be able to discover, inspect, validate, preview, run and verify each operation from the executable alone.
+
+Mark then moved connecting the Mac app to these commands out of this proposal and into a follow-up pull request (Beads `pico-bfk.5`). This proposal changes no app code. It specifies the commands the app will use.
 
 ## Domain grounding
 
@@ -61,20 +63,19 @@ The app is not the only client of these settings. An agent working in Sesh, incl
 
 - **Never fall back silently.** A model, file or command that cannot be used fails with its cause.
 - **Never rewrite the user's OMP configuration or credentials.** Pico reads the user's credential store in place and writes no OMP file.
-- **One parser, one command schema.** Mark chose `pico` as the only reader and writer of the settings file. The app and agents use the same commands, and every command's parser, help, schema and search entry come from one registry.
-- **Swift gets no second provider engine** ([PROTOTYPE.md](../PROTOTYPE.md#configuration-and-credentials)). The app shows what `pico` reports and decides nothing about models itself.
+- **One parser, one command schema.** Mark chose `pico` as the only reader and writer of the settings file. The app, when it is connected, and agents use the same commands, and every command's parser, help, schema and search entry come from one registry.
+- **Swift gets no second provider engine** ([PROTOTYPE.md](../PROTOTYPE.md#configuration-and-credentials)). Everything the app will need to show, including the catalog, each model's thinking choices and the effective default, comes from `pico`.
 - **The executable's existing contract stays** ([proposal 0002](0002-pico-homebrew-distribution.md)). With no arguments and stdin not a terminal, `pico` is the ACP agent Sesh launches. `pico --version` prints `pico <version>` and a newline. An unknown argument exits 2. The Homebrew formula's test relies on the last two.
 - **A setting exists only if it changes a real capability.** The default model and reasoning level change what a new session runs on, and no other setting is added.
-- **Every unconnected control stays visibly unconnected** until the work that connects it ([proposal 0005](0005-mac-app-ui-workspace.md#stub-boundary)).
 
 ### Quality bar
 
-Choosing a default model in the app changes the model the next new Sesh session starts on, without restarting anything. A session that is already open, or that was given a model in Sesh, keeps its own. Quitting and reopening the app shows the same choice. A save that fails leaves the previous file byte-for-byte unchanged and says why. Nothing under `~/.omp`, other than the credential store Pico already reads, affects a Pico session. An agent that has never seen `pico` can find the right command, change the default, recover from a rejected value, and confirm the result, using only the executable.
+Saving a default model with `pico settings update` changes the model the next new Sesh session starts on, without restarting anything. A session that is already open, or that was given a model in Sesh, keeps its own. A save that fails leaves the previous file byte-for-byte unchanged and says why. Nothing under `~/.omp`, other than the credential store Pico already reads, affects a Pico session. An agent that has never seen `pico` can find the right command, change the default, recover from a rejected value, and confirm the result, using only the executable.
 
 ### Remaining uncertainty
 
 - Sesh's model picker for a new session shows the value Sesh cached when it last probed Pico. After the default changes, that value can be stale until the session starts and reports the model it actually used. The preview has to show whether Sesh sends the cached value as an explicit choice, which would override Pico's default.
-- The app launches `pico` with the app's environment, not a login shell's. A provider whose only credential is a shell environment variable can be available to Sesh sessions but missing from the app's catalog.
+- `pico` sees the environment of whatever launched it. A provider whose only credential is a shell environment variable can be available from a terminal but missing for a process that seshd or a GUI app launches.
 - The fake local server for `pico:verify` and the agent evaluation has to satisfy LM Studio discovery as OMP 18.14.0 performs it. That is established from the source, not yet exercised.
 
 ## Existing baseline
@@ -97,18 +98,13 @@ Several pieces exist only to serve OMP configuration and go with it:
 
 `adapter/invocation.ts` recognizes only `--version` and bare ACP invocation, printing `usage: pico [--version]` to stderr for anything else. `adapter/pico.ts` handles `--version` before loading OMP. That ordering is the pattern for discovery commands: `pico` can answer them without the native addon, OMP or credentials.
 
-The app's Models pane already has the shape this proposal connects:
-
-- `DefaultModelPickerRow`, `ReasoningLevelPickerRow` and `AvailableModelRows` (`app/Panes/ModelRows.swift`) render either a disabled stub or sample values.
-- The sample rule for switching models (keep the reasoning level when the new model offers it, otherwise use the model's default) moves into `pico` (`app/Sample/SampleSettings.swift:69-75`).
-- `SettingsFileRow` shows a path on one line with Show in Finder and Copy Path.
-- Everything under `app/Sample/` exists only for sample data. So do the provider list, provider pages, the Add Provider sheet, provider tiles and logos, the View › Show Sample Data command and the `-ShowsSampleData` argument.
+The Mac app is unchanged by this proposal. Its sample data already holds the rule a default-model change needs: keep the reasoning level when the new model offers it, otherwise switch to that model's default level (`app/Sample/SampleSettings.swift:69-75`). `settings update` adopts that rule, so the connected app will not need its own copy.
 
 ## Proposed solution
 
 `pico` owns one JSON file, `~/Library/Application Support/Pico/settings.json`. It carries a version number and, for now, one setting: the default model and its reasoning level. `pico` gains a small command tree, `models list`, `models get`, `settings get` and `settings update`, and the discovery commands an unfamiliar agent needs: `--help`, `cli search` and `schema`. All of them come from one command registry. Results are JSON on stdout, errors are coded JSON on stderr, and `settings update` can be previewed, guarded by a revision, and read back.
 
-The Mac app runs `settings get`, `models list` and `settings update`, and nothing else. Its Models pane shows the real catalog and saves each choice as it is made, as System Settings does. Each `session/new` reads the file. A model chosen in Sesh still wins for that session, and a reopened session keeps its own. Pico sessions stop reading OMP's settings files, `models.yml`, extensions and OMP-only prompt sources.
+Each `session/new` reads the file. A model chosen in Sesh still wins for that session, and a reopened session keeps its own. Pico sessions stop reading OMP's settings files, `models.yml`, extensions and OMP-only prompt sources.
 
 ```text
 pico cli search "change the default model"  → settings update ranked first, with its usage
@@ -119,7 +115,6 @@ pico settings update --default-model anthropic/claude-sonnet-5-5
                                               → receipt with the new revision
 pico settings get                             → the saved default, and that new sessions start on it
 pico settings update --default-thinking max   → exit 2, INVALID_ARGUMENT listing the levels the model offers
-Models › Model in Pico.app                    → the same update; a new Sesh session starts on it
 ```
 
 ## Detailed design
@@ -179,7 +174,7 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
 ### Starting a session
 
 - `session/new` reads `settings.json` each time, so a save applies to the next new session without restarting `pico`. The catalog is resolved as for the CLI below, including one cache-aware discovery pass when the saved model is not in the cached catalog.
-    - **Valid with a default model:** the session starts on that model at that thinking level, and its config options report both. If the model is not in the catalog, or the model does not offer that thinking value, `session/new` fails. The error names the saved model and says to choose another default in Pico's Models settings or with `pico settings update`. No session is created and no model is substituted.
+    - **Valid with a default model:** the session starts on that model at that thinking level, and its config options report both. If the model is not in the catalog, or the model does not offer that thinking value, `session/new` fails. The error names the saved model and says to choose another default with `pico settings update`. No session is created and no model is substituted.
     - **Missing, or valid without a default:** the session starts on OMP's built-in choice, `pickDefaultAvailableModel` over the catalog, at that model's default thinking level. Mark noted that Sesh makes the user pick a model before a session starts, and Sesh learns its choices from Pico's `session/new` response, so failing here would leave Sesh nothing to offer. If no model has usable credentials, `session/new` fails as it does today.
     - **Unsupported or invalid:** `session/new` fails with the file's problem and path. No session is created.
 - `session/set_config_option` is unchanged. It changes that session alone and is never written to Pico settings.
@@ -188,7 +183,7 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
 
 ### Thinking choices for a model
 
-- A model's thinking choices are the options Pico's Thinking option offers for it: Off, then Auto, then the model's supported reasoning levels in OMP's order. The config option and the CLI share one pure function of a model, so Sesh, the app and agents cannot see different lists.
+- A model's thinking choices are the options Pico's Thinking option offers for it: Off, then Auto, then the model's supported reasoning levels in OMP's order. The config option and the CLI share one pure function of a model, so Sesh and every `pico` client see the same list.
 - A model's default thinking level is the value Pico's Thinking option shows when a session starts on that model with no level chosen. That is Off for a model without reasoning; otherwise it is OMP's built-in `high`, adjusted to the nearest level the model supports, as OMP adjusts it.
 
 ### The `pico` command line
@@ -349,63 +344,17 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
     - A dry run returns `dryRun: true`. Its `after.revision` is the revision the write would produce, and the file is untouched.
     - `settings get` reads the result back, and `before` holds what an update back would restore.
     - The update replaces a default rather than destroying data, so it asks for no confirmation and has no force option.
+    - No command removes a saved default, because Mark chose that a model must be chosen. Deleting `settings.json` is the only way back to OMP's built-in choice.
 
 #### Guidance that does not apply
 
 - **Authentication, profiles and tokens.** No command signs in or holds a credential. Commands read the existing store, and credentials are the next slice of #12.
 - **Pagination, field projection and streaming.** Every list is a complete local catalog. `--provider` narrows it, and `jq` can project fields.
 - **Environments and remote targets.** There is one settings file per macOS user, and every result names it.
-- **Long-running operations.** Every command finishes before it exits. The app enforces its own timeout.
+- **Long-running operations.** Every command finishes before it exits. A client can still impose its own timeout.
 - **Structured request bodies.** The inputs are two scalar options.
 - **Documentation search, an agent skill and an MCP surface.** `pico` ships no documentation beyond its help and schema. The registry is where any of these would be generated from later.
 - **Text and table output modes.** JSON is the only result format, and `--help` is the human form.
-
-### The Mac app
-
-#### Finding and running `pico`
-
-- The app runs the executable named by the `-PicoExecutable <path>` launch argument when one is given, reading the argument domain only, never saved defaults. Otherwise it runs the first executable file of `/opt/homebrew/bin/pico` and `/usr/local/bin/pico`. `mise run macos:run` builds `.build/pico` with `pico:build` and opens the app with `-PicoExecutable` set to it.
-- When no executable is found, the app runs nothing. The Models pane says `pico` was not found at those locations and that Homebrew installs it.
-- The app runs `pico` off the main thread, with no stdin and the app's own environment. A run that has not finished within 30 seconds is terminated and reported as "`pico` did not answer within 30 seconds".
-- On exit status 0 the app decodes stdout. Otherwise it decodes the last line of stderr as an error document and shows its `message`. Failing that, it shows the last lines of stderr, or the exit status when stderr is empty. A document whose `apiVersion` is not 1 is reported as this `pico` speaking a different version, naming its path.
-- The app loads by running `pico settings get` and `pico models list` concurrently, when its window opens and each time the Models pane is shown.
-- To save, it runs `pico settings update --default-model <value> --if-revision <revision>` when a model is chosen, or `--default-thinking <value> --if-revision <revision>` when a level is chosen, with the revision from its last load. `pico` decides the level a new model keeps. A successful receipt updates the shown values and revision.
-- On `CONFLICT`, the app reloads and shows an alert saying that Pico's settings changed outside the window, nothing was saved, and the current values are shown. Any other failure shows an alert with its message, and the pickers keep the last loaded values.
-
-#### Models
-
-- **Loading:** both pickers are disabled and read "Loading…".
-- **Command failure:** both pickers are disabled and read "Unavailable". The Defaults footer shows the failure with a Try Again button that loads again.
-- **Unsupported or invalid settings file:** both pickers are disabled and read "Unavailable". The footer shows the problem, says to fix or remove the file, and has a Show in Finder button that reveals it.
-- **Loaded, file missing or valid:**
-    - The Model picker lists the catalog. Each entry shows the model's name and then its provider in parentheses, such as "Claude Sonnet 5.5 (anthropic)", because two providers can offer models with the same name.
-    - With no saved default, the Model picker reads "Not Set", and the Reasoning level picker is disabled and reads "Not Set". "Not Set" cannot be chosen once a model is saved. When `effective` names a built-in choice, the footer says that until a model is chosen, new sessions start with that model.
-    - A saved model that is not in the catalog appears as its saved value followed by "(unavailable)", selected. The footer says new sessions will fail to start until another model is chosen.
-    - The Reasoning level picker lists the saved model's thinking choices and shows the saved level.
-    - Choosing a model or level saves it at once. While a save runs, both pickers are disabled.
-    - With an empty catalog, the Model picker is disabled and reads "None available", and the footer says no model has usable credentials.
-    - The Defaults footer otherwise says that new Sesh sessions start with this model and reasoning level, and that sessions already open, or given a model in Sesh, keep their own.
-- **Available models** lists the catalog in order. Each row shows the model's name and its `provider/id` value, with "Default" on the saved model. An empty catalog reads "None available". While loading or after a failure, the section reads "Unavailable".
-- The Models pane shows no notice about unconnected settings, because it has none.
-
-#### General › Settings file
-
-- The row shows `settingsFile` from the last load on one line, truncated in the middle if it does not fit. Before a load it reads "Loading…", and after a failure it reads "Unavailable".
-- Show in Finder reveals the file selected when it exists. When only its folder exists, it opens the folder. Otherwise it is disabled. Copy Path, in the row's context menu, copies the path whenever one is shown.
-- The Runtime and Versions rows stay unconnected.
-
-#### Removing sample data
-
-- Delete the sample-data mode, including:
-    - `app/Sample/` and its tests;
-    - the View › Show Sample Data command, the `-ShowsSampleData` argument and the sample-data notice;
-    - the provider list rows, provider pages, the Add Provider sheet, the sign-in menu and Sign Out;
-    - the sample Register and Unregister actions;
-    - provider tiles, and the provider logo assets with their notice, `app/ThirdPartyNotices.md`.
-- Navigation no longer has provider pages, and the history rule for forgetting them goes too.
-- Every unconnected row keeps its unconnected stub. Providers & Accounts shows its Providers row reading "Not connected" and a disabled Add Provider… button.
-- The notice at the bottom of every pane except Models reads "Some settings aren't connected yet". It keeps the symbol and accessibility announcement of today's unconnected notice.
-- Search, links and item slugs are unchanged.
 
 ### Tests, guides and verification
 
@@ -433,7 +382,6 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
     - `session/set_config_option` overriding the default for one session;
     - a reopened session keeping its own model, including when the settings file is invalid;
     - isolation: in a scratch OMP configuration directory and project, a `config.yml`, project settings, `models.yml`, extensions, skills, rules, prompts, commands and an `.omp/AGENTS.md` each would change a session, and none does. The project's `AGENTS.md` and `.agents/skills` still load.
-- Swift tests cover decoding each result and error document, rejecting another `apiVersion`, and the order in which `pico` is located.
 - `pico:verify` changes how its compiled `pico` gets an offline model. It starts a local fake OpenAI-compatible server that OMP's built-in LM Studio provider discovers through `LM_STUDIO_BASE_URL`, with no extension or OMP configuration file. In its scratch home it then runs:
     - `--help`, `schema` and `cli search`;
     - `settings get` with no file;
@@ -449,15 +397,9 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
 
     Record each task's end state (`settings.json` and `settings get`, not exit statuses), the commands run, invalid commands, recoveries, and whether the agent verified its result. Fix any discovery or error defect it exposes within this design, and include the record in the readiness report.
 
-- Revise `guides/running-pico-in-sesh.md` and `guides/refining-the-mac-app-ui.md` from this proposal before changing code:
-    - what Pico reads and no longer reads;
-    - how the default applies;
-    - the `pico` commands, pointing to `pico --help` rather than reproducing the reference;
-    - how the Models pane and the Settings file row work.
+- Revise `guides/running-pico-in-sesh.md` from this proposal before changing code. It should say what Pico reads and no longer reads, how the default applies, and which `pico` commands exist, pointing to `pico --help` rather than reproducing the reference.
 
-    Remove the sample-data material.
-
-- Revise `AGENTS.md` (including its layout and commands), `PROTOTYPE.md`, `README.md` and `VISION.md` wherever they describe any of these: Pico applying its policy over the user's OMP configuration, the app's sample-data mode, the app configuring nothing, or `pico` accepting only `--version`. Add a changeset.
+- Revise `AGENTS.md` (including its layout and commands), `PROTOTYPE.md`, `README.md` and `VISION.md` wherever they describe Pico applying its policy over the user's OMP configuration, or `pico` accepting only `--version`. Where they say the app's configuration waits for #12's contract, say that the contract now exists and that connecting the app is the follow-up. Add a changeset.
 - Run `mise run check` and `mise run pico:verify`, then exercise the preview.
 
 ## Compatibility
@@ -471,13 +413,12 @@ Models › Model in Pico.app                    → the same update; a new Sesh 
 - **No migration.** Pico does not import OMP's default model, because Mark chose that a model must be chosen. Until one is, new sessions start on OMP's built-in choice, and Sesh and `pico settings get` show which model that is.
 - **Existing sessions** reopen on their own journal's model. A session whose model came from `models.yml` fails to reopen with proposal 0004's unavailable-model error.
 - **`pico`** keeps its ACP invocation, its `--version` output and exit status 2 for an unknown argument, so the Homebrew formula's test still passes. Usage errors now end stderr with an `INVALID_ARGUMENT` document instead of `usage: pico [--version]`. Bare `pico` on a terminal prints the orientation help.
-- **The app** loses its sample-data mode, and `-ShowsSampleData` is ignored.
 - **The settings file** is new, so nothing reads an older version.
 - **Dependencies:** `zod` becomes a direct, exact-pinned dependency at the version already installed.
 
 ## Implications on adoption
 
-Users who want a particular starting model choose it once, in the app or with `pico settings update`. The app needs `pico` from Homebrew, or a development build passed with `-PicoExecutable`, which `mise run macos:run` provides. Nothing is installed, registered or signed differently. Removing `settings.json` returns new sessions to OMP's built-in choice. Reverting this change restores reading OMP's configuration and leaves the settings file in place, ignored.
+Users who want a particular starting model choose it once with `pico settings update`, or in the app once the follow-up connects it. Nothing is installed, registered or signed differently. Removing `settings.json` returns new sessions to OMP's built-in choice. Reverting this change restores reading OMP's configuration and leaves the settings file in place, ignored.
 
 ## Scope
 
@@ -485,12 +426,11 @@ Users who want a particular starting model choose it once, in the app or with `p
 - The `pico` command line: the registry, discovery commands, `models list`, `models get`, `settings get` and `settings update`, the output and error contracts, and the invocation changes.
 - New sessions starting on the saved default, with session choices and reopened sessions unchanged.
 - Pico sessions no longer reading OMP's settings files, `models.yml`, extensions and hooks, or OMP-only skills, rules, prompts and commands. This includes removing the code, tests and SDK patch that served only them, and moving test providers to the in-process seam and the fake local server.
-- The app locating and running `pico`, with the Models pane and Settings file row connected through it.
-- Removing the app's sample-data mode, and the notice wording that follows.
 - Tests, `pico:verify`, the agent evaluation, guides, contract, brief, README and vision wording, and a changeset.
 
 ### Out of scope
 
+- **The Mac app.** Connecting the Models pane and the Settings file row to these commands, how the app finds and runs `pico`, and removing the app's sample-data mode belong to a follow-up pull request (Beads `pico-bfk.5`). That pull request completes the app half of prototype criterion 15. The app's controls stay unconnected until then.
 - **Credentials.** Credential references, Pico-managed secrets, the Keychain, sign-in and the Providers & Accounts pane belong to the next slice of #12, designed with #7 (Beads `pico-bfk.4`). This slice stores no secret and reads credentials exactly as today.
 - **Other settings.** No other OMP setting becomes a Pico setting, and there are no per-project defaults.
 - **Live changes.** Changing the default never changes a running or reopened session.
@@ -501,26 +441,18 @@ Users who want a particular starting model choose it once, in the app or with `p
 
 ## Preview
 
-- Repository shape: a native macOS app and a CLI executable.
-- Artifact:
-    - the Debug `Pico.app` built and opened by `mise run macos:run`, running this checkout's `.build/pico`;
-    - `.build/pico` itself, used directly from a terminal or by an agent;
-    - a real Sesh session driven by the registered development launcher, `.build/pico-acp`, which runs this checkout's adapter.
-
-    Criterion 15 needs the app and the adapter together, and the commands are a surface of their own.
+- Repository shape: a CLI executable carrying the ACP adapter.
+- Artifact: `.build/pico`, used from a terminal and by an agent, and a real Sesh session driven by the registered development launcher, `.build/pico-acp`, which runs this checkout's adapter. The commands and the session behavior are the two surfaces this proposal changes.
 
 - Access: the local checkout. Nothing is published, installed over Homebrew's `pico`, or registered differently in Sesh.
 - Exercise:
     - Run `.build/pico --help`, `cli search`, `schema settings update`, `models list` and `settings get`.
-    - In the app, Models shows the real catalog and "Not Set" with the built-in model named. Choose a model and a reasoning level.
-    - Run `.build/pico settings get` and see the same values.
-    - Quit and reopen the app; both values are still shown.
-    - Change the level with `.build/pico settings update` while the app is open. The app's next save reports the conflict and shows the new value.
+    - Save a default with `.build/pico settings update`, first with `--dry-run`. Read it back with `settings get`.
+    - Run `settings update --if-revision` with a stale revision and see `CONFLICT`.
     - Start a new Sesh session. It starts on the chosen model and level, and a prompt is answered by it. Observe what Sesh's picker shows before the session starts.
     - In an older session, choose a different model in Sesh, close it, reopen it, and confirm it keeps that model.
     - Make a save fail, for example by making the data directory read-only. Confirm the error, and that `settings.json` is unchanged.
     - Confirm that a `config.yml` default model and a user extension no longer affect a new session.
-    - Check that sample data is gone and the notice reads correctly.
     - Read the agent evaluation record.
 - Completion cleanup: restore any permission changed for the failed save, stop the fake server, and leave `settings.json` holding the human's choice. No account or registration needs cleanup.
 
@@ -528,19 +460,18 @@ Users who want a particular starting model choose it once, in the app or with `p
 
 - Formal policy records: None. `policies/` contains only its index.
 - Formal decision records: None. `decisions/` contains only its index.
-- [VISION.md](../VISION.md): configuration is native and truthful, the app offers models from OMP's available catalog, and settings exist only when backed by real capabilities. This proposal keeps all three. Its description of the app as configuring nothing is updated on acceptance.
+- [VISION.md](../VISION.md): configuration is native and truthful, and settings exist only when backed by real capabilities. This proposal keeps both. Its description of the app as configuring nothing stays true until the follow-up connects it.
 - [PROTOTYPE.md](../PROTOTYPE.md):
     - Its Configuration runtime decision and its [Configuration and credentials](../PROTOTYPE.md#configuration-and-credentials) section apply Pico's policy "over the user's normal OMP configuration". Mark's decision replaces that with Pico's settings and fixed policy over OMP's built-in defaults, reusing only credentials.
     - Its "dedicated local process channel" for the app becomes the `pico` command line.
-    - The brief is revised to match, and its sample-data exception is removed.
+    - The brief is revised to match.
 - `AGENTS.md`:
     - The hard rule "Apply Pico's policy per process and per session over the user's normal configuration" is revised the same way. Never rewriting the user's OMP configuration or credentials still holds.
-    - The sample-data exceptions in its no-fabricated-capability, no-build-only-source and no-manufactured-credentials rules are removed.
     - Its "no build-tool wrappers" rule is unaffected, because `pico`'s commands are product behavior.
 - [Proposal 0001](0001-acp-adapter-core.md): its `session/new` rules for starting on the model the user's OMP configuration resolves, keeping user and project extension hooks working, and reading the user's OMP settings read-only are replaced by this proposal's. Its rule that Pico substitutes no model is kept.
 - [Proposal 0002](0002-pico-homebrew-distribution.md): the ACP invocation, `--version` output, exit status 2 for unknown arguments and the formula test are kept. The usage line it specifies is replaced by the `--help` text and the `INVALID_ARGUMENT` document. Its "later subcommands" clause anticipated exactly this.
 - [Proposal 0004](0004-session-restoration.md): restoration is unchanged. Its SDK patch, and the threading of the original configuration directory into discovery, are removed. The directory is still used for the credential store.
-- [Proposal 0005](0005-mac-app-ui-workspace.md): its sample-data mode, provider pages and provider logos are removed at Mark's direction. Its Models pane and Settings file row are connected, and its search items, slugs and links are unchanged.
+- [Proposal 0005](0005-mac-app-ui-workspace.md): unchanged. The follow-up connects its Models pane and Settings file row through these commands, and removes its sample-data mode at Mark's direction.
 - [Proposal 0006](0006-todo-plan-updates.md): its pinned `todo` and title overrides stay. `todo.eager` and `todo.remindersMax` now take OMP's built-in defaults instead of the user's.
 
 ## Future directions
@@ -559,11 +490,10 @@ Users who want a particular starting model choose it once, in the app or with `p
 - **No command search for a small command tree.** `schema` alone would list the commands. Search costs a pure function over the registry, and it lets an agent go from a task in words to a command without reading the whole tree.
 - **Confirmation for `settings update`.** It replaces a default that the receipt records and another update restores, so confirmation would add friction without protecting anything.
 - **Pico's default sitting under a project's OMP model setting.** Mark decided that no OMP-specific setting should affect Pico.
-- **An "Oh My Pi Default" picker entry.** Mark chose that a model must be chosen.
-- **Keeping sample data.** Mark chose to remove it.
+- **A way to clear the default and return to OMP's choice.** Mark chose that a model must be chosen.
 - **Failing `session/new` when no default is saved.** Sesh learns which models it can offer from that response, so failing would leave the user unable to pick one in Sesh.
 - **Falling back to OMP's choice when the saved default cannot be used.** That would silently start a model the user did not choose.
-- **A long-lived JSON-RPC helper.** Nothing in this slice streams or needs cancellation. A process per command is simpler and cannot outlive the app.
+- **A long-lived JSON-RPC helper.** Nothing in this slice streams or needs cancellation. A process per command is simpler and cannot outlive its caller.
 - **Storing settings in the app's user defaults.** The adapter could not read them without a second format, and the brief places Pico's settings in Application Support.
 
 ## Open questions

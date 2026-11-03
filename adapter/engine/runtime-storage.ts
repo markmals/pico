@@ -1,6 +1,6 @@
 // Keep imports side-effect-free: main loads this module before isolating stdout.
 
-import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import { setAgentDir } from "@oh-my-pi/pi-utils/dirs";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -14,9 +14,8 @@ export function ensureEngineDirectory(dataDir: string): string {
     return engineDir;
 }
 
-/** Redirects SDK runtime storage once per process and returns the user's OMP agent directory. */
-export function initializeRuntimeStorage(dataDir: string): string {
-    const userAgentDir = getAgentDir();
+/** Redirects SDK storage without changing the environment inherited by child processes. */
+export function initializeRuntimeStorage(dataDir: string): void {
     const inherited = INHERITED_DIRECTORY_VARIABLES.map(
         variable => [variable, process.env[variable]] as const,
     );
@@ -25,5 +24,4 @@ export function initializeRuntimeStorage(dataDir: string): string {
         if (value === undefined) delete process.env[variable];
         else process.env[variable] = value;
     }
-    return userAgentDir;
 }

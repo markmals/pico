@@ -32,10 +32,9 @@ describe("proposal.0006 todo settings", () => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t, TODO_DISABLED);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });
         t.after(() => session.dispose());
@@ -46,7 +45,7 @@ describe("proposal.0006 todo settings", () => {
 
     test("a turn that stops with open todo items ends without a reminder continuing it", async t => {
         allowTitles(t);
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const model = createMockModel({
             responses: [
                 {
@@ -63,10 +62,9 @@ describe("proposal.0006 todo settings", () => {
         });
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());
@@ -87,7 +85,7 @@ describe("proposal.0006 todo settings", () => {
 
     test("creating a todo list starts no hidden title requests and leaves the session untitled", async t => {
         allowTitles(t);
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const model = createMockModel({
             responses: [
                 { content: [toolCall("todo", { op: "init", items: ["Draft", "Review"] })] },
@@ -97,10 +95,9 @@ describe("proposal.0006 todo settings", () => {
         });
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());
@@ -112,14 +109,13 @@ describe("proposal.0006 todo settings", () => {
     });
 
     test("the model is told to keep one flat todo list", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const model = createMockModel({ responses: [{ content: ["ok"] }] });
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());

@@ -1,6 +1,5 @@
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
 
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +7,9 @@ import path from "node:path";
 
 import type { Cleanups } from "../engine/testing/session-fixture.ts";
 
-import { createPicoModelRegistry, loadCatalog, modelValue } from "../engine/model-catalog.ts";
+import { createMemorySecretStore } from "../credentials/testing/memory-secret-store.ts";
+import { openPicoCredentials } from "../engine/credential-policy.ts";
+import { loadCatalog, modelValue } from "../engine/model-catalog.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
 import { picoWorkspace, withoutProviderCredentials } from "../engine/testing/session-fixture.ts";
 import { startFakeLmStudio } from "./fake-lm-studio.ts";
@@ -46,18 +47,18 @@ function useFakeLmStudio(scope: Cleanups = cleanups): void {
 /** Env vars `isBunTestRuntime()` reads; OMP's registry refuses to fetch while any marks a test. */
 const TEST_RUNTIME_ENV = ["NODE_ENV", "BUN_ENV", "PI_TEST_RUNTIME"];
 
-/**
- * The registry a Pico session uses, built the way `pico` builds it. Its fetch is chosen in the
- * constructor and disabled under a Bun test runtime, so only that call runs unmarked; the rest
- * of the session keeps the markers the test runner set.
- */
-async function picoRegistry(agentDir: string, dataDir: string, scope: Cleanups = cleanups) {
-    const authStorage = await discoverAuthStorage(agentDir);
-    scope.after(() => authStorage.close());
+// The registry captures its fetch policy at construction. Let the local fake
+// endpoint answer real discovery, then restore the test markers.
+async function picoRegistry(dataDir: string, scope: Cleanups = cleanups) {
     const marks = TEST_RUNTIME_ENV.map(variable => [variable, process.env[variable]] as const);
     for (const [variable] of marks) delete process.env[variable];
     try {
-        return { authStorage, registry: createPicoModelRegistry(authStorage, dataDir) };
+        const credentials = await openPicoCredentials({
+            dataDir,
+            keychain: createMemorySecretStore(),
+        });
+        scope.after(() => credentials.close());
+        return { authStorage: credentials.authStorage, registry: credentials.registry };
     } finally {
         for (const [variable, value] of marks) {
             if (value !== undefined) process.env[variable] = value;
@@ -84,8 +85,8 @@ beforeAll(async () => {
     try {
         withoutProviderCredentials(scope);
         useFakeLmStudio(scope);
-        const { agentDir, dataDir } = picoWorkspace(scope);
-        await loadCatalog((await picoRegistry(agentDir, dataDir, scope)).registry);
+        const { dataDir } = picoWorkspace(scope);
+        await loadCatalog((await picoRegistry(dataDir, scope)).registry);
     } finally {
         while (warmup.length > 0) await warmup.pop()?.();
     }
@@ -97,9 +98,9 @@ describe("proposal.0007 the offline model `mise run pico:verify` drives", () => 
         async () => {
             withoutProviderCredentials(cleanups);
             useFakeLmStudio();
-            const { agentDir, dataDir } = picoWorkspace(cleanups);
+            const { dataDir } = picoWorkspace(cleanups);
 
-            const { registry } = await picoRegistry(agentDir, dataDir);
+            const { registry } = await picoRegistry(dataDir);
 
             expect((await loadCatalog(registry)).map(modelValue)).toContain("lm-studio/echo");
         },
@@ -111,11 +112,10 @@ describe("proposal.0007 the offline model `mise run pico:verify` drives", () => 
         async () => {
             withoutProviderCredentials(cleanups);
             useFakeLmStudio();
-            const { cwd, agentDir, dataDir } = picoWorkspace(cleanups);
-            const { authStorage, registry } = await picoRegistry(agentDir, dataDir);
+            const { cwd, dataDir } = picoWorkspace(cleanups);
+            const { authStorage, registry } = await picoRegistry(dataDir);
             const session = await createPicoSession({
                 cwd,
-                agentDir,
                 dataDir,
                 mcpServers: [],
                 authStorage,
@@ -151,12 +151,11 @@ describe("proposal.0007 starting a session on a model only discovery finds", () 
         async () => {
             withoutProviderCredentials(cleanups);
             useFakeLmStudio();
-            const { cwd, agentDir, dataDir } = picoWorkspace(cleanups);
-            const { authStorage, registry } = await picoRegistry(agentDir, dataDir);
+            const { cwd, dataDir } = picoWorkspace(cleanups);
+            const { authStorage, registry } = await picoRegistry(dataDir);
 
             const session = await createPicoSession({
                 cwd,
-                agentDir,
                 dataDir,
                 mcpServers: [],
                 authStorage,

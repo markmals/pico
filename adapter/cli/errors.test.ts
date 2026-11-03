@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { CliError, errorDocument, exitCodeOf } from "./errors.ts";
+import { CliError, errorDocument, exitCodeOf, retryableByDefault } from "./errors.ts";
 
 describe("proposal.0007 cli errors", () => {
     test("INVALID_ARGUMENT exits 2 and every other code exits 1", () => {
@@ -64,5 +64,49 @@ describe("proposal.0007 cli errors", () => {
 
     test("an error with no details carries an empty details object", () => {
         expect(errorDocument(new CliError("INTERNAL", "boom")).error.details).toEqual({});
+    });
+});
+
+describe("proposal.0009 the codes a credential caller must tell apart", () => {
+    const added = [
+        "AUTH_REQUIRED",
+        "KEYCHAIN_LOCKED",
+        "KEYCHAIN_ACCESS_DENIED",
+        "CANCELLED",
+        "TIMED_OUT",
+    ] as const;
+
+    test("each one exits 1, because none of them is a mistake in the command", () => {
+        for (const code of added) {
+            expect({ code, exit: exitCodeOf(code) }).toEqual({ code, exit: 1 });
+        }
+    });
+
+    test("the ones that pass on their own are retryable, and the rest are not", () => {
+        for (const code of ["KEYCHAIN_LOCKED", "TIMED_OUT"] as const) {
+            expect({ code, retryable: retryableByDefault(code) }).toEqual({
+                code,
+                retryable: true,
+            });
+        }
+        for (const code of ["AUTH_REQUIRED", "KEYCHAIN_ACCESS_DENIED", "CANCELLED"] as const) {
+            expect({ code, retryable: retryableByDefault(code) }).toEqual({
+                code,
+                retryable: false,
+            });
+        }
+    });
+
+    test("a Keychain refusal carries its platform status without any payload", () => {
+        const denied = new CliError("KEYCHAIN_ACCESS_DENIED", "Pico may not read the item", {
+            details: { reference: "0c5f", keychain: "ERR_ACCESS_DENIED", status: -25293 },
+        });
+
+        expect(errorDocument(denied).error).toEqual({
+            code: "KEYCHAIN_ACCESS_DENIED",
+            message: "Pico may not read the item",
+            retryable: false,
+            details: { reference: "0c5f", keychain: "ERR_ACCESS_DENIED", status: -25293 },
+        });
     });
 });

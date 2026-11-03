@@ -10,18 +10,13 @@ import type { Cleanups } from "./testing/session-fixture.ts";
 import { createPicoSession } from "./pico-session.ts";
 import { initializeRuntimeStorage } from "./runtime-storage.ts";
 import {
+    boundCredential,
     createMockModel,
     picoWorkspace,
-    storeMockProviderKey,
     useAsProcessAgentDir,
 } from "./testing/session-fixture.ts";
 
-/**
- * The split proposal.0004 makes: Pico's own engine directory becomes the SDK's
- * process-wide runtime storage root, while the user's agent directory stays the
- * configuration source every session is given explicitly. `initializeRuntimeStorage`
- * performs this redirect once at startup; a test performs it for one session.
- */
+// SDK storage is Pico-owned; launched programs retain the user's directory and profile.
 function splitProcessRoot(t: Cleanups, dataDir: string): string {
     const engineDir = path.join(dataDir, "engine");
     fs.mkdirSync(engineDir, { recursive: true });
@@ -38,18 +33,13 @@ describe("proposal.0004 runtime storage", () => {
         process.env.OMP_PROFILE = "pico-split-profile";
         t.after(() => delete process.env.OMP_PROFILE);
 
-        const configSource = initializeRuntimeStorage(dataDir);
+        initializeRuntimeStorage(dataDir);
         assert.equal(
             fs.statSync(path.join(dataDir, "engine")).mode & 0o777,
             0o700,
             "SDK history support must stay private even when the parent directory already existed",
         );
 
-        assert.equal(
-            configSource,
-            agentDir,
-            "the user's configuration directory was not reported back",
-        );
         assert.ok(
             getBlobsDir().startsWith(path.join(dataDir, "engine")),
             "the SDK still stores blobs in the user's agent directory",
@@ -68,38 +58,40 @@ describe("proposal.0004 runtime storage", () => {
 });
 
 describe("proposal.0004 storage after the split", () => {
-    test("credentials stay in the user's agent directory and are not copied into Pico's", async t => {
+    test("Pico's credentials stay Pico's and nothing is written to the user's agent directory", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
         const engineDir = splitProcessRoot(t, dataDir);
-        await storeMockProviderKey(agentDir);
+        const { keychain } = await boundCredential(dataDir, "mock");
+        const before = fs.readdirSync(agentDir).toSorted();
 
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
+            keychain,
             mcpServers: [],
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });
         t.after(() => session.dispose());
         await session.engine.prompt("hello");
 
-        assert.ok(
-            fs.existsSync(path.join(agentDir, "agent.db")),
-            "the credential store was not opened in the user's agent directory",
+        assert.deepEqual(
+            fs.readdirSync(agentDir).toSorted(),
+            before,
+            "Pico wrote to the user's agent directory",
         );
         assert.deepEqual(
             fs
                 .readdirSync(engineDir)
                 .filter(entry => entry.startsWith("agent.db") || entry === "models.yml"),
             [],
-            "Pico's engine directory holds a copy of the user's credentials",
+            "Pico's engine directory holds an Oh My Pi credential store",
         );
     });
 
     test("a saved conversation stays in Pico's storage and adds no history to the user's agent directory", async t => {
         const { cwd, agentDir, dataDir } = picoWorkspace(t);
         splitProcessRoot(t, dataDir);
-        await storeMockProviderKey(agentDir);
+        const { keychain } = await boundCredential(dataDir, "mock");
         const sessionDir = path.join(dataDir, "sessions", path.basename(cwd));
         fs.mkdirSync(sessionDir, { recursive: true });
         const manager = await SessionManager.inMemory(cwd).persistCopy({
@@ -111,8 +103,8 @@ describe("proposal.0004 storage after the split", () => {
 
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
+            keychain,
             mcpServers: [],
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
             sessionManager: manager,

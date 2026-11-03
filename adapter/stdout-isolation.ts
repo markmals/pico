@@ -14,18 +14,24 @@ import { Console } from "node:console";
  * or a child process that inherits this stdout, cannot be intercepted in process.
  */
 export function isolateStdout(): WritableStream<Uint8Array> {
-    const writeToStdout = process.stdout.write.bind(process.stdout);
+    const originalStdout = process.stdout;
+    const writeToStdout = originalStdout.write.bind(originalStdout);
 
     // Same call signature, different destination; the overload set is identical.
     process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
     redirectConsole();
 
     return new WritableStream<Uint8Array>({
+        start(controller) {
+            originalStdout.on("error", error => controller.error(error));
+        },
         write(chunk) {
-            if (writeToStdout(chunk)) return undefined;
-            const drained = Promise.withResolvers<void>();
-            process.stdout.once("drain", () => drained.resolve());
-            return drained.promise;
+            const finished = Promise.withResolvers<void>();
+            writeToStdout(chunk, error => {
+                if (error) finished.reject(error);
+                else finished.resolve();
+            });
+            return finished.promise;
         },
     });
 }

@@ -31,13 +31,12 @@ async function writingSession(
     t: { after(cleanup: () => void | Promise<void>): void },
     writes: readonly Written[],
 ) {
-    const { cwd, agentDir, dataDir } = picoWorkspace(t);
+    const { cwd, dataDir } = picoWorkspace(t);
     const session = await createPicoSession({
         cwd,
-        agentDir,
         dataDir,
         mcpServers: [],
-        authStorage: await mockAuthStorage(agentDir),
+        authStorage: await mockAuthStorage(dataDir),
         model: createMockModel({
             responses: [
                 {
@@ -125,15 +124,14 @@ describe("proposal.0001 recorded writes", () => {
     });
 
     test("a write whose path is a pasted hashline header records the file it wrote", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "pasted.txt");
         fs.writeFileSync(absolute, "before\n");
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("read", { path: "pasted.txt" })] },
@@ -167,13 +165,12 @@ describe("proposal.0001 recorded writes", () => {
     });
 
     test("a write to an internal URL records nothing and still runs", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("write", { path: "local://notes.md", content: "hi\n" })] },
@@ -195,13 +192,12 @@ describe("proposal.0001 recorded writes", () => {
     });
 
     test("a record nothing took during the turn is gone once the turn ends", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("write", { path: "unclaimed.txt", content: "hi\n" })] },
@@ -337,15 +333,14 @@ describe("proposal.0001 undiffable files", () => {
 
 describe("proposal.0001 change attribution", () => {
     test("an edit's record is attributed to the edit's tool call", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const absolute = path.join(cwd, "edited.txt");
         fs.writeFileSync(absolute, "one\ntwo\n");
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("read", { path: "edited.txt" })] },
@@ -370,7 +365,7 @@ describe("proposal.0001 change attribution", () => {
     });
 
     test("a partly failed edit keeps the record of the file it did write", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const edited = path.join(cwd, "src", "a.txt");
         const locked = path.join(cwd, "b.txt");
         fs.mkdirSync(path.join(cwd, "src"));
@@ -379,10 +374,9 @@ describe("proposal.0001 change attribution", () => {
         fs.chmodSync(locked, 0o400);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     {
@@ -431,13 +425,12 @@ describe("proposal.0001 change attribution", () => {
 
 describe("proposal.0001 engine assumptions", () => {
     test("Oh My Pi runs write and edit exclusively, which is what makes attribution by order sound", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });
         t.after(() => session.dispose());
@@ -506,17 +499,16 @@ describe("proposal.0001 writes in flight", () => {
     });
 
     test("a write that lands after its turn ended files no record", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const cancelled = path.join(cwd, "cancelled.txt");
         const next = path.join(cwd, "next.txt");
         fs.writeFileSync(cancelled, "before\n");
         fs.writeFileSync(next, "next before\n");
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
                     { content: [toolCall("write", { path: "cancelled.txt", content: "late\n" })] },

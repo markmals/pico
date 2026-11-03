@@ -1,8 +1,16 @@
 import type { CommandSpec } from "./command.ts";
 
 import {
+    authLoginOutput,
+    credentialsCreateOutput,
+    credentialsDeleteOutput,
+    credentialsGetOutput,
+    credentialsListOutput,
     modelsGetOutput,
     modelsListOutput,
+    providersGetOutput,
+    providersListOutput,
+    providersUpdateOutput,
     schemaOutput,
     searchOutput,
     settingsGetOutput,
@@ -41,6 +49,8 @@ const schema: CommandSpec = {
     effects: "none",
     dryRun: false,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: schemaOutput,
     errors: [
         {
@@ -92,6 +102,8 @@ const cliSearch: CommandSpec = {
     effects: "none",
     dryRun: false,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: searchOutput,
     errors: [
         {
@@ -148,12 +160,30 @@ const modelsList: CommandSpec = {
     effects: "reads",
     dryRun: false,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: modelsListOutput,
     errors: [
         { code: "INVALID_ARGUMENT", when: "An unknown option, or --provider without a value." },
         {
+            code: "NOT_FOUND",
+            when: "A provider's selected credential is no longer stored. details names the provider and its reference.",
+        },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "Pico's settings file is unsupported or invalid, so the credentials it selects cannot be resolved.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked, or reading the item needs permission this command was not given.",
+        },
+        {
+            code: "KEYCHAIN_ACCESS_DENIED",
+            when: "Pico may not read a selected credential's Keychain item.",
+        },
+        {
             code: "UNAVAILABLE",
-            when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
         { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
@@ -197,6 +227,8 @@ const modelsGet: CommandSpec = {
     effects: "reads",
     dryRun: false,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: modelsGetOutput,
     errors: [
         {
@@ -208,8 +240,20 @@ const modelsGet: CommandSpec = {
             when: "No such model in the catalog. details names it and the command that lists the alternatives.",
         },
         {
+            code: "FAILED_PRECONDITION",
+            when: "Pico's settings file is unsupported or invalid, so the credentials it selects cannot be resolved.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked, or reading the item needs permission this command was not given.",
+        },
+        {
+            code: "KEYCHAIN_ACCESS_DENIED",
+            when: "Pico may not read a selected credential's Keychain item.",
+        },
+        {
             code: "UNAVAILABLE",
-            when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
         { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
@@ -250,12 +294,14 @@ const settingsGet: CommandSpec = {
     effects: "reads",
     dryRun: false,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: settingsGetOutput,
     errors: [
         { code: "INVALID_ARGUMENT", when: "An option was given; settings get takes none." },
         {
             code: "UNAVAILABLE",
-            when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
         { code: "IO_ERROR", when: "The settings file or Pico's data directory cannot be used." },
         { code: "INTERNAL", when: "The catalog could not be resolved." },
@@ -371,6 +417,8 @@ const settingsUpdate: CommandSpec = {
     effects: "writes",
     dryRun: true,
     idempotent: true,
+    outputMode: "document",
+    platform: "any",
     output: settingsUpdateOutput,
     errors: [
         {
@@ -387,11 +435,11 @@ const settingsUpdate: CommandSpec = {
         },
         {
             code: "CONFLICT",
-            when: "--if-revision does not match the file. Read the settings again and retry.",
+            when: "The file does not match --if-revision, or changed while the command prepared its save. Read the settings again and retry.",
         },
         {
             code: "UNAVAILABLE",
-            when: "The credential store cannot be opened; a retry helps only when it reports that it is busy or locked.",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
         },
         {
             code: "IO_ERROR",
@@ -424,6 +472,725 @@ const settingsUpdate: CommandSpec = {
     ],
 };
 
+const providersList: CommandSpec = {
+    path: ["providers", "list"],
+    summary: "List the providers Pico knows, how to connect each, and what is selected",
+    description:
+        "Prints every model provider this Pico's engine declares, whether it accepts an API key, the engine's login methods and their destination providers, whether Pico can run each method, and the credential currently selected for that provider. It reads no Keychain item and makes no provider request, so it says what is configured, not what works.",
+    keywords: [
+        "providers",
+        "provider",
+        "list",
+        "which",
+        "connect",
+        "methods",
+        "available",
+        "selected",
+        "configured",
+    ],
+    arguments: [],
+    options: [],
+    constraints: [],
+    effects: "reads",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: providersListOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "An option was given; providers list takes none." },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "Pico's settings file is unsupported or invalid, so the selections cannot be read.",
+        },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory or settings file cannot be read." },
+    ],
+    examples: [
+        {
+            description: "List every provider and how to connect it",
+            command: "pico providers list",
+        },
+    ],
+};
+
+const providersGet: CommandSpec = {
+    path: ["providers", "get"],
+    summary: "Show one provider, its login methods and the credential selected for it",
+    description:
+        "Prints one provider's entry from pico providers list, including the login methods Pico cannot run and the reason for each. An id the engine does not declare is not found.",
+    keywords: [
+        "providers",
+        "provider",
+        "show",
+        "get",
+        "methods",
+        "login",
+        "capabilities",
+        "unsupported",
+        "reason",
+        "selected",
+        "credential",
+    ],
+    arguments: [
+        {
+            name: "provider",
+            description: "The provider's id, as pico providers list prints it.",
+            required: true,
+            variadic: false,
+            format: "provider",
+        },
+    ],
+    options: [],
+    constraints: [],
+    effects: "reads",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: providersGetOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "The provider argument is missing or malformed." },
+        {
+            code: "NOT_FOUND",
+            when: "This Pico's engine declares no such provider. details lists the command that prints the alternatives.",
+        },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "Pico's settings file is unsupported or invalid, so the selection cannot be read.",
+        },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory or settings file cannot be read." },
+    ],
+    examples: [
+        {
+            description: "Show one provider's login methods",
+            command: "pico providers get openai-codex",
+        },
+    ],
+};
+
+const providersUpdate: CommandSpec = {
+    path: ["providers", "update"],
+    summary: "Select the credential a provider uses, or remove that selection",
+    description:
+        "Saves which stored credential Pico uses for one provider, or removes that selection with --disconnect. A selection must name an active credential belonging to that provider, and Pico reads its Keychain item to establish that it is there and valid before saving; that is not a claim that the provider accepts it. Disconnecting removes the reference only: it deletes no credential and revokes nothing at the provider. Every session, including one already open, uses the saved selection on its next request.",
+    keywords: [
+        "providers",
+        "provider",
+        "update",
+        "select",
+        "choose",
+        "use",
+        "credential",
+        "bind",
+        "binding",
+        "connect",
+        "disconnect",
+        "remove",
+        "unset",
+        "stop",
+        "switch",
+        "account",
+    ],
+    arguments: [
+        {
+            name: "provider",
+            description: "The provider whose selection changes.",
+            required: true,
+            variadic: false,
+            format: "provider",
+        },
+    ],
+    options: [
+        {
+            name: "--credential",
+            valueName: "reference",
+            type: "string",
+            format: "reference",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "command",
+                command: "pico credentials list",
+                description: "a reference it lists for this provider",
+            },
+            description: "The stored credential this provider uses.",
+        },
+        {
+            name: "--disconnect",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: undefined,
+            accepted: undefined,
+            description: "Remove this provider's selection, keeping the credential stored.",
+        },
+        {
+            name: "--if-revision",
+            valueName: "revision",
+            type: "string",
+            format: "revision",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "format",
+                format: "none, or the revision pico settings get printed",
+            },
+            description: "Refuse the change unless the settings file still has this revision.",
+        },
+        {
+            name: "--allow-keychain-ui",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Let macOS ask you to allow this Keychain item, rather than failing without asking.",
+        },
+        {
+            name: "--dry-run",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description: "Do everything except write the file, and check no Keychain item.",
+        },
+    ],
+    constraints: [
+        {
+            kind: "exactly-one-of",
+            options: ["--credential", "--disconnect"],
+            description: "exactly one of --credential or --disconnect",
+        },
+    ],
+    effects: "writes",
+    dryRun: true,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: providersUpdateOutput,
+    errors: [
+        {
+            code: "INVALID_ARGUMENT",
+            when: "The provider is missing or malformed, or neither or both of --credential and --disconnect was given.",
+        },
+        {
+            code: "NOT_FOUND",
+            when: "No such provider, or no stored credential with that reference.",
+        },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "The settings file is unsupported or invalid, the credential belongs to another provider, or it is being deleted.",
+        },
+        {
+            code: "CONFLICT",
+            when: "--if-revision does not match the file. Read the settings again and retry.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked. Unlock it and retry the same command.",
+        },
+        {
+            code: "KEYCHAIN_ACCESS_DENIED",
+            when: "Pico may not read that credential's Keychain item, so it will not select it.",
+        },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "The settings file or Pico's data directory cannot be used." },
+    ],
+    examples: [
+        {
+            description: "Preview selecting a credential, writing nothing",
+            command:
+                "pico providers update openai-codex --credential 0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b --dry-run",
+        },
+        {
+            description: "Select a credential for a provider",
+            command:
+                "pico providers update openai-codex --credential 0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b",
+        },
+        {
+            description: "Stop using any credential for a provider",
+            command: "pico providers update openai-codex --disconnect",
+        },
+    ],
+};
+
+const credentialsList: CommandSpec = {
+    path: ["credentials", "list"],
+    summary: "List the credentials Pico has stored, with their accounts",
+    description:
+        "Prints Pico's stored credential references, the provider and kind of each, the account the provider reported, and whether one is being deleted. It reads Pico's own index, not Keychain, so it says what is stored rather than what can be read or used. --provider keeps one provider's credentials.",
+    keywords: [
+        "credentials",
+        "credential",
+        "list",
+        "stored",
+        "references",
+        "accounts",
+        "keys",
+        "tokens",
+        "which",
+        "provider",
+    ],
+    arguments: [],
+    options: [
+        {
+            name: "--provider",
+            valueName: "provider",
+            type: "string",
+            format: "provider",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "command",
+                command: "pico providers list",
+                description: "any provider it lists",
+            },
+            description: "Keep only the credentials stored for this provider.",
+        },
+    ],
+    constraints: [],
+    effects: "reads",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: credentialsListOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "An unknown option, or --provider without a value." },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be read." },
+    ],
+    examples: [
+        { description: "List every stored credential", command: "pico credentials list" },
+        {
+            description: "List one provider's credentials",
+            command: "pico credentials list --provider openai",
+        },
+    ],
+};
+
+const credentialsGet: CommandSpec = {
+    path: ["credentials", "get"],
+    summary: "Show one stored credential and check that Pico can still read it",
+    description:
+        "Prints one reference's provider, kind and account, and reads its Keychain item to establish that it is present and valid. The stored secret is never printed, and no provider request or token refresh happens. A locked Keychain, a refused item and a missing item are different failures.",
+    keywords: [
+        "credentials",
+        "credential",
+        "get",
+        "show",
+        "check",
+        "verify",
+        "keychain",
+        "readable",
+        "reference",
+        "account",
+    ],
+    arguments: [
+        {
+            name: "reference",
+            description: "The credential's reference, as pico credentials list prints it.",
+            required: true,
+            variadic: false,
+            format: "reference",
+        },
+    ],
+    options: [
+        {
+            name: "--allow-keychain-ui",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Let macOS ask you to allow this Keychain item, rather than failing without asking.",
+        },
+    ],
+    constraints: [],
+    effects: "reads",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "macos",
+    output: credentialsGetOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "The reference is missing or is not one Pico issues." },
+        { code: "NOT_FOUND", when: "Pico has no active credential with that reference." },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "This platform has no Keychain bridge, or the stored item does not match its reference.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked. Unlock it and retry the same command.",
+        },
+        { code: "KEYCHAIN_ACCESS_DENIED", when: "Pico may not read that Keychain item." },
+        {
+            code: "UNAVAILABLE",
+            when: "The Keychain item behind this reference is gone, or Pico's credential index cannot be opened. Pico never answers with another account instead.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be read." },
+    ],
+    examples: [
+        {
+            description: "Check that a stored credential can still be read",
+            command: "pico credentials get 0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b",
+        },
+    ],
+};
+
+const credentialsCreate: CommandSpec = {
+    path: ["credentials", "create"],
+    summary: "Store one API key, read privately from stdin, in the login Keychain",
+    description:
+        "Reads one API key from stdin and stores it in your login Keychain under a new reference. The key never appears in an argument, an environment variable, a prompt or the receipt. Pico removes one trailing line ending and nothing else, and refuses a terminal, empty input, a NUL character, bytes that are not UTF-8, and anything over 64 KiB. Storing a key selects nothing: use pico providers update to select it.",
+    keywords: [
+        "credentials",
+        "credential",
+        "create",
+        "add",
+        "store",
+        "save",
+        "api",
+        "key",
+        "token",
+        "stdin",
+        "paste",
+        "secret",
+        "keychain",
+    ],
+    arguments: [],
+    options: [
+        {
+            name: "--provider",
+            valueName: "provider",
+            type: "string",
+            format: "provider",
+            required: true,
+            default: undefined,
+            accepted: {
+                kind: "command",
+                command: "pico providers list",
+                description: "a provider it lists as taking an API key",
+            },
+            description: "The provider this key belongs to.",
+        },
+        {
+            name: "--stdin",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: true,
+            default: undefined,
+            accepted: undefined,
+            description: "Read the key from stdin; it is the only way to give one.",
+        },
+        {
+            name: "--if-revision",
+            valueName: "revision",
+            type: "string",
+            format: "revision",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "format",
+                format: "none, or the revision pico credentials list printed",
+            },
+            description:
+                "Refuse the change unless Pico's credential index still has this revision.",
+        },
+        {
+            name: "--allow-keychain-ui",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Let macOS ask you to allow this Keychain item, rather than failing without asking.",
+        },
+        {
+            name: "--dry-run",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Read and check the key, then report what would be stored without touching Keychain.",
+        },
+    ],
+    constraints: [],
+    effects: "writes",
+    dryRun: true,
+    idempotent: false,
+    outputMode: "document",
+    platform: "macos",
+    output: credentialsCreateOutput,
+    errors: [
+        {
+            code: "INVALID_ARGUMENT",
+            when: "--provider or --stdin is missing, or the key is empty, not UTF-8, holds a NUL character, is over 64 KiB, or came from a terminal.",
+        },
+        { code: "NOT_FOUND", when: "This Pico's engine declares no such provider." },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "This platform has no Keychain bridge, or the provider does not take a pasted API key. details says how it is connected instead.",
+        },
+        {
+            code: "CONFLICT",
+            when: "--if-revision does not match the credential index. Read it again and retry.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked. Unlock it and retry the same command.",
+        },
+        { code: "KEYCHAIN_ACCESS_DENIED", when: "Pico may not write the Keychain item." },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
+    ],
+    examples: [
+        {
+            description:
+                "Check a key and the provider without storing anything, with the key piped in",
+            command: "pico credentials create --provider openai --stdin --dry-run",
+        },
+        {
+            description: "Store a key piped in from a file or a secret manager",
+            command: "pico credentials create --provider openai --stdin",
+        },
+    ],
+};
+
+const credentialsDelete: CommandSpec = {
+    path: ["credentials", "delete"],
+    summary: "Delete one stored credential from Pico and the login Keychain",
+    description:
+        "Removes one reference from Pico's index and its item from your login Keychain. It revokes nothing at the provider and changes no other installation. A credential a provider still selects is refused: disconnect it or select another one first. A reference Pico does not have reports an unchanged receipt, so a repeated deletion finishes a half-done one.",
+    keywords: [
+        "credentials",
+        "credential",
+        "delete",
+        "remove",
+        "forget",
+        "revoke",
+        "revoked",
+        "keychain",
+        "reference",
+    ],
+    arguments: [
+        {
+            name: "reference",
+            description: "The credential's reference, as pico credentials list prints it.",
+            required: true,
+            variadic: false,
+            format: "reference",
+        },
+    ],
+    options: [
+        {
+            name: "--if-revision",
+            valueName: "revision",
+            type: "string",
+            format: "revision",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "format",
+                format: "none, or the revision pico credentials list printed",
+            },
+            description:
+                "Refuse the change unless Pico's credential index still has this revision.",
+        },
+        {
+            name: "--allow-keychain-ui",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Let macOS ask you to allow this Keychain item, rather than failing without asking.",
+        },
+        {
+            name: "--dry-run",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description: "Report what deleting would remove, touching no Keychain item.",
+        },
+    ],
+    constraints: [],
+    effects: "writes",
+    dryRun: true,
+    idempotent: true,
+    outputMode: "document",
+    platform: "macos",
+    output: credentialsDeleteOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "The reference is missing or is not one Pico issues." },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "This platform has no Keychain bridge, or a provider still selects this credential. details names the provider.",
+        },
+        {
+            code: "CONFLICT",
+            when: "--if-revision does not match the credential index. Read it again and retry.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked. Unlock it and retry the same command.",
+        },
+        {
+            code: "KEYCHAIN_ACCESS_DENIED",
+            when: "Pico may not delete that Keychain item; the credential stays recorded as being deleted.",
+        },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened; a retry helps only when it reports that it is busy or locked.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
+    ],
+    examples: [
+        {
+            description: "Preview deleting a credential",
+            command: "pico credentials delete 0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b --dry-run",
+        },
+        {
+            description: "Delete a credential Pico no longer uses",
+            command: "pico credentials delete 0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b",
+        },
+    ],
+};
+
+const authLogin: CommandSpec = {
+    path: ["auth", "login"],
+    summary: "Run one provider login and hand its authorization URL to the human",
+    description:
+        "Runs one login with the engine's own flow and prints a JSON document per line while it runs: the attempt, the authorization URL and instructions to give the human, progress, and finally the stored credential or a failure. It opens no browser, starts no terminal interface, and answers no question. Known input-dependent methods are refused before starting; an unexpected question aborts the flow. It reads nothing from stdin. A signal, closed output or ten-minute authorization deadline stops the SDK flow. The subsequent synchronous Keychain save is outside that deadline; dismiss an explicitly allowed macOS dialog to cancel a blocked native call. A stored credential is selected by pico providers update, not by this command.",
+    keywords: [
+        "auth",
+        "login",
+        "sign",
+        "in",
+        "oauth",
+        "device",
+        "browser",
+        "url",
+        "authorize",
+        "authorization",
+        "connect",
+        "subscription",
+        "account",
+        "provider",
+    ],
+    arguments: [
+        {
+            name: "method",
+            description: "The login method's id, as pico providers list prints it.",
+            required: true,
+            variadic: false,
+            format: "provider",
+        },
+    ],
+    options: [
+        {
+            name: "--allow-keychain-ui",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Let macOS ask you to allow this Keychain item, rather than failing without asking.",
+        },
+        {
+            name: "--dry-run",
+            valueName: undefined,
+            type: "boolean",
+            format: undefined,
+            required: false,
+            default: false,
+            accepted: undefined,
+            description:
+                "Report the attempt Pico would run as one document, starting no login at all.",
+        },
+    ],
+    constraints: [],
+    effects: "writes",
+    dryRun: true,
+    idempotent: false,
+    outputMode: "json-lines",
+    platform: "macos",
+    output: authLoginOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "The method is missing or malformed." },
+        { code: "NOT_FOUND", when: "This Pico's engine declares no such login method." },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "This platform has no Keychain bridge, Pico cannot run this method, or the flow asked a question Pico does not answer. details says which.",
+        },
+        { code: "AUTH_REQUIRED", when: "The provider refused the authorization." },
+        { code: "CANCELLED", when: "A signal or a closed output stopped the attempt." },
+        { code: "TIMED_OUT", when: "The authorization was not completed before the deadline." },
+        {
+            code: "CONFLICT",
+            when: "Pico's credential index moved while the login ran, so the result was not stored.",
+        },
+        {
+            code: "KEYCHAIN_LOCKED",
+            when: "The login Keychain is locked. Unlock it and retry the same command.",
+        },
+        { code: "KEYCHAIN_ACCESS_DENIED", when: "Pico may not write the Keychain item." },
+        {
+            code: "UNAVAILABLE",
+            when: "Pico's credential index cannot be opened, or the provider could not be reached.",
+        },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used." },
+    ],
+    examples: [
+        {
+            description: "Check that Pico can run a method before starting it",
+            command: "pico auth login openai-codex-device --dry-run",
+        },
+        {
+            description: "Start a login and relay its URL to the human",
+            command: "pico auth login openai-codex-device",
+        },
+    ],
+};
+
 export const COMMANDS: readonly CommandSpec[] = [
     schema,
     cliSearch,
@@ -431,4 +1198,12 @@ export const COMMANDS: readonly CommandSpec[] = [
     modelsGet,
     settingsGet,
     settingsUpdate,
+    providersList,
+    providersGet,
+    providersUpdate,
+    credentialsList,
+    credentialsGet,
+    credentialsCreate,
+    credentialsDelete,
+    authLogin,
 ];

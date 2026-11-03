@@ -25,7 +25,6 @@ import { ALPHA_DEFAULT, TEST_PROVIDER, testProvider } from "./testing/test-provi
 /** A conversation that outlives its engine: a Pico-owned journal and the project it belongs to. */
 interface Conversation {
     cwd: string;
-    agentDir: string;
     dataDir: string;
     /** Pico's own session bucket, standing in for `~/Library/Application Support/Pico/sessions/<project>`. */
     sessionDir: string;
@@ -36,11 +35,11 @@ interface Conversation {
 
 function conversation(t: Cleanups): Conversation {
     withoutProviderCredentials(t);
-    const { cwd, agentDir, dataDir } = picoWorkspace(t);
+    const { cwd, dataDir } = picoWorkspace(t);
     const provider = testProvider();
     const sessionDir = path.join(dataDir, "sessions", path.basename(cwd));
     fs.mkdirSync(sessionDir, { recursive: true });
-    return { cwd, agentDir, dataDir, sessionDir, provider, models: provider.models };
+    return { cwd, dataDir, sessionDir, provider, models: provider.models };
 }
 
 /**
@@ -78,13 +77,12 @@ async function attach(
     mcpServers: McpServerStdio[] = [],
     { startOn, offerProvider = true }: AttachOptions = {},
 ): Promise<PicoSession> {
-    const { cwd, agentDir, dataDir, provider } = conversationUnderTest;
-    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const { cwd, dataDir, provider } = conversationUnderTest;
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     if (offerProvider) provider.register(modelRegistry);
     return createPicoSession({
         cwd,
-        agentDir,
         dataDir,
         mcpServers,
         authStorage,

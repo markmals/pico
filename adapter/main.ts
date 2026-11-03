@@ -26,7 +26,8 @@ try {
 const { ndJsonStream } = await import("@agentclientprotocol/sdk");
 const { createPicoAgent, picoAgentShutdown } = await import("./server/pico-agent.ts");
 const { picoSessionFactory } = await import("./server/session-factory.ts");
-const agentDir = initializeRuntimeStorage(dataDir);
+// Redirects the SDK's own storage into Pico's data directory; Pico reads no Oh My Pi credentials.
+initializeRuntimeStorage(dataDir);
 
 /** How long shutdown may take before Pico reports an unclean exit. */
 const SHUTDOWN_GRACE_MS = 5_000;
@@ -34,7 +35,7 @@ const SHUTDOWN_GRACE_MS = 5_000;
 const app = createPicoAgent({
     version: manifest.version,
     dataDir,
-    createSession: picoSessionFactory({ dataDir, agentDir }),
+    createSession: picoSessionFactory({ dataDir }),
 });
 
 const connection = app.connect(ndJsonStream(protocolStdout, Bun.stdin.stream()));

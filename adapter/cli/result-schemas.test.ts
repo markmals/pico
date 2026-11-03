@@ -23,18 +23,18 @@ const SETTINGS_FILE = "/Users/mark/Library/Application Support/Pico/settings.jso
 const REVISION = `sha256:${"3".repeat(64)}`;
 
 describe("proposal.0007 declared result shapes", () => {
-    test("a catalog listing carries the credential store and every model", () => {
+    test("a catalog listing carries the provider bindings it used and every model", () => {
         expect(
             modelsListOutput.safeParse({
                 apiVersion: 1,
-                credentialStore: "/Users/mark/.omp/agent/auth.json",
+                providerCredentials: { anthropic: "0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2b" },
                 items: [MODEL],
             }).success,
         ).toBe(true);
         expect(
             modelsGetOutput.safeParse({
                 apiVersion: 1,
-                credentialStore: "/Users/mark/.omp/agent/auth.json",
+                providerCredentials: {},
                 item: MODEL,
             }).success,
         ).toBe(true);
@@ -47,7 +47,7 @@ describe("proposal.0007 declared result shapes", () => {
         expect(
             modelsGetOutput.safeParse({
                 apiVersion: 1,
-                credentialStore: "/store.json",
+                providerCredentials: {},
                 item: incomplete,
             }).success,
         ).toBe(false);
@@ -64,6 +64,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     autoBackground: null,
+                    providerCredentials: {},
                 },
                 effective: {
                     defaultModel: "anthropic/claude-sonnet-5-5",
@@ -83,7 +84,12 @@ describe("proposal.0007 declared result shapes", () => {
                 settingsFile: SETTINGS_FILE,
                 status: "missing",
                 revision: "none",
-                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+                item: {
+                    defaultModel: null,
+                    defaultThinking: null,
+                    autoBackground: null,
+                    providerCredentials: {},
+                },
                 effective: {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
@@ -99,7 +105,12 @@ describe("proposal.0007 declared result shapes", () => {
                 settingsFile: SETTINGS_FILE,
                 status: "missing",
                 revision: REVISION,
-                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+                item: {
+                    defaultModel: null,
+                    defaultThinking: null,
+                    autoBackground: null,
+                    providerCredentials: {},
+                },
                 effective: {
                     defaultModel: null,
                     defaultThinking: null,
@@ -140,7 +151,12 @@ describe("proposal.0007 declared result shapes", () => {
             changed: true,
             before: {
                 revision: "none",
-                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+                item: {
+                    defaultModel: null,
+                    defaultThinking: null,
+                    autoBackground: null,
+                    providerCredentials: {},
+                },
             },
             after: {
                 revision: REVISION,
@@ -148,6 +164,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     autoBackground: null,
+                    providerCredentials: {},
                 },
             },
         };
@@ -168,7 +185,12 @@ describe("proposal.0008 autoBackground in the declared result shapes", () => {
         settingsFile: SETTINGS_FILE,
         status: "valid",
         revision: REVISION,
-        item: { defaultModel: null, defaultThinking: null, autoBackground: false },
+        item: {
+            defaultModel: null,
+            defaultThinking: null,
+            autoBackground: false,
+            providerCredentials: {},
+        },
         effective: {
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
@@ -217,11 +239,21 @@ describe("proposal.0008 autoBackground in the declared result shapes", () => {
             changed: true,
             before: {
                 revision: "none",
-                item: { defaultModel: null, defaultThinking: null, autoBackground: null },
+                item: {
+                    defaultModel: null,
+                    defaultThinking: null,
+                    autoBackground: null,
+                    providerCredentials: {},
+                },
             },
             after: {
                 revision: REVISION,
-                item: { defaultModel: null, defaultThinking: null, autoBackground: false },
+                item: {
+                    defaultModel: null,
+                    defaultThinking: null,
+                    autoBackground: false,
+                    providerCredentials: {},
+                },
             },
         };
 

@@ -1,6 +1,8 @@
-export type ValueFormat = "model" | "revision" | "text";
+export type ValueFormat = "model" | "provider" | "reference" | "revision" | "text";
 
 const REVISION = /^(none|sha256:[0-9a-f]{64})$/;
+const PROVIDER = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/;
+const REFERENCE = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
 const FORMATS: Record<ValueFormat, { accepts: (raw: string) => boolean; description: string }> = {
     model: {
@@ -9,6 +11,14 @@ const FORMATS: Record<ValueFormat, { accepts: (raw: string) => boolean; descript
             return slash > 0 && slash < raw.length - 1;
         },
         description: "provider/id, such as anthropic/claude-sonnet-5-5",
+    },
+    provider: {
+        accepts: raw => PROVIDER.test(raw),
+        description: "a provider id, such as openai-codex",
+    },
+    reference: {
+        accepts: raw => REFERENCE.test(raw),
+        description: "a credential reference, as pico credentials list prints it",
     },
     revision: {
         accepts: raw => REVISION.test(raw),

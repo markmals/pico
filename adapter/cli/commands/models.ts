@@ -6,22 +6,22 @@ import { CliError } from "../errors.ts";
 
 export function modelsList(context: HandlerContext): CommandHandler {
     return async input => {
-        const { registry, credentialStore } = await context.openCatalog();
+        const { registry, providerCredentials } = await context.openCatalog();
         const provider = input.options.provider;
         const models = (await loadCatalog(registry)).filter(
             model => provider === undefined || model.provider === provider,
         );
-        return { credentialStore, items: models.map(catalogEntry) };
+        return { providerCredentials, items: models.map(catalogEntry) };
     };
 }
 
 export function modelsGet(context: HandlerContext): CommandHandler {
     return async input => {
         const value = input.arguments.model as string;
-        const { registry, credentialStore } = await context.openCatalog();
+        const { registry, providerCredentials } = await context.openCatalog();
         const model = (await loadCatalog(registry)).find(entry => modelValue(entry) === value);
         if (!model) throw modelNotFound(value);
-        return { credentialStore, item: catalogEntry(model) };
+        return { providerCredentials, item: catalogEntry(model) };
     };
 }
 

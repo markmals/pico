@@ -95,16 +95,22 @@ describe("proposal.0007 schema command", () => {
         }
     });
 
-    test("every declared error carries the exit status and retryability of its code", () => {
+    test("every declared error carries the exit status its code implies", () => {
         for (const command of COMMANDS) {
             for (const error of commandSpecification(command.path).errors) {
-                expect({ id: commandId(command), ...error, when: undefined }).toEqual({
+                // Only a mistake in the command line exits 2; retryability is the code's own
+                // contract, checked where that contract lives rather than copied here.
+                expect({
+                    id: commandId(command),
+                    code: error.code,
+                    exitCode: error.exitCode,
+                }).toEqual({
                     id: commandId(command),
                     code: error.code,
                     exitCode: error.code === "INVALID_ARGUMENT" ? 2 : 1,
-                    retryable: error.code === "CONFLICT",
-                    when: undefined,
                 });
+                expect(typeof error.retryable).toBe("boolean");
+                expect(error.when.length).toBeGreaterThan(0);
             }
         }
     });
@@ -140,5 +146,46 @@ describe("proposal.0008 the auto-background option in schema output", () => {
             accepted: { values: ["on", "off"] },
             description: expect.any(String) as unknown as string,
         });
+    });
+});
+
+describe("proposal.0009 what a credential command's schema tells a caller", () => {
+    test("auth login declares that its success is a stream of documents", () => {
+        const specification = commandSpecification(["auth", "login"]);
+
+        expect([specification.outputMode, specification.platform]).toEqual(["json-lines", "macos"]);
+    });
+
+    test("an ordinary command declares one document and no platform of its own", () => {
+        const specification = commandSpecification(["providers", "list"]);
+
+        expect([specification.outputMode, specification.platform]).toEqual(["document", "any"]);
+    });
+
+    test("the login event shapes are published, so a caller can validate what it reads", () => {
+        const output = commandSpecification(["auth", "login"]).output;
+
+        expect(JSON.stringify(output)).toContain("authorization");
+        expect(JSON.stringify(output)).toContain("completed");
+    });
+
+    test("the Keychain dialog is an option a caller opts into, never a default", () => {
+        for (const path of [
+            ["credentials", "get"],
+            ["credentials", "create"],
+            ["credentials", "delete"],
+            ["providers", "update"],
+            ["auth", "login"],
+        ]) {
+            const option = commandSpecification(path).options.find(
+                declared => declared.name === "--allow-keychain-ui",
+            );
+
+            expect({ path, type: option?.type, default: option?.default }).toEqual({
+                path,
+                type: "boolean",
+                default: false,
+            });
+        }
     });
 });

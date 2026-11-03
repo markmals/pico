@@ -3,20 +3,27 @@ import path from "node:path";
 import type { CommandInput, CommandSpec } from "../command.ts";
 import type { CommandHandler } from "../execute.ts";
 import type { CommandIo } from "../output.ts";
-import type { HandledCommand } from "./handlers.ts";
+import type { LoginIo } from "./auth-login.ts";
+import type { HandledCommand, HandlerContext } from "./handlers.ts";
 
+import { openCredentialVault } from "../../credentials/vault.ts";
 import { describeCause } from "../../engine/errors.ts";
 import { initializeRuntimeStorage } from "../../engine/runtime-storage.ts";
 import { commandId } from "../command.ts";
 import { CliError } from "../errors.ts";
 import { executeCommand } from "../execute.ts";
-import { userCatalog } from "./catalog.ts";
+import { readApiKey } from "../stdin.ts";
+import { authLoginPreview, runAuthLogin } from "./auth-login.ts";
+import { picoCatalog } from "./catalog.ts";
 import { createCommandHandlers } from "./handlers.ts";
 
 /**
  * Runs one command that needs Oh My Pi. `stdout` is the stream stdout isolation preserved, so
  * nothing Oh My Pi prints can reach the result; the exit status is returned once it is written.
  * Setup runs inside the command, so its failures end stderr with an error document too.
+ *
+ * This module is loaded only after the engine's native addon is in place, which is why it may
+ * import the engine directly; `dispatch.ts` answers everything that comes before that.
  */
 export async function runCommand(
     command: CommandSpec,
@@ -32,12 +39,27 @@ export async function runCommand(
         stderr: text => process.stderr.write(text),
         stdoutIsTerminal,
     };
+    if (commandId(command) === "auth login") {
+        if (input.options.dryRun === true) {
+            // An undeclared method reaches here, where the engine can still identify it.
+            const exitCode = await executeCommand(
+                command,
+                input,
+                given => authLoginPreview(contextFor(dataDir), given),
+                io,
+            );
+            await Promise.all(writes);
+            return exitCode;
+        }
+        const loginIo: LoginIo = {
+            // Awaited per line, so each event leaves the process before the next one is built.
+            writeLine: text => writer.write(new TextEncoder().encode(text)),
+            stderr: io.stderr,
+        };
+        return runAuthLogin(contextFor(dataDir), input, loginIo);
+    }
     const handler: CommandHandler = async given => {
-        const userAgentDir = runtimeStorage(dataDir);
-        const handlers = createCommandHandlers({
-            dataDir,
-            openCatalog: userCatalog(userAgentDir, dataDir),
-        });
+        const handlers = createCommandHandlers(contextFor(dataDir));
         return handlers[commandId(command) as HandledCommand](given);
     };
     const exitCode = await executeCommand(command, input, handler, io);
@@ -45,10 +67,25 @@ export async function runCommand(
     return exitCode;
 }
 
+/** The commands' view of this machine: Pico's data directory, its catalog, its vault, stdin. */
+function contextFor(dataDir: string): HandlerContext {
+    return {
+        dataDir,
+        openCatalog: () => {
+            runtimeStorage(dataDir);
+            return picoCatalog(dataDir)();
+        },
+        openVault: options =>
+            openCredentialVault({ dataDir, allowKeychainUI: options?.allowKeychainUI }),
+        readStdin: () =>
+            readApiKey({ isTerminal: process.stdin.isTTY === true, stream: Bun.stdin.stream() }),
+    };
+}
+
 /** Points Oh My Pi's own storage at Pico's engine directory, reporting a failure as `IO_ERROR`. */
-function runtimeStorage(dataDir: string): string {
+function runtimeStorage(dataDir: string): void {
     try {
-        return initializeRuntimeStorage(dataDir);
+        initializeRuntimeStorage(dataDir);
     } catch (error) {
         const engineDir = path.join(dataDir, "engine");
         const cause = describeCause(error);

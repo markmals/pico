@@ -1,24 +1,15 @@
-import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+// Reading Pico's settings file, and the failures a command reports for it. Nothing here
+// touches the engine: a preview must reach this module before the engine's runtime exists.
 
-import type { PicoSettings, SettingsState } from "../../settings/settings-document.ts";
+import type { SettingsState } from "../../settings/settings-document.ts";
 
 import {
-    builtInChoice,
-    findCatalogModel,
-    modelValue,
-    offersThinking,
-} from "../../engine/model-catalog.ts";
-import { DEFAULT_AUTO_BACKGROUND } from "../../settings/settings-document.ts";
-import { readSettings, SettingsIoError } from "../../settings/settings-store.ts";
+    readProviderBindings,
+    readSettings,
+    SettingsIoError,
+    SettingsUnusableError,
+} from "../../settings/settings-store.ts";
 import { CliError } from "../errors.ts";
-
-export interface EffectiveSettings {
-    defaultModel: string | null;
-    defaultThinking: string | null;
-    source: "settings" | "built-in";
-    available: boolean;
-    autoBackground: boolean;
-}
 
 /** The settings file's state, with a read failure reported as `IO_ERROR`. */
 export function readSettingsFile(dataDir: string): SettingsState {
@@ -36,24 +27,26 @@ export function ioError(error: unknown): unknown {
     });
 }
 
-/** What a new session would attach with now, as `session/new` resolves it. */
-export async function effectiveSettings(
-    registry: ModelRegistry,
-    item: PicoSettings,
-): Promise<EffectiveSettings> {
-    const { defaultModel, defaultThinking } = item;
-    const autoBackground = item.autoBackground ?? DEFAULT_AUTO_BACKGROUND;
-    if (defaultModel !== null && defaultThinking !== null) {
-        const model = await findCatalogModel(registry, defaultModel);
-        const available = model !== undefined && offersThinking(model, defaultThinking);
-        return { defaultModel, defaultThinking, source: "settings", available, autoBackground };
+/** The provider bindings the settings file holds, with an unusable file refused visibly. */
+export function readBindings(dataDir: string): Record<string, string> {
+    try {
+        return readProviderBindings(dataDir);
+    } catch (error) {
+        throw settingsUnusable(error);
     }
-    const choice = await builtInChoice(registry);
-    return {
-        defaultModel: choice ? modelValue(choice.model) : null,
-        defaultThinking: choice?.thinking ?? null,
-        source: "built-in",
-        available: choice !== undefined,
-        autoBackground,
-    };
+}
+
+/**
+ * A settings file Pico cannot read is a precondition failure, not an empty configuration: it
+ * must never let a command fall back to a last-known binding.
+ */
+export function settingsUnusable(error: unknown): unknown {
+    if (error instanceof SettingsUnusableError) {
+        return new CliError(
+            "FAILED_PRECONDITION",
+            `Pico's settings file ${error.path} cannot be used: ${error.problem}. Fix or remove it first.`,
+            { details: { settingsFile: error.path, problem: error.problem } },
+        );
+    }
+    return ioError(error);
 }

@@ -12,10 +12,9 @@ describe("proposal.0002 the model cache", () => {
 
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({ responses: [{ content: ["ok"] }] }),
         });
         t.after(() => session.dispose());

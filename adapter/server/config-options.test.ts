@@ -5,12 +5,8 @@ import type {
     SetSessionConfigOptionResponse,
 } from "@agentclientprotocol/sdk";
 
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { PicoSession } from "../engine/pico-session.ts";
 import type { TestProviderModels, TestProviderScripts } from "../engine/testing/test-provider.ts";
@@ -18,6 +14,7 @@ import type { ConnectedClient } from "./agent-harness.ts";
 
 import { createPicoModelRegistry } from "../engine/model-catalog.ts";
 import { createPicoSession } from "../engine/pico-session.ts";
+import { unauthenticatedAuthStorage } from "../engine/testing/session-fixture.ts";
 import { ALPHA_DEFAULT, testProvider } from "../engine/testing/test-provider.ts";
 import { connectPicoAgent, INVALID_PARAMS, requestError } from "./agent-harness.ts";
 import {
@@ -62,9 +59,8 @@ interface ModelSession {
 
 async function startModelSession(scripts: TestProviderScripts = {}): Promise<ModelSession> {
     const cwd = temporaryProject();
-    const agentDir = realpathSync(mkdtempSync(join(tmpdir(), "pico-agent-dir-")));
     const dataDir = temporaryDataDir();
-    const authStorage = await discoverAuthStorage(agentDir);
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     const provider = testProvider(scripts);
     provider.register(modelRegistry);
@@ -75,7 +71,6 @@ async function startModelSession(scripts: TestProviderScripts = {}): Promise<Mod
             created = await createPicoSession({
                 cwd: sessionCwd,
                 mcpServers,
-                agentDir,
                 dataDir,
                 authStorage,
                 modelRegistry,

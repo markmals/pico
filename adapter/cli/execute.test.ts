@@ -37,6 +37,7 @@ const SAVED_SETTINGS = {
         defaultModel: "anthropic/claude-sonnet-5-5",
         defaultThinking: "high",
         autoBackground: null,
+        providerCredentials: {},
     },
     effective: {
         defaultModel: "anthropic/claude-sonnet-5-5",

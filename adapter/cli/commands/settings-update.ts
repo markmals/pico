@@ -11,7 +11,11 @@ import {
     thinkingChoices,
 } from "../../engine/model-catalog.ts";
 import { revisionOf, serializeSettings } from "../../settings/settings-document.ts";
-import { settingsFilePath, writeSettings } from "../../settings/settings-store.ts";
+import {
+    SettingsConflictError,
+    settingsFilePath,
+    writeSettings,
+} from "../../settings/settings-store.ts";
 import { CliError } from "../errors.ts";
 import { modelNotFound } from "./models.ts";
 import { ioError, readSettingsFile } from "./settings-file.ts";
@@ -41,14 +45,17 @@ export function settingsUpdate(context: HandlerContext): CommandHandler {
                 { details: { settingsFile, problem: state.problem } },
             );
         }
+        // The authoritative check happens inside the write lock; this one only fails early.
         if (options.ifRevision !== undefined && options.ifRevision !== state.revision) {
-            throw new CliError(
-                "CONFLICT",
-                `${settingsFile} changed since revision ${options.ifRevision}; read it again with \`pico settings get\` and retry.`,
-                { details: { expected: options.ifRevision, actual: state.revision } },
-            );
+            throw conflict(settingsFile, options.ifRevision, state.revision);
         }
         const after = await chosenSettings(context, state.item, options, settingsFile);
+        if (options.dryRun !== true) {
+            const current = readSettingsFile(context.dataDir);
+            if (current.revision !== state.revision) {
+                throw conflict(settingsFile, state.revision, current.revision);
+            }
+        }
         const before = { revision: state.revision, item: state.item };
         const revision = revisionOf(new TextEncoder().encode(serializeSettings(after)));
         if (revision === state.revision) {
@@ -60,7 +67,7 @@ export function settingsUpdate(context: HandlerContext): CommandHandler {
                 after: before,
             };
         }
-        if (options.dryRun !== true) save(context.dataDir, after);
+        if (options.dryRun !== true) save(context.dataDir, after, state.revision);
         return {
             settingsFile,
             dryRun: options.dryRun === true,
@@ -86,7 +93,8 @@ async function chosenSettings(
         return { ...saved, autoBackground };
     }
     const chosen = await chosenDefault(context, saved, options, settingsFile);
-    return { ...chosen, autoBackground };
+    // A default-model save keeps the provider selections: they are a separate decision.
+    return { ...chosen, autoBackground, providerCredentials: saved.providerCredentials };
 }
 
 async function chosenDefault(
@@ -123,10 +131,21 @@ function keptThinking(model: Model<Api>, saved: string | null): string {
     return saved !== null && offersThinking(model, saved) ? saved : defaultThinking(model);
 }
 
-function save(dataDir: string, item: PicoSettings): void {
+function save(dataDir: string, item: PicoSettings, ifRevision: string | undefined): void {
     try {
-        writeSettings(dataDir, item);
+        writeSettings(dataDir, item, { ifRevision });
     } catch (error) {
+        if (error instanceof SettingsConflictError) {
+            throw conflict(error.path, error.expected, error.actual);
+        }
         throw ioError(error);
     }
+}
+
+function conflict(settingsFile: string, expected: string, actual: string): CliError {
+    return new CliError(
+        "CONFLICT",
+        `${settingsFile} changed since revision ${expected}; read it again with \`pico settings get\` and retry.`,
+        { details: { expected, actual } },
+    );
 }

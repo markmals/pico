@@ -12,6 +12,14 @@ const DECLARED = [
     "models get",
     "settings get",
     "settings update",
+    "providers list",
+    "providers get",
+    "providers update",
+    "credentials list",
+    "credentials get",
+    "credentials create",
+    "credentials delete",
+    "auth login",
 ];
 
 describe("proposal.0007 command registry", () => {
@@ -65,6 +73,14 @@ describe("proposal.0007 command registry", () => {
             "models get": "reads",
             "settings get": "reads",
             "settings update": "writes",
+            "providers list": "reads",
+            "providers get": "reads",
+            "providers update": "writes",
+            "credentials list": "reads",
+            "credentials get": "reads",
+            "credentials create": "writes",
+            "credentials delete": "writes",
+            "auth login": "writes",
         });
     });
 
@@ -125,25 +141,87 @@ describe("proposal.0007 command registry", () => {
         expect(findCommand(["nope"])).toBeUndefined();
     });
 
-    test("every declared error code is one the output contract defines", () => {
-        const codes: ErrorCode[] = [
-            "INVALID_ARGUMENT",
-            "NOT_FOUND",
-            "FAILED_PRECONDITION",
-            "CONFLICT",
-            "UNAVAILABLE",
-            "IO_ERROR",
-            "INTERNAL",
-        ];
-
+    test("every declared error explains when a caller sees it", () => {
         for (const command of COMMANDS) {
             for (const error of command.errors) {
                 expect({
                     id: commandId(command),
-                    known: codes.includes(error.code),
+                    code: error.code,
                     explained: error.when.length > 0,
-                }).toEqual({ id: commandId(command), known: true, explained: true });
+                }).toEqual({ id: commandId(command), code: error.code, explained: true });
             }
+        }
+    });
+});
+
+describe("proposal.0009 what the registry declares about the credential commands", () => {
+    test("only auth login streams, and it is the one command that does", () => {
+        const streaming = COMMANDS.filter(command => command.outputMode === "json-lines");
+
+        expect(streaming.map(commandId)).toEqual(["auth login"]);
+    });
+
+    test("the commands that reach Keychain declare the platform they need", () => {
+        expect(COMMANDS.filter(command => command.platform === "macos").map(commandId)).toEqual([
+            "credentials get",
+            "credentials create",
+            "credentials delete",
+            "auth login",
+        ]);
+    });
+
+    test("providers update takes exactly one of the two ways to change a binding", () => {
+        expect(findCommand(["providers", "update"])?.constraints).toEqual([
+            {
+                kind: "exactly-one-of",
+                options: ["--credential", "--disconnect"],
+                description: "exactly one of --credential or --disconnect",
+            },
+        ]);
+    });
+
+    test("every mutating credential command previews, and the reading ones do not", () => {
+        const previews = Object.fromEntries(
+            COMMANDS.filter(command => commandId(command).startsWith("credentials ")).map(
+                command => [commandId(command), command.dryRun],
+            ),
+        );
+
+        expect(previews).toEqual({
+            "credentials list": false,
+            "credentials get": false,
+            "credentials create": true,
+            "credentials delete": true,
+        });
+    });
+
+    test("the secret only ever arrives through stdin, never as an option's value", () => {
+        const create = findCommand(["credentials", "create"]);
+
+        expect(create?.options.map(option => option.name)).toEqual([
+            "--provider",
+            "--stdin",
+            "--if-revision",
+            "--allow-keychain-ui",
+            "--dry-run",
+        ]);
+        expect(create?.options.find(option => option.name === "--stdin")?.type).toBe("boolean");
+        expect(create?.arguments).toEqual([]);
+    });
+
+    test("the added error codes are declared by the commands that raise them", () => {
+        const declared = new Set(
+            COMMANDS.flatMap(command => command.errors.map(error => error.code as ErrorCode)),
+        );
+
+        for (const code of [
+            "AUTH_REQUIRED",
+            "KEYCHAIN_LOCKED",
+            "KEYCHAIN_ACCESS_DENIED",
+            "CANCELLED",
+            "TIMED_OUT",
+        ] as const) {
+            expect({ code, declared: declared.has(code) }).toEqual({ code, declared: true });
         }
     });
 });

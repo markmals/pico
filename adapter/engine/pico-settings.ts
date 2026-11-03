@@ -4,9 +4,10 @@ import { Settings } from "@oh-my-pi/pi-coding-agent";
  * The capability providers that read OMP's own configuration: everything under `~/.omp/agent`
  * and a project's `.omp` (`native`), configured extension packages (`omp-plugins`) and
  * auto-learned skills (`omp-managed`). `AGENTS.md`, `.agents` and other harnesses' folders come
- * from other providers and still load (proposal.0007).
+ * from other providers and still load (proposal.0007). Pico's credential policy adds the model
+ * providers it has no binding for to the same setting (proposal.0009).
  */
-const OMP_CONFIGURATION_PROVIDERS = ["native", "omp-plugins", "omp-managed"];
+export const OMP_CONFIGURATION_PROVIDERS = ["native", "omp-plugins", "omp-managed"];
 
 /** OMP's threshold for moving a plain command to the background, fixed by Pico (proposal.0008). */
 const AUTO_BACKGROUND_THRESHOLD_MS = 60_000;

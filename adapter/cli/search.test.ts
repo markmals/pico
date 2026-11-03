@@ -87,3 +87,22 @@ describe("proposal.0008 finding the auto-background option", () => {
         ]);
     });
 });
+
+describe("proposal.0009 finding how to connect a provider", () => {
+    test.each([
+        ["sign in to a provider", "auth login"],
+        ["store an api key", "credentials create"],
+        ["which providers can I connect", "providers list"],
+        ["stop using a credential for a provider", "providers update"],
+    ])("%p ranks %p first", (query: string, expected: string) => {
+        expect(searchCommands(query).items[0]?.command).toBe(expected);
+    });
+
+    test.each([
+        ["forget a credential", "credentials delete"],
+        ["list the credentials pico stored", "credentials list"],
+        ["check that a credential still works", "credentials get"],
+    ])("%p ranks %p first", (query: string, expected: string) => {
+        expect(searchCommands(query).items[0]?.command).toBe(expected);
+    });
+});

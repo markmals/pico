@@ -33,17 +33,33 @@ function randomText(next: (bound: number) => number): string {
 
 const AUTO_BACKGROUND: (boolean | null)[] = [true, false, null];
 
+/** Provider ids a binding map may really hold, beside the references they select. */
+const PROVIDERS = ["anthropic", "openai-codex", "a/b", "日", "x-1"];
+
+function randomBindings(next: (bound: number) => number): Record<string, string> {
+    const bindings: Record<string, string> = {};
+    const count = next(4);
+    for (let index = 0; index < count; index++) {
+        bindings[PROVIDERS[next(PROVIDERS.length)] as string] = randomText(next);
+    }
+    return bindings;
+}
+
 function randomItem(next: (bound: number) => number): PicoSettings {
     const autoBackground = AUTO_BACKGROUND[next(AUTO_BACKGROUND.length)] as boolean | null;
-    if (next(5) === 0) return { defaultModel: null, defaultThinking: null, autoBackground };
+    const providerCredentials = randomBindings(next);
+    if (next(5) === 0) {
+        return { defaultModel: null, defaultThinking: null, autoBackground, providerCredentials };
+    }
     return {
         defaultModel: randomText(next),
         defaultThinking: randomText(next),
         autoBackground,
+        providerCredentials,
     };
 }
 
-const VERSIONS: unknown[] = [1, 1, 1, 1, 2, 7, 1000, 1.5, "1", 0, -3, true, null, { major: 1 }];
+const VERSIONS: unknown[] = [1, 1, 2, 2, 2, 3, 7, 1000, 1.5, "1", 0, -3, true, null, { major: 1 }];
 const MEMBER_VALUES: unknown[] = [
     "high",
     "anthropic/claude-sonnet-5-5",
@@ -56,6 +72,18 @@ const MEMBER_VALUES: unknown[] = [
 ];
 const UNKNOWN_KEYS = ["flavour", "defaultmodel", "extra", "VERSION"];
 const BACKGROUND_VALUES: unknown[] = [true, false, "on", "off", 1, 0, null, []];
+const BINDING_VALUES: unknown[] = [
+    { anthropic: "ref-a" },
+    { anthropic: "ref-a", "openai-codex": "ref-b" },
+    {},
+    { anthropic: "" },
+    { "": "ref-a" },
+    { anthropic: 7 },
+    { anthropic: null },
+    [],
+    "ref-a",
+    null,
+];
 
 function randomCandidate(next: (bound: number) => number): Record<string, unknown> {
     const candidate: Record<string, unknown> = {};
@@ -65,26 +93,41 @@ function randomCandidate(next: (bound: number) => number): Record<string, unknow
     if (next(3) === 0) {
         candidate["autoBackground"] = BACKGROUND_VALUES[next(BACKGROUND_VALUES.length)];
     }
+    if (next(3) === 0) {
+        candidate["providerCredentials"] = BINDING_VALUES[next(BINDING_VALUES.length)];
+    }
     if (next(4) === 0) candidate[UNKNOWN_KEYS[next(UNKNOWN_KEYS.length)] as string] = "anything";
     return candidate;
 }
 
-/** What version 1 defines, written out independently of the schema it is compared against. */
+/** What the settings versions define, written out independently of the schema they compare against. */
 function expectedStatus(candidate: Record<string, unknown>): string {
     const version = candidate["version"];
-    if (typeof version === "number" && Number.isInteger(version) && version > 1) {
+    if (typeof version === "number" && Number.isInteger(version) && version > 2) {
         return "unsupported";
     }
-    if (version !== 1) return "invalid";
+    if (version !== 1 && version !== 2) return "invalid";
     const defined = ["version", "defaultModel", "defaultThinking", "autoBackground"];
+    if (version === 2) defined.push("providerCredentials");
     if (Object.keys(candidate).some(key => !defined.includes(key))) return "invalid";
     const background = candidate["autoBackground"];
     if (background !== undefined && typeof background !== "boolean") return "invalid";
+    if (!bindingsAreValid(candidate["providerCredentials"])) return "invalid";
     const model = candidate["defaultModel"];
     const thinking = candidate["defaultThinking"];
     if (model === undefined && thinking === undefined) return "valid";
     if (typeof model !== "string" || typeof thinking !== "string") return "invalid";
     return model.length > 0 && thinking.length > 0 ? "valid" : "invalid";
+}
+
+/** A binding map names providers and credential references, both non-empty text. */
+function bindingsAreValid(bindings: unknown): boolean {
+    if (bindings === undefined) return true;
+    if (typeof bindings !== "object" || bindings === null || Array.isArray(bindings)) return false;
+    return Object.entries(bindings).every(
+        ([provider, reference]) =>
+            provider.length > 0 && typeof reference === "string" && reference.length > 0,
+    );
 }
 
 function randomBytes(next: (bound: number) => number): Uint8Array {
@@ -105,6 +148,8 @@ describe("proposal.0007 settings file invariants", () => {
             backgroundOn: 0,
             backgroundOff: 0,
             backgroundUnset: 0,
+            bound: 0,
+            unbound: 0,
         };
 
         for (let seed = 1; seed <= CASES; seed++) {
@@ -120,6 +165,8 @@ describe("proposal.0007 settings file invariants", () => {
             if (item.autoBackground === true) counts.backgroundOn++;
             if (item.autoBackground === false) counts.backgroundOff++;
             if (item.autoBackground === null) counts.backgroundUnset++;
+            if (Object.keys(item.providerCredentials).length > 0) counts.bound++;
+            else counts.unbound++;
             const bytes = new TextEncoder().encode(serializeSettings(item));
 
             expect(readSettingsState(bytes)).toEqual({
@@ -136,9 +183,11 @@ describe("proposal.0007 settings file invariants", () => {
         expect(counts.backgroundOn).toBeGreaterThan(0);
         expect(counts.backgroundOff).toBeGreaterThan(0);
         expect(counts.backgroundUnset).toBeGreaterThan(0);
+        expect(counts.bound).toBeGreaterThan(0);
+        expect(counts.unbound).toBeGreaterThan(0);
     });
 
-    test("a JSON object is valid only when it is exactly a version 1 document, and a later integer version is unsupported", () => {
+    test("a JSON object is valid only when it is exactly a version 1 or version 2 document, and a later integer version is unsupported", () => {
         const counts: Record<string, number> = { valid: 0, unsupported: 0, invalid: 0 };
 
         for (let seed = 1; seed <= CASES; seed++) {

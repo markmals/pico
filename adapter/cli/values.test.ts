@@ -84,3 +84,49 @@ describe("proposal.0007 command line value formats", () => {
         expect(describeValueFormat("text")).not.toBe("");
     });
 });
+
+describe("proposal.0009 the value formats a credential command takes", () => {
+    test.each([["openai"], ["openai-codex"], ["llama.cpp"], ["gpt-4o-2"], ["a"]])(
+        "%p is a provider id",
+        (raw: string) => {
+            expect(isValidValue("provider", raw)).toBe(true);
+        },
+    );
+
+    test.each([
+        ["OpenAI"],
+        ["openai/gpt"],
+        ["-openai"],
+        ["openai "],
+        ["open ai"],
+        [""],
+        ["openai\n"],
+    ])("%p is not a provider id", (raw: string) => {
+        expect(isValidValue("provider", raw)).toBe(false);
+    });
+
+    test("a reference is the lowercase UUID Pico assigned to a credential", () => {
+        const next = randomSource(23);
+        for (let seed = 0; seed < 100; seed++) {
+            const uuid = [8, 4, 4, 4, 12].map(length => randomHex(next, length)).join("-");
+
+            expect({ uuid, valid: isValidValue("reference", uuid) }).toEqual({ uuid, valid: true });
+        }
+    });
+
+    test.each([
+        ["0F8E2C1A-4B6D-4E2F-9A1B-7C3D5E8F0A2B"],
+        ["0f8e2c1a4b6d4e2f9a1b7c3d5e8f0a2b"],
+        ["0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2"],
+        ["0f8e2c1a-4b6d-4e2f-9a1b-7c3d5e8f0a2bb"],
+        ["not-a-uuid"],
+        [""],
+    ])("%p is not a reference", (raw: string) => {
+        expect(isValidValue("reference", raw)).toBe(false);
+    });
+
+    test("both formats describe what they accept", () => {
+        expect(describeValueFormat("provider")).toContain("provider");
+        expect(describeValueFormat("reference")).toContain("credentials list");
+    });
+});

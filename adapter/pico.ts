@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import manifest from "../package.json" with { type: "json" };
+import { runWithoutRuntime } from "./cli/commands/dispatch.ts";
 import { CliError } from "./cli/errors.ts";
 import { renderError } from "./cli/output.ts";
 import { planInvocation } from "./cli/plan.ts";
@@ -32,6 +33,18 @@ if (invocation.kind === "version") {
 } else {
     const dataDir = picoDataDir(homedir());
     const nativesDir = join(dataDir, "natives");
+    const command =
+        invocation.kind === "run" ? { ...invocation, stdout: isolateStdout() } : undefined;
+    if (command !== undefined) {
+        const early = await runWithoutRuntime(
+            command.command,
+            command.input,
+            dataDir,
+            command.stdout,
+            stdoutIsTerminal,
+        );
+        if (early !== undefined) process.exit(early);
+    }
     try {
         ensureDataDir(dataDir);
         const addon = await carriedAddon();
@@ -56,16 +69,15 @@ if (invocation.kind === "version") {
     process.env.PI_NATIVES_DIR = nativesDir;
 
     // Dynamic, so the agent, the commands and Oh My Pi load only after `PI_NATIVES_DIR` is set.
-    if (invocation.kind === "acp") {
+    if (command === undefined) {
         await import("./main.ts");
     } else {
-        const stdout = isolateStdout();
         const { runCommand } = await import("./cli/commands/run.ts");
         const exitCode = await runCommand(
-            invocation.command,
-            invocation.input,
+            command.command,
+            command.input,
             dataDir,
-            stdout,
+            command.stdout,
             stdoutIsTerminal,
         );
         process.exit(exitCode);

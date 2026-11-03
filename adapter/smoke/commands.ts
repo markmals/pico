@@ -30,10 +30,15 @@ interface Run {
 
 type Outcome<T> = { value: T; problem: null } | { value: undefined; problem: string };
 
-async function run(executable: string, scratch: Scratch, args: string[]): Promise<Run> {
+async function run(
+    executable: string,
+    scratch: Scratch,
+    args: string[],
+    stdin?: string,
+): Promise<Run> {
     const child = Bun.spawn([executable, ...args], {
         env: scratch.env,
-        stdin: "ignore",
+        stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
         stdout: "pipe",
         stderr: "pipe",
     });
@@ -180,6 +185,53 @@ async function checkRefusal(
     );
 }
 
+async function checkCredentialBoundaries(
+    executable: string,
+    scratch: Scratch,
+    checklist: Checklist,
+): Promise<void> {
+    const before = settingsBytes(scratch);
+    const indexFile = path.join(path.dirname(settingsFile(scratch)), "credentials.db");
+    const indexBefore = existsSync(indexFile) ? readFileSync(indexFile) : undefined;
+    const fakeKey = "FAKE-pico-compiled-preview-not-a-live-key";
+    const preview = await run(
+        executable,
+        scratch,
+        ["credentials", "create", "--provider", "openai", "--stdin", "--dry-run"],
+        fakeKey,
+    );
+    let planned = false;
+    try {
+        planned = JSON.parse(preview.stdout).dryRun === true;
+    } catch {
+        planned = false;
+    }
+    const indexUnchanged =
+        indexBefore === undefined
+            ? !existsSync(indexFile)
+            : existsSync(indexFile) && indexBefore.equals(readFileSync(indexFile));
+    checklist.record(
+        "compiled API-key preview neither stores nor exposes its input",
+        preview.exitCode === 0 &&
+            planned &&
+            !preview.stdout.includes(fakeKey) &&
+            !preview.stderr.includes(fakeKey) &&
+            settingsBytes(scratch) === before &&
+            indexUnchanged
+            ? null
+            : `exit ${preview.exitCode}; preview or no-write boundary failed`,
+    );
+    const refused = await run(executable, scratch, ["auth", "login", "github-copilot"]);
+    checklist.record(
+        "compiled URL-only login refuses a known prompt-dependent SDK method",
+        refused.exitCode === 1 &&
+            refused.stdout === "" &&
+            lastErrorCode(refused.stderr) === "FAILED_PRECONDITION"
+            ? null
+            : `exit ${refused.exitCode}, code ${lastErrorCode(refused.stderr)}`,
+    );
+}
+
 /** Saves the offline model as the default, which the session checks then start on. */
 export async function checkCommands(
     executable: string,
@@ -189,4 +241,5 @@ export async function checkCommands(
     await checkDiscovery(executable, scratch, checklist);
     await checkSettingsRoundTrip(executable, scratch, checklist);
     await checkRefusal(executable, scratch, checklist);
+    await checkCredentialBoundaries(executable, scratch, checklist);
 }

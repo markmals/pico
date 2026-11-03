@@ -28,7 +28,7 @@ import { isRunning } from "./session-fixture.ts";
 async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
     const { cwd, agentDir, dataDir } = picoWorkspace(t);
     useAsProcessAgentDir(t, agentDir);
-    const authStorage = await unauthenticatedAuthStorage(agentDir);
+    const authStorage = await unauthenticatedAuthStorage(dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, dataDir);
     const provider = testProvider(scripts);
     provider.register(modelRegistry);
@@ -48,7 +48,6 @@ async function fixture(t: TestContext, scripts: TestProviderScripts = {}) {
                 await creation.before?.();
                 const session = await createPicoSession({
                     cwd: directory,
-                    agentDir,
                     dataDir,
                     authStorage,
                     modelRegistry,

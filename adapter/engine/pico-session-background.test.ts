@@ -50,13 +50,12 @@ async function backgroundSession(
     responses: Parameters<typeof createMockModel>[0],
     options: { autoBackground?: boolean } = {},
 ): Promise<{ session: PicoSession; cwd: string; executions: ToolExecution[] }> {
-    const { cwd, agentDir, dataDir } = picoWorkspace(t);
+    const { cwd, dataDir } = picoWorkspace(t);
     const session = await createPicoSession({
         cwd,
-        agentDir,
         dataDir,
         mcpServers: [],
-        authStorage: await mockAuthStorage(agentDir),
+        authStorage: await mockAuthStorage(dataDir),
         model: createMockModel(responses),
         ...options,
     });
@@ -79,13 +78,12 @@ async function pidFrom(file: string): Promise<number> {
 describe("proposal.0008 roster and settings", () => {
     test("bash offers async but not service mode, and wait is active", async t => {
         const model = createMockModel({ responses: [{ content: ["ok"] }] });
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());
@@ -146,14 +144,13 @@ describe("proposal.0008 roster and settings", () => {
 
 describe("proposal.0008 stopping background jobs", () => {
     test("stopping returns only once a job's process that ignores SIGTERM has exited", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "job.pid");
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [{ content: [stubbornJob(pidFile, "job")] }, { content: ["started"] }],
             }),
@@ -167,14 +164,13 @@ describe("proposal.0008 stopping background jobs", () => {
     });
 
     test("disposing a session returns only once a job's process that ignores SIGTERM has exited", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "job.pid");
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [{ content: [stubbornJob(pidFile, "job")] }, { content: ["started"] }],
             }),
@@ -188,7 +184,7 @@ describe("proposal.0008 stopping background jobs", () => {
     });
 
     test("disposing waits for a job the model killed itself, even one ignoring SIGTERM", async t => {
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const pidFile = path.join(cwd, "job.pid");
         // The model kills its job only once the job runs, so there is a process to watch.
         async function* script(): AsyncGenerator<MockResponse> {
@@ -199,10 +195,9 @@ describe("proposal.0008 stopping background jobs", () => {
         }
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({ responses: script() }),
         });
         await session.engine.prompt("start a job, then kill it");
@@ -217,13 +212,12 @@ describe("proposal.0008 stopping background jobs", () => {
 describe("proposal.0008 guidance", () => {
     test("the model is told that background jobs belong to the turn", async t => {
         const model = createMockModel({ responses: [{ content: ["ok"] }] });
-        const { cwd, agentDir, dataDir } = picoWorkspace(t);
+        const { cwd, dataDir } = picoWorkspace(t);
         const session = await createPicoSession({
             cwd,
-            agentDir,
             dataDir,
             mcpServers: [],
-            authStorage: await mockAuthStorage(agentDir),
+            authStorage: await mockAuthStorage(dataDir),
             model,
         });
         t.after(() => session.dispose());

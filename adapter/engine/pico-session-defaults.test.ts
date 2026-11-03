@@ -18,7 +18,7 @@ import { testProvider } from "./testing/test-provider.ts";
 async function registryWithTestProvider(t: Cleanups) {
     withoutProviderCredentials(t);
     const workspace = picoWorkspace(t);
-    const authStorage = await unauthenticatedAuthStorage(workspace.agentDir);
+    const authStorage = await unauthenticatedAuthStorage(workspace.dataDir);
     const modelRegistry = createPicoModelRegistry(authStorage, workspace.dataDir);
     testProvider().register(modelRegistry);
     return { workspace, authStorage, modelRegistry };

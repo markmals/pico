@@ -1,13 +1,11 @@
 import type { SessionConfigSelectOption } from "@agentclientprotocol/sdk";
 import type { Api, AuthStorage, Model } from "@oh-my-pi/pi-ai";
+import type { ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 
 import { clampThinkingLevelForModel, getSupportedEfforts } from "@oh-my-pi/pi-catalog";
-import { ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { pickDefaultAvailableModel } from "@oh-my-pi/pi-coding-agent/config/model-resolver";
-import path from "node:path";
 
-import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
-import { picoSettings } from "./pico-settings.ts";
+import { PicoModelRegistry } from "./credential-policy.ts";
 
 /** OMP's built-in `defaultThinkingLevel`, which a Pico session starts from with no level chosen. */
 const BUILT_IN_THINKING = "high";
@@ -27,13 +25,12 @@ export interface StartingChoice {
     thinking: string;
 }
 
-/** OMP's model registry as Pico runs it: no models.yml, its cache in Pico's data directory. */
+/**
+ * Oh My Pi's model registry as Pico runs it: no models.yml, its cache in Pico's data directory,
+ * and every credential decision made against Pico's own provider bindings (proposal.0009).
+ */
 export function createPicoModelRegistry(authStorage: AuthStorage, dataDir: string): ModelRegistry {
-    return new ModelRegistry(authStorage, undefined, {
-        settings: picoSettings(DEFAULT_AUTO_BACKGROUND),
-        ignoreLocalModelConfig: true,
-        cacheDbPath: path.join(dataDir, "models.db"),
-    });
+    return new PicoModelRegistry(authStorage, dataDir);
 }
 
 /**

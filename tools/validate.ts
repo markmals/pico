@@ -180,7 +180,8 @@ export function parseFrontmatter(source: string): ParsedFrontmatter {
         }
 
         if (!rawValue.endsWith("]")) return { error: `cannot parse list value for "${key}"` };
-        let contents = rawValue.slice(1, -1).trim();
+        // Oxfmt ends a list it wraps one item per line with a trailing comma.
+        let contents = rawValue.slice(1, -1).trim().replace(/,$/, "").trim();
         if (contents.includes("[") || contents.includes("]"))
             return { error: `cannot parse list value for "${key}"` };
 

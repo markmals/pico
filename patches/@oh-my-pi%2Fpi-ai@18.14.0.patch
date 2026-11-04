@@ -1,0 +1,67 @@
+diff --git a/src/registry/oauth/oauth.html b/src/registry/oauth/oauth.html
+--- a/src/registry/oauth/oauth.html
++++ b/src/registry/oauth/oauth.html
+@@ -4,7 +4,7 @@
+ 		<meta charset="UTF-8" />
+ 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+ 		<meta name="color-scheme" content="dark light" />
+-		<title>omp · authentication</title>
++		<title>Pico · authentication</title>
+ 		<style>
+ 			:root {
+ 				--bg: #000;
+@@ -126,10 +126,6 @@
+ 				gap: 0.6rem;
+ 				margin-bottom: 1.75rem;
+ 			}
+-			.omp-mark {
+-				flex: none;
+-				display: block;
+-			}
+ 			.wordmark {
+ 				font-size: 13px;
+ 				font-weight: 600;
+@@ -276,16 +272,6 @@
+ 		<span aria-hidden="true" class="glow"></span>
+ 		<div id="app" class="container">
+ 			<div class="brand">
+-				<svg class="omp-mark" viewBox="0 0 64 64" width="24" height="24" aria-hidden="true">
+-					<defs>
+-						<linearGradient id="omp-mark-grad" x1="0" y1="0" x2="1" y2="1">
+-							<stop offset="0" stop-color="oklch(0.7 0.24 340)" />
+-							<stop offset=".5" stop-color="oklch(0.62 0.21 295)" />
+-							<stop offset="1" stop-color="oklch(0.81 0.14 200)" />
+-						</linearGradient>
+-					</defs>
+-					<path fill="url(#omp-mark-grad)" d="M10 14h44v9H43v33h-9V23h-9v22h-9V23H10z" />
+-				</svg>
+-				<span class="wordmark">omp</span>
++				<span class="wordmark">Pico</span>
+ 				<span class="wordmark-sub">oauth</span>
+ 			</div>
+@@ -293,6 +279,6 @@
+ 			<div class="status" role="status">
+ 				<span aria-hidden="true" class="status-dot"></span>
+ 				<span class="status-word status-pending">Waiting</span>
+-				<span class="status-word status-success">Connected</span>
++				<span class="status-word status-success">Response received</span>
+ 				<span class="status-word status-error">Failed</span>
+ 			</div>
+@@ -326,14 +312,14 @@
+ 			if (serverState.ok) {
+ 				const closeButton = document.querySelector(".btn");
+ 				app.classList.add("success", "countdown");
+-				title.textContent = "Authentication successful";
+-				message.textContent = "You have successfully logged in.";
++				title.textContent = "Authorization received";
++				message.textContent = "Return to the agent to finish signing in.";
+ 				window.close();
+ 				setTimeout(() => {
+ 					app.classList.remove("countdown");
+ 					closeButton.remove();
+-					message.innerHTML = "You have successfully logged in.<br>Please close this tab manually.";
++					message.textContent = "Close this tab and return to the agent to finish signing in.";
+ 				}, 300);
+ 			} else {
+ 				app.classList.add("error");
+ 				title.textContent = "Authentication failed";

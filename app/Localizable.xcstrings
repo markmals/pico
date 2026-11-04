@@ -1,16 +1,20 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
-
+    "%@ (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
     },
-    "%@ is the latest" : {
+    "%@ (unavailable)" : {
 
     },
     "ACP" : {
-
-    },
-    "API Key" : {
 
     },
     "API key" : {
@@ -19,19 +23,10 @@
     "About" : {
 
     },
-    "Account" : {
-
-    },
     "Add Provider…" : {
 
     },
-    "Anthropic Console · mark@example.com" : {
-
-    },
     "App version" : {
-
-    },
-    "Auto" : {
 
     },
     "Available models" : {
@@ -46,34 +41,13 @@
     "Built-in tool policy" : {
 
     },
-    "Cancel" : {
-
-    },
-    "ChatGPT Pro · mark@example.com" : {
-
-    },
-    "Checked just now" : {
-
-    },
-    "Choices come from the connected account's catalog, not from here." : {
-
-    },
-    "Choose a Provider" : {
+    "Choose a model before starting a new session without a model override. No automatic default is available." : {
 
     },
     "Choosing or checking the intellisense program is not available here." : {
 
     },
-    "Claude Max · mark@example.com" : {
-
-    },
-    "Complete" : {
-
-    },
     "Configuration" : {
-
-    },
-    "Connected" : {
 
     },
     "Connection" : {
@@ -100,9 +74,6 @@
     "Diagnostics & About" : {
 
     },
-    "Disconnected" : {
-
-    },
     "Edit" : {
 
     },
@@ -113,6 +84,9 @@
 
     },
     "Finder" : {
+
+    },
+    "Fix or remove this settings file before changing model defaults." : {
 
     },
     "Forward" : {
@@ -127,16 +101,10 @@
     "Helper location" : {
 
     },
-    "High" : {
-
-    },
     "Homebrew" : {
 
     },
     "How Sesh launches Pico as a custom agent." : {
-
-    },
-    "Include these versions when you report a problem." : {
 
     },
     "Included" : {
@@ -166,10 +134,10 @@
     "Launch details" : {
 
     },
-    "Low" : {
+    "Loading Pico's settings and model catalog…" : {
 
     },
-    "Medium" : {
+    "Loading…" : {
 
     },
     "Model" : {
@@ -184,43 +152,22 @@
     "Native delegation" : {
 
     },
-    "New Sesh sessions can use Pico once setup is complete." : {
-
-    },
-    "New Sesh sessions start with these. A session's own choice wins." : {
-
-    },
     "No Results" : {
-
-    },
-    "No catalog is loaded while settings stay unconnected." : {
 
     },
     "No diagnostics are collected, redacted, or exported here." : {
 
     },
-    "None" : {
+    "No model has usable credentials. Connect and select a provider using Pico's commands, then return to Models." : {
 
     },
     "None available" : {
 
     },
-    "Not Signed In" : {
+    "Not Set" : {
 
     },
     "Not connected" : {
-
-    },
-    "Not created" : {
-
-    },
-    "Not registered" : {
-
-    },
-    "Not set up" : {
-
-    },
-    "Not signed in" : {
 
     },
     "Nothing is read from Sesh, and no registration is inspected." : {
@@ -238,9 +185,6 @@
     "OMP version" : {
 
     },
-    "Off" : {
-
-    },
     "Oh My Pi" : {
 
     },
@@ -250,47 +194,44 @@
     "Pico Can't Open This Link" : {
 
     },
+    "Pico Couldn't Save Settings" : {
+
+    },
     "Pico app" : {
+
+    },
+    "Pico couldn't find the pico command in %@. Install it with Homebrew, or launch Pico with -PicoExecutable and the path to it." : {
+
+    },
+    "Pico couldn't read what the pico command at %@ printed." : {
+
+    },
+    "Pico couldn't start the pico command at %@. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pico couldn't start the pico command at %1$@. %2$@"
+          }
+        }
+      }
+    },
+    "Pico couldn't use %@ as the pico command: there is no executable file there." : {
 
     },
     "Pico keeps its settings here, apart from your OMP configuration." : {
 
     },
-    "Pico's sessions can use the models of every signed-in provider." : {
+    "Pico returned an unreadable command response: %@" : {
 
     },
-    "Pico's sessions run intellisense through the shell for code intelligence." : {
+    "Pico uses this model and reasoning level for new sessions without a model override from Sesh. Open sessions keep their own choices." : {
 
     },
-    "Provide a Gemini API Key…" : {
+    "Pico's settings changed outside this window. Nothing was saved, and the current settings could not be reloaded: %@" : {
 
     },
-    "Provide a Groq API Key…" : {
-
-    },
-    "Provide a Mistral API Key…" : {
-
-    },
-    "Provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms](%@)." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms](%4$@)."
-          }
-        }
-      }
-    },
-    "Provide an Anthropic API Key…" : {
-
-    },
-    "Provide an OpenAI API Key…" : {
-
-    },
-    "Provide an OpenRouter API Key…" : {
-
-    },
-    "Provide an xAI API Key…" : {
+    "Pico's settings changed outside this window. Nothing was saved. The current settings are shown." : {
 
     },
     "Provider accounts, and where their credentials come from." : {
@@ -317,37 +258,13 @@
     "Recent errors" : {
 
     },
-    "Recent errors from Pico's sessions appear here as they happen." : {
-
-    },
     "Register" : {
-
-    },
-    "Registering adds Pico to Sesh as a custom agent." : {
-
-    },
-    "Requires a ChatGPT account or API key" : {
-
-    },
-    "Requires a Claude account or API key" : {
-
-    },
-    "Requires a Google account or API key" : {
-
-    },
-    "Requires an API key" : {
-
-    },
-    "Requires an OpenRouter account or API key" : {
 
     },
     "Runtime" : {
 
     },
     "Runtime readiness, installed versions, and where Pico keeps its settings." : {
-
-    },
-    "Sample data — nothing here is saved or connected" : {
 
     },
     "Search" : {
@@ -357,12 +274,6 @@
 
     },
     "Sesh custom agent" : {
-
-    },
-    "Sesh launches `pico` for every Pico session." : {
-
-    },
-    "Sesh starts Pico with these details." : {
 
     },
     "Settings file" : {
@@ -380,44 +291,10 @@
     "Shell" : {
 
     },
-    "Show Sample Data" : {
-
-    },
     "Show in Finder" : {
 
     },
-    "Sign In With OpenRouter…" : {
-
-    },
-    "Sign In With a ChatGPT Account…" : {
-
-    },
-    "Sign In With a Claude Account…" : {
-
-    },
-    "Sign In With a Google Account…" : {
-
-    },
-    "Sign In With an Anthropic Console Account…" : {
-
-    },
-    "Sign Out" : {
-
-    },
-    "Sign in or provide an API key to use %@'s models in Pico's sessions. Your requests are subject to %@'s [privacy policy](%@) and [terms](%@)." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Sign in or provide an API key to use %1$@'s models in Pico's sessions. Your requests are subject to %2$@'s [privacy policy](%3$@) and [terms](%4$@)."
-          }
-        }
-      }
-    },
-    "Sign in to more providers in Providers & Accounts to use their models." : {
-
-    },
-    "Sign-in options for %@" : {
+    "Some settings aren't connected yet" : {
 
     },
     "Starts" : {
@@ -435,7 +312,53 @@
     "The helper's location is not resolved while settings stay unconnected." : {
 
     },
-    "The settings location is not read and cannot be chosen yet." : {
+    "The pico command at %@ answered without a command API version Pico supports." : {
+
+    },
+    "The pico command at %@ did not answer within %@ seconds and was stopped." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The pico command at %1$@ did not answer within %2$@ seconds and was stopped."
+          }
+        }
+      }
+    },
+    "The pico command at %@ ended with status %lld and reported no problem." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The pico command at %1$@ ended with status %2$lld and reported no problem."
+          }
+        }
+      }
+    },
+    "The pico command at %@ failed: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The pico command at %1$@ failed: %2$@"
+          }
+        }
+      }
+    },
+    "The pico command at %@ uses command API version %lld, which this version of Pico doesn't support." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The pico command at %1$@ uses command API version %2$lld, which this version of Pico doesn't support."
+          }
+        }
+      }
+    },
+    "The saved model is unavailable. New sessions will fail to start until you choose another model." : {
+
+    },
+    "The saved model or reasoning level is unavailable. New sessions will fail to start until you choose an available model and level." : {
 
     },
     "The tools Pico's agent can use, and the programs it works with." : {
@@ -444,10 +367,13 @@
     "Tools & Integrations" : {
 
     },
-    "UI scaffold — configuration not connected" : {
+    "Try Again" : {
 
     },
-    "Unregister" : {
+    "Unavailable" : {
+
+    },
+    "Until you choose a model, Pico uses %@ for new sessions without a model override from Sesh." : {
 
     },
     "Up to date" : {
@@ -466,9 +392,6 @@
 
     },
     "`pico`" : {
-
-    },
-    "`pico` is built on this version of OMP; each has its own version number." : {
 
     },
     "`pico` version" : {
@@ -538,9 +461,6 @@
 
     },
     "logs" : {
-
-    },
-    "mark@example.com" : {
 
     },
     "path" : {

@@ -1,6 +1,6 @@
 # Pico
 
-Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). Pico keeps its own settings and Keychain credentials, read and changed through agent-first commands (`pico --help`). An agent can give you the SDK's provider authorization URL, then store and explicitly select the resulting credential. Pico does not reuse terminal OMP credentials. Credential changes apply to every session's next provider request; model and reasoning choices remain session-local. The Mac app is a UI scaffold: it opens a native settings window with six sidebar panes, and every configuration control in it is visibly unconnected unless you turn on its labelled sample data ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)). It configures nothing yet.
+Pico is the development starting point for two programs: an ACP adapter that exposes an [OMP](https://omp.sh) SDK agent to Sesh, and a native macOS app that configures and manages that adapter so its user never opens a terminal. The adapter's core turn path exists: Sesh can launch it as a custom agent, pick its model and thinking level, see every tool call, and cancel work ([`guides/running-pico-in-sesh.md`](guides/running-pico-in-sesh.md)). Pico keeps its own settings and Keychain credentials, read and changed through agent-first commands (`pico --help`). An agent can give you the SDK's provider authorization URL, then store and explicitly select the resulting credential. Pico does not reuse terminal OMP credentials. Credential changes apply to every session's next provider request; model and reasoning choices remain session-local. The Mac app's Models pane reads Pico's catalog and saves model/reasoning defaults through those commands; General shows the actual settings file location. Other configuration controls remain visibly unconnected, and sample mode has been removed ([`guides/refining-the-mac-app-ui.md`](guides/refining-the-mac-app-ui.md)).
 
 ## Install
 
@@ -97,16 +97,16 @@ In the repository today:
 - `AGENTS.md`, `PROCESS.md`, `.agents/rules/`, `.agents/skills/` and `.agents/templates/`: the process, the binding rules, and the record templates.
 - `.omp/extensions/`, the harness lifecycle wiring: the gate on session stop, formatting after an edit, and `bd prime` once per session.
 - `hk.pkl`, `.oxfmtrc.jsonc`, `.oxlintrc.jsonc`, `tsconfig.json`, `.changeset/`, and the mise and Bun lockfiles.
-- `app/`, the Mac app's Swift: the window scene, the sidebar navigation, the six settings panes, and the string catalog their copy resolves through.
+- `app/`, the Mac app's Swift: the window scene, sidebar navigation, six settings panes, the command-backed Models and Settings file connection, and the string catalog.
 - `Project.swift`, `Tuist.swift`, `Config/Version.xcconfig` and `.swift-format`: the Mac app's project configuration. One macOS target named `Pico`, bundle identifier `me.malstrom.pico`, deployment target macOS 27, Swift 6 with complete strict concurrency, and unsigned.
 - `.github/workflows/ci.yml`, which runs `mise run check`, runs `mise run macos:check` and `mise run pico:verify` on the `xcode-27` macOS runner image, checks every commit subject in a pull request, and rejects a pull request without a changeset.
 - `Formula/pico.rb` in [`markmals/homebrew-tap`](https://github.com/markmals/homebrew-tap), which builds `pico` from a release tag and whose bottles the tap's CI builds.
 
-Not implemented. Nothing below is faked anywhere; where the Mac app shows a control for a thing it cannot do, that control is visibly unconnected, or filled with sample data that is labelled as such:
+Not implemented. Nothing below is faked; where the Mac app shows a control for something it cannot do, that control is visibly unconnected:
 
 - broader child-session handoff and integration workflows; Autonomous sessions; MCP servers beyond the ones Sesh sends. These remain follow-up work tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
-- the Mac app's configuration behavior: no provider sign-in, no model catalog, no runtime readiness or version inspection, no Sesh registration, no bundled engine or runtime. The window and its six panes exist; every control in them is an unconnected stub. The configuration contract of issue #12 now exists as `pico`'s commands, and connecting the panes to it is follow-up work. View › Show Sample Data fills the panes with invented values for design review; nothing in that mode is saved or reaches a provider, Sesh or your OMP configuration.
+- the Mac app's provider sign-in and credential management, runtime readiness or version inspection, Sesh registration, and bundled engine or runtime. Models and the Settings file row use real configuration; the remaining controls are unconnected stubs. Providers & Accounts remains Beads `pico-bfk.7`.
 
 `proposals/` holds proposals 0001–0007, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
 

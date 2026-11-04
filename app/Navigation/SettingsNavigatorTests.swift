@@ -10,7 +10,7 @@ struct SettingsNavigatorTests {
     func startsOnGeneral() {
         let navigator = SettingsNavigator()
 
-        #expect(navigator.page == .main(.general))
+        #expect(navigator.destination == .general)
         #expect(navigator.revealedItem == nil)
         #expect(navigator.rejectedLink == nil)
         #expect(!navigator.canGoBack)
@@ -28,13 +28,28 @@ struct SettingsNavigatorTests {
         #expect(navigator.canGoForward)
     }
 
+    @Test("choosing the destination already open changes nothing")
+    func sidebarCurrentDestinationIsNoOp() {
+        let navigator = SettingsNavigator()
+        navigator.selectedDestination = .providers
+        navigator.open(.item(.providerList))
+
+        navigator.selectedDestination = .providers
+
+        #expect(navigator.destination == .providers)
+        #expect(navigator.revealedItem == .providerList)
+        navigator.goBack()
+        #expect(navigator.destination == .general)
+        #expect(!navigator.canGoBack)
+    }
+
     @Test("opening an item navigates to its destination and reveals it")
     func openingAnItemRevealsIt() {
         let navigator = SettingsNavigator()
 
         navigator.open(.item(.reasoningLevel))
 
-        #expect(navigator.page == .main(.models))
+        #expect(navigator.destination == .models)
         #expect(navigator.revealedItem == .reasoningLevel)
         #expect(navigator.openedLocation == .item(.reasoningLevel))
         #expect(navigator.canGoBack)
@@ -71,10 +86,6 @@ struct SettingsNavigatorTests {
         navigator.open(.destination(.tools))
         #expect(navigator.revealedItem == nil)
         #expect(navigator.openedLocation == .destination(.tools))
-
-        navigator.open(.item(.providerList))
-        navigator.openProvider("anthropic")
-        #expect(navigator.revealedItem == nil)
     }
 
     @Test("choosing a search result opens its location")
@@ -83,64 +94,9 @@ struct SettingsNavigatorTests {
 
         navigator.searchSelection = .item(.providerList)
 
-        #expect(navigator.page == .main(.providers))
+        #expect(navigator.destination == .providers)
         #expect(navigator.revealedItem == .providerList)
         #expect(navigator.searchSelection == .item(.providerList))
-    }
-
-    @Test("opening a provider page is a history step that back returns from")
-    func providerPageIsAHistoryStep() {
-        let navigator = SettingsNavigator()
-        navigator.selectedDestination = .providers
-
-        navigator.openProvider("anthropic")
-        #expect(navigator.page == .provider("anthropic"))
-        #expect(navigator.destination == .providers)
-        #expect(navigator.selectedDestination == .providers)
-
-        navigator.goBack()
-        #expect(navigator.page == .main(.providers))
-    }
-
-    @Test("choosing the current destination in the sidebar keeps a provider page open")
-    func sidebarCurrentDestinationKeepsProviderPage() {
-        let navigator = SettingsNavigator()
-        navigator.selectedDestination = .providers
-        navigator.openProvider("openAI")
-
-        navigator.selectedDestination = .providers
-
-        #expect(navigator.page == .provider("openAI"))
-    }
-
-    @Test("opening an item from a provider page goes to its destination's main page")
-    func openingAnItemLeavesTheProviderPage() {
-        let navigator = SettingsNavigator()
-        navigator.selectedDestination = .providers
-        navigator.openProvider("google")
-
-        navigator.open(.item(.providerList))
-
-        #expect(navigator.page == .main(.providers))
-        #expect(navigator.revealedItem == .providerList)
-        navigator.goBack()
-        #expect(navigator.page == .provider("google"))
-    }
-
-    @Test("forgetting every provider page keeps the other pages")
-    func forgettingAllProviderPages() {
-        let navigator = SettingsNavigator()
-        navigator.selectedDestination = .providers
-        navigator.openProvider("anthropic")
-        navigator.goBack()
-        navigator.openProvider("openAI")
-
-        navigator.forgetProviderPages()
-
-        #expect(navigator.page == .main(.providers))
-        navigator.goBack()
-        #expect(navigator.page == .main(.general))
-        #expect(!navigator.canGoBack)
     }
 
     @Test("a valid link opens its location")

@@ -1,24 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// The settings file's location, with Show in Finder and, on right-click, Copy Path. Both are
-/// unavailable while settings are unconnected.
-///
-/// The row lays out its label, path, and button on one line itself: the path gives way and
-/// truncates in the middle, where a labeled row would wrap the path and button below the label.
 struct SettingsFileRow: View {
     let path: String?
+    let isLoading: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             Text(SettingsItem.settingsFile.displayTitle)
                 .fixedSize()
             Spacer(minLength: 0)
-            SettingsValueText(value: path.map(SettingsValue.verbatim))
-                .layoutPriority(-1)
-            Button("Show in Finder", action: showFolder)
-                .disabled(!canShowFolder)
-                .fixedSize()
+            SettingsValueText(
+                value: path.map(SettingsValue.verbatim)
+                    ?? .text(isLoading ? "Loading…" : "Unavailable")
+            )
+            .layoutPriority(-1)
+            ShowSettingsFileButton(path: path)
         }
         .accessibilityElement(children: .contain)
         .settingsRow(.settingsFile)
@@ -26,22 +23,6 @@ struct SettingsFileRow: View {
             Button("Copy Path", action: copyPath)
                 .disabled(path == nil)
         }
-    }
-
-    /// Pico's own folder in Application Support, which holds the settings file.
-    private var folder: URL {
-        URL.applicationSupportDirectory.appending(path: "Pico", directoryHint: .isDirectory)
-    }
-
-    private var canShowFolder: Bool {
-        guard path != nil else { return false }
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)
-            && isDirectory.boolValue
-    }
-
-    private func showFolder() {
-        NSWorkspace.shared.open(folder)
     }
 
     private func copyPath() {

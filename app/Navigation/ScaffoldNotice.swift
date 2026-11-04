@@ -1,10 +1,9 @@
 import SwiftUI
 
+/// The bar below a pane whose settings are not connected yet.
 struct ScaffoldNotice: View {
-    @Environment(\.sampleSettings) private var sample
-
     var body: some View {
-        notice
+        Label("Some settings aren't connected yet", systemImage: "hammer")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -15,13 +14,5 @@ struct ScaffoldNotice: View {
                 Divider()
             }
             .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder private var notice: some View {
-        if sample == nil {
-            Label("UI scaffold — configuration not connected", systemImage: "hammer")
-        } else {
-            Label("Sample data — nothing here is saved or connected", systemImage: "theatermasks")
-        }
     }
 }

@@ -1,70 +1,40 @@
 import SwiftUI
 
 struct GeneralPane: View {
-    @Environment(\.sampleSettings) private var sample
+    @Environment(ModelSettings.self) private var settings
 
     var body: some View {
         Form {
             PaneHeader(destination: .general)
 
             Section {
-                SettingsValueRow(
-                    item: .installed,
-                    value: sampleValue(.status("\(SampleFacts.helperLocation)", .ready))
-                )
-                SettingsValueRow(
-                    item: .starts,
-                    value: sampleValue(.status("Checked just now", .ready))
-                )
-                SettingsValueRow(
-                    item: .upToDate,
-                    value: sampleValue(.status("\(SampleFacts.picoVersion) is the latest", .ready))
-                )
+                SettingsValueRow(item: .installed, value: nil)
+                SettingsValueRow(item: .starts, value: nil)
+                SettingsValueRow(item: .upToDate, value: nil)
             } header: {
                 Text("Runtime")
             } footer: {
-                sample == nil
-                    ? Text("Readiness is not inspected while settings stay unconnected.")
-                    : Text("Sesh launches `pico` for every Pico session.")
+                Text("Readiness is not inspected while settings stay unconnected.")
             }
 
             Section {
-                SettingsValueRow(
-                    item: .generalAppVersion,
-                    value: sampleValue(.verbatim(SampleFacts.appVersion))
-                )
-                SettingsValueRow(
-                    item: .generalPicoVersion,
-                    value: sampleValue(.verbatim(SampleFacts.picoVersion))
-                )
-                SettingsValueRow(
-                    item: .generalOMPVersion,
-                    value: sampleValue(.verbatim(SampleFacts.ompVersion))
-                )
+                SettingsValueRow(item: .generalAppVersion, value: nil)
+                SettingsValueRow(item: .generalPicoVersion, value: nil)
+                SettingsValueRow(item: .generalOMPVersion, value: nil)
             } header: {
                 Text("Versions")
             } footer: {
-                sample == nil
-                    ? Text("Installed versions are not read here.")
-                    : Text(
-                        "`pico` is built on this version of OMP; each has its own version number."
-                    )
+                Text("Installed versions are not read here.")
             }
 
             Section {
-                SettingsFileRow(path: sample == nil ? nil : SampleFacts.settingsFile)
+                SettingsFileRow(path: settings.settingsFile, isLoading: settings.state == .loading)
             } header: {
                 Text("Configuration")
             } footer: {
-                sample == nil
-                    ? Text("The settings location is not read and cannot be chosen yet.")
-                    : Text("Pico keeps its settings here, apart from your OMP configuration.")
+                Text("Pico keeps its settings here, apart from your OMP configuration.")
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func sampleValue(_ value: SettingsValue) -> SettingsValue? {
-        sample == nil ? nil : value
     }
 }

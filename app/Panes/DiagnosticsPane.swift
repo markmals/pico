@@ -1,51 +1,30 @@
 import SwiftUI
 
 struct DiagnosticsPane: View {
-    @Environment(\.sampleSettings) private var sample
-
     var body: some View {
         Form {
             PaneHeader(destination: .diagnostics)
 
             Section {
                 AppIdentityRow()
-                SettingsValueRow(
-                    item: .diagnosticsAppVersion,
-                    value: sampleValue(.verbatim(SampleFacts.appVersion))
-                )
-                SettingsValueRow(
-                    item: .diagnosticsPicoVersion,
-                    value: sampleValue(.verbatim(SampleFacts.picoVersion))
-                )
-                SettingsValueRow(
-                    item: .diagnosticsOMPVersion,
-                    value: sampleValue(.verbatim(SampleFacts.ompVersion))
-                )
+                SettingsValueRow(item: .diagnosticsAppVersion, value: nil)
+                SettingsValueRow(item: .diagnosticsPicoVersion, value: nil)
+                SettingsValueRow(item: .diagnosticsOMPVersion, value: nil)
             } header: {
                 Text("About")
             } footer: {
-                sample == nil
-                    ? Text("Installed versions are not read while settings stay unconnected.")
-                    : Text("Include these versions when you report a problem.")
+                Text("Installed versions are not read while settings stay unconnected.")
             }
 
             Section {
-                SettingsValueRow(item: .recentErrors, value: sampleValue(.text("None")))
-                SettingsValueRow(item: .diagnosticReport, value: sampleValue(.text("Not created")))
+                SettingsValueRow(item: .recentErrors, value: nil)
+                SettingsValueRow(item: .diagnosticReport, value: nil)
             } header: {
                 Text("Diagnostics")
             } footer: {
-                sample == nil
-                    ? Text("No diagnostics are collected, redacted, or exported here.")
-                    : Text(
-                        "Recent errors from Pico's sessions appear here as they happen."
-                    )
+                Text("No diagnostics are collected, redacted, or exported here.")
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func sampleValue(_ value: SettingsValue) -> SettingsValue? {
-        sample == nil ? nil : value
     }
 }

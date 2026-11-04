@@ -44,13 +44,12 @@ let project = Project(
                     ],
                 ]
             ),
-            // The app's own Swift, the string catalog its localized titles and copy
-            // resolve through, the asset catalog of provider logos, and the notice those
-            // logos' license requires. The globs pick up a new file under app/ at the
-            // next generation, and the generated project is never edited.
+            // The app's own Swift and the string catalog its localized titles and copy
+            // resolve through. The globs pick up a new file under app/ at the next
+            // generation, and the generated project is never edited.
             // Tests sit beside the code they test and belong to PicoTests instead.
             sources: [.glob("app/**/*.swift", excluding: ["app/**/*Tests.swift"])],
-            resources: ["app/**/*.xcstrings", "app/**/*.xcassets", "app/ThirdPartyNotices.md"]
+            resources: ["app/**/*.xcstrings"]
         ),
         .target(
             name: "PicoTests",

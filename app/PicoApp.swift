@@ -3,25 +3,24 @@ import SwiftUI
 @main
 struct PicoApp: App {
     @State private var navigator = SettingsNavigator()
-    @State private var showsSampleData = Self.launchesWithSampleData
-    @State private var sampleSettings = SampleSettings()
+    @State private var settings = ModelSettings(
+        client: PicoSettingsClient(executableOverride: Self.executableOverride)
+    )
 
     var body: some Scene {
         Window("Pico", id: SettingsWindowView.sceneID) {
             SettingsWindowView(navigator: navigator)
-                .environment(\.sampleSettings, showsSampleData ? sampleSettings : nil)
+                .environment(settings)
         }
         .defaultSize(width: 715, height: 680)
         .windowResizability(.contentSize)
         .commands {
-            SettingsCommands(showsSampleData: $showsSampleData)
+            SettingsCommands()
         }
     }
 
-    /// Whether Pico was launched with `-ShowsSampleData YES`. Only the launch arguments are read,
-    /// never saved defaults, so sample data is off at every other launch.
-    private static var launchesWithSampleData: Bool {
+    private static var executableOverride: String? {
         let arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-        return (arguments["ShowsSampleData"] as? NSString)?.boolValue ?? false
+        return arguments["PicoExecutable"] as? String
     }
 }

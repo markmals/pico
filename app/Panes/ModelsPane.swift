@@ -1,40 +1,34 @@
 import SwiftUI
 
 struct ModelsPane: View {
-    @Environment(\.sampleSettings) private var sample
+    @Environment(ModelSettings.self) private var settings
 
     var body: some View {
         Form {
             PaneHeader(destination: .models)
 
             Section {
-                DefaultModelPickerRow(settings: sample)
-                ReasoningLevelPickerRow(settings: sample)
+                DefaultModelPickerRow(settings: settings)
+                ReasoningLevelPickerRow(settings: settings)
             } header: {
                 Text("Defaults")
             } footer: {
-                sample == nil
-                    ? Text("Choices come from the connected account's catalog, not from here.")
-                    : Text("New Sesh sessions start with these. A session's own choice wins.")
+                ModelDefaultsFooter(settings: settings)
             }
 
             Section {
-                if let sample {
-                    AvailableModelRows(settings: sample)
+                if let snapshot = settings.snapshot {
+                    AvailableModelRows(
+                        models: snapshot.models,
+                        defaultModel: snapshot.item.defaultModel
+                    )
                 } else {
-                    SettingsValueRow(item: .availableModels, value: nil)
+                    Text("Unavailable")
+                        .foregroundStyle(.secondary)
                 }
             } header: {
-                if sample == nil {
-                    Text(SettingsItem.availableModels.displayTitle)
-                } else {
-                    Text(SettingsItem.availableModels.displayTitle)
-                        .settingsRow(.availableModels)
-                }
-            } footer: {
-                sample == nil
-                    ? Text("No catalog is loaded while settings stay unconnected.")
-                    : Text("Sign in to more providers in Providers & Accounts to use their models.")
+                Text(SettingsItem.availableModels.displayTitle)
+                    .settingsRow(.availableModels)
             }
         }
         .formStyle(.grouped)

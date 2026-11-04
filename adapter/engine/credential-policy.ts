@@ -51,6 +51,14 @@ function substituted(provider: string, reference: string, instead: string): Cred
     );
 }
 
+function authenticationRequired(provider: string, reference?: string): CredentialError {
+    const message =
+        reference === undefined
+            ? `Pico has no credential selected for ${provider}. Discover sign-in methods with \`pico providers get ${provider}\`, then select a stored reference with \`pico providers update ${provider} --credential <reference>\`.`
+            : `Pico's selected credential for ${provider} could not authorize this request. Inspect it with \`pico credentials get ${reference}\` and discover sign-in methods with \`pico providers get ${provider}\`.`;
+    return new CredentialError("AUTH_REQUIRED", message, { details: { provider, reference } });
+}
+
 /**
  * Opens Pico's own credentials for `dataDir`. Nothing here reads the user's Oh My Pi store:
  * a provider is authorized by an explicit Pico binding or not at all (proposal.0009).
@@ -191,8 +199,17 @@ export class PicoModelRegistry extends ModelRegistry {
         const bindings = this.#bindings();
         this.#apply(bindings);
         const reference = bindings[provider];
+        const isRequest = sessionId !== undefined || options?.modelId !== undefined;
         if (reference === undefined) {
-            return super.getApiKeyWithCredentialForProvider(provider, sessionId, options);
+            const resolved = await super.getApiKeyWithCredentialForProvider(
+                provider,
+                sessionId,
+                options,
+            );
+            if (resolved === undefined && isRequest && !this.#keyless.has(provider)) {
+                throw authenticationRequired(provider);
+            }
+            return resolved;
         }
         // Reread the selected item before resolving: a removed, locked, denied or malformed
         // Keychain item fails this request rather than serving a cached payload, and the row
@@ -203,7 +220,12 @@ export class PicoModelRegistry extends ModelRegistry {
             sessionId,
             options,
         );
-        if (resolved === undefined) return undefined;
+        if (resolved === undefined) {
+            if (isRequest && !this.#keyless.has(provider)) {
+                throw authenticationRequired(provider, reference);
+            }
+            return undefined;
+        }
         // The cascade names the stored row it chose, and names none for a key it read from
         // the environment or a configuration file: that is the substitution to refuse.
         if (resolved.credentialId !== (selected?.rowId ?? resolved.credentialId)) {

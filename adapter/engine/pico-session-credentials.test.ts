@@ -72,6 +72,38 @@ describe("proposal.0009 a session's provider requests", () => {
         );
     });
 
+    test("disconnecting an open session raises Pico authentication-required before dispatch", async t => {
+        const { cwd, dataDir } = picoWorkspace(t);
+        const credentials = await picoCredentials(dataDir);
+        t.after(() => credentials.close());
+        credentials.bind(MOCK_PROVIDER, "first-key");
+        const model = createMockModel({
+            responses: [{ content: ["connected"] }, { content: ["must not dispatch"] }],
+        });
+        const session = await createPicoSession({
+            cwd,
+            dataDir,
+            keychain: credentials.keychain,
+            mcpServers: [],
+            model,
+        });
+        t.after(() => session.dispose());
+        await session.engine.prompt("connected control");
+        const state = readSettings(dataDir);
+        assert.ok("item" in state);
+        writeSettings(dataDir, { ...state.item, providerCredentials: {} });
+
+        await assert.rejects(session.engine.prompt("must fail without a binding"), {
+            code: "AUTH_REQUIRED",
+        });
+
+        assert.deepEqual(
+            model.calls.map(call => call.options?.apiKey),
+            ["first-key"],
+        );
+        assert.equal(session.engine.model?.id, model.id);
+    });
+
     test("changing the binding changes no session's model or thinking level", async t => {
         const { cwd, dataDir } = picoWorkspace(t);
         const credentials = await picoCredentials(dataDir);

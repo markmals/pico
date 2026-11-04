@@ -1,5 +1,5 @@
 /**
- * Codes the vault reports. They are the stable CLI codes plus the Keychain
+ * Codes Pico credential operations report. They are the stable CLI codes plus the Keychain
  * conditions proposal 0009 adds, so a command surfaces one unchanged instead of
  * flattening every storage failure into one message.
  */
@@ -7,6 +7,7 @@ export type CredentialErrorCode =
     | "INVALID_ARGUMENT"
     | "NOT_FOUND"
     | "FAILED_PRECONDITION"
+    | "AUTH_REQUIRED"
     | "CONFLICT"
     | "UNAVAILABLE"
     | "IO_ERROR"

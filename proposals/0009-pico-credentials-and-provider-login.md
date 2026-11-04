@@ -2,7 +2,7 @@
 id: proposal.0009
 title: Pico Credentials and Provider Login
 authors: [Mark Malstrom]
-status: active-review
+status: implemented
 pull-request: https://github.com/markmals/pico/pull/47
 issues: [https://github.com/markmals/pico/issues/12, https://github.com/markmals/pico/issues/7]
 supersedes: []
@@ -273,6 +273,12 @@ Disconnecting provider bindings is reversible while credentials remain. Deleting
 - **Bun.secrets with delayed SDK writes, experimental FFI, or a secret-printing helper:** the compiled Secrets API probe establishes native access, but queued async persistence cannot satisfy synchronous SDK commits. Experimental FFI is not the recommended stable bridge, and a credential-printing subprocess expands the leakage surface. Use a narrowly scoped Node-API bridge instead.
 - **Interactive terminal login or a native sign-in UI now:** Mark selected agent-only URL handoff and no UI. Neither a TUI launched behind the scenes nor sample app state meets that direction.
 - **A detached login daemon with on-disk resumable OAuth state:** it could make each CLI call short-lived, but adds sensitive flow persistence, lifecycle/recovery, and a service boundary the SDK does not need. A supervised finite login process keeps state in memory and cancellation tied to its caller.
+
+## Acceptance and delivery
+
+Mark accepted this implementation on 2026-11-04: “LGTM, this is ready to merge. Please clean up afterwards.” The accepted scope and observed verification are recorded in the [readiness report](https://github.com/markmals/pico/pull/47#issuecomment-6621051740). No implementation or design revisions were requested.
+
+This status records accepted implementation in the original feature pull request before merge into `main`. Delivery for this change is merge-only: no release, Homebrew publication, signing, or notarization was requested or performed. GitHub #12 remains open for real app configuration and #7 for Autonomous support; Beads `pico-bfk.4` is complete.
 
 ## Open questions
 

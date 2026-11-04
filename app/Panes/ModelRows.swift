@@ -1,80 +1,94 @@
 import SwiftUI
 
 struct DefaultModelPickerRow: View {
-    let settings: SampleSettings?
+    @Bindable var settings: ModelSettings
 
     var body: some View {
-        if let settings, !settings.availableModels.isEmpty {
-            Picker(selection: selection(settings)) {
-                ForEach(settings.availableModels) { model in
-                    Text(verbatim: model.name).tag(Optional(model))
+        if let snapshot = settings.snapshot, !snapshot.models.isEmpty {
+            Picker(selection: $settings.modelSelection) {
+                if snapshot.item.defaultModel == nil {
+                    Text("Not Set").tag("")
+                } else if settings.selectedModel == nil, let saved = snapshot.item.defaultModel {
+                    Text("\(saved) (unavailable)").tag(saved)
+                }
+                ForEach(snapshot.models) { model in
+                    Text("\(model.name) (\(model.provider))").tag(model.value)
                 }
             } label: {
                 Text(SettingsItem.model.title)
             }
+            .disabled(settings.isSaving)
             .accessibilityLabel(Text(SettingsItem.model.title))
             .settingsRow(.model)
-        } else if settings != nil {
-            UnavailablePicker(item: .model, reason: "None available")
+        } else if let saved = settings.snapshot?.item.defaultModel {
+            UnavailablePicker(item: .model, reason: "\(saved) (unavailable)")
         } else {
-            UnavailablePicker(item: .model)
+            UnavailablePicker(item: .model, reason: unavailableReason)
         }
     }
 
-    private func selection(_ settings: SampleSettings) -> Binding<SampleModel?> {
-        Binding {
-            settings.defaultModel
-        } set: { model in
-            if let model { settings.chooseDefaultModel(model) }
+    private var unavailableReason: LocalizedStringResource {
+        switch settings.state {
+        case .loading: "Loading…"
+        case .ready, .saving: "None available"
+        case .failed, .invalid: "Unavailable"
         }
     }
 }
 
 struct ReasoningLevelPickerRow: View {
-    let settings: SampleSettings?
+    @Bindable var settings: ModelSettings
 
     var body: some View {
-        if let settings, !settings.reasoningLevels.isEmpty {
-            @Bindable var settings = settings
-            Picker(selection: $settings.reasoningLevel) {
-                ForEach(settings.reasoningLevels) { level in
-                    Text(level.title).tag(level)
+        if let model = settings.selectedModel, !model.thinking.isEmpty {
+            Picker(selection: $settings.thinkingSelection) {
+                if !model.thinking.contains(where: { $0.value == settings.thinkingSelection }) {
+                    Text("\(settings.thinkingSelection) (unavailable)")
+                        .tag(settings.thinkingSelection)
+                }
+                ForEach(model.thinking) { level in
+                    Text(verbatim: level.name).tag(level.value)
                 }
             } label: {
                 Text(SettingsItem.reasoningLevel.title)
             }
+            .disabled(settings.isSaving)
             .accessibilityLabel(Text(SettingsItem.reasoningLevel.title))
             .settingsRow(.reasoningLevel)
-        } else if settings != nil {
-            UnavailablePicker(item: .reasoningLevel, reason: "None available")
         } else {
-            UnavailablePicker(item: .reasoningLevel)
+            UnavailablePicker(item: .reasoningLevel, reason: unavailableReason)
+        }
+    }
+
+    private var unavailableReason: LocalizedStringResource {
+        switch settings.state {
+        case .loading: "Loading…"
+        case .ready(let snapshot), .saving(let snapshot):
+            snapshot.item.defaultModel == nil ? "Not Set" : "Unavailable"
+        case .failed, .invalid: "Unavailable"
         }
     }
 }
 
-/// The models of signed-in providers, each with its provider; the default is marked.
 struct AvailableModelRows: View {
-    let settings: SampleSettings
+    let models: [PicoModel]
+    let defaultModel: String?
 
     var body: some View {
-        if settings.availableModels.isEmpty {
+        if models.isEmpty {
             Text("None available")
                 .foregroundStyle(.secondary)
         }
-        ForEach(settings.availableModels) { model in
+        ForEach(models) { model in
             LabeledContent {
-                if model == settings.defaultModel {
+                if model.value == defaultModel {
                     SettingsValueText(value: .text("Default"))
                 }
             } label: {
-                HStack(spacing: 10) {
-                    ProviderTile(provider: model.provider, size: 24)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(verbatim: model.name)
-                        Text(verbatim: model.provider.name)
-                            .foregroundStyle(.secondary)
-                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: model.name)
+                    Text(verbatim: model.value)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

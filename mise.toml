@@ -228,11 +228,10 @@ xcodebuild -workspace Pico.xcworkspace -scheme Pico -configuration Debug \
 '''
 
 [tasks."macos:run"]
-description = "Build the app and open this checkout's .build/macos Debug Pico.app"
-depends = ["macos:build"]
-# The explicit path matters: a bare `open -a Pico` would launch whichever copy
-# Launch Services knows about, which is not necessarily the one just built.
-run = 'open "{{config_root}}/.build/macos/Build/Products/Debug/Pico.app"'
+description = "Build this checkout's app and pico executable, then open the app using that pico"
+depends = ["macos:build", "pico:build"]
+# A new instance picks up the rebuilt app and launch argument even when Pico is already running.
+run = 'open -n "{{config_root}}/.build/macos/Build/Products/Debug/Pico.app" --args -PicoExecutable "{{config_root}}/.build/pico"'
 
 [tasks."macos:test"]
 description = "Build the app and run the native PicoTests suite"

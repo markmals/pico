@@ -5,7 +5,7 @@ struct SettingsWindowView: View {
 
     @Bindable var navigator: SettingsNavigator
 
-    @Environment(\.sampleSettings) private var sample
+    @Environment(ModelSettings.self) private var settings
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -13,14 +13,16 @@ struct SettingsWindowView: View {
                 .navigationSplitViewColumnWidth(215)
         } detail: {
             RetainedSettingsPanes(selection: navigator.destination)
-                .navigationTitle(pageTitle)
+                .navigationTitle(Text(navigator.destination.title))
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
                         BackForwardControl(navigator: navigator)
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    ScaffoldNotice()
+                    if navigator.destination != .models {
+                        ScaffoldNotice()
+                    }
                 }
                 .environment(\.settingsReveal, reveal)
         }
@@ -38,9 +40,12 @@ struct SettingsWindowView: View {
         .onOpenURL { url in
             navigator.handle(url)
         }
-        .onChange(of: sample == nil) { _, sampleDataIsOff in
-            if sampleDataIsOff { navigator.forgetProviderPages() }
+        .onAppear { settings.reload() }
+        .onDisappear { settings.cancel() }
+        .onChange(of: navigator.destination) { _, destination in
+            if destination == .models { settings.reload() }
         }
+        .modifier(ModelSettingsAlert(settings: settings))
         .alert(
             "Pico Can't Open This Link",
             isPresented: $navigator.isShowingRejectedLink,
@@ -50,14 +55,6 @@ struct SettingsWindowView: View {
         } message: { link in
             Text("“\(link.absoluteString)” doesn't name a pane or setting in Pico.")
         }
-    }
-
-    private var pageTitle: Text {
-        if case .provider(let slug) = navigator.page, let provider = SampleProvider(rawValue: slug)
-        {
-            return Text(verbatim: provider.name)
-        }
-        return Text(navigator.destination.title)
     }
 
     private var reveal: SettingsReveal? {

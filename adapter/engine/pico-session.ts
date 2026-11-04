@@ -305,13 +305,6 @@ async function attemptOpen(open: () => Promise<PicoCredentials>): Promise<PicoCr
     }
 }
 
-/**
- * Resolves the selected model's real credential — running a command-backed key
- * and refreshing OAuth in place, exactly as a request would — so a session only
- * exists when its first prompt can reach the provider. The session id is the
- * same identity OMP's own requests resolve under, so a provider holding several
- * session-sticky accounts picks this session's.
- */
 async function verifyCredentials(engine: AgentSession, model: Model<Api>): Promise<void> {
     const named = `${model.provider}/${model.id}`;
     let credential: string | undefined;

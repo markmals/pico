@@ -1,7 +1,7 @@
 import type { z } from "zod/v4";
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,7 @@ import { authLoginEventOutput } from "../result-schemas.ts";
 
 type LoginEvent = z.infer<typeof authLoginEventOutput>;
 const probe = join(import.meta.dir, "../../credentials/testing/login-process-probe.ts");
+const pipeReader = join(import.meta.dir, "../../credentials/testing/login-output-reader.ts");
 const marker = "FAKE-pico-process-probe-private-material";
 
 // Windows does not deliver the POSIX cancellation signals this process contract exercises.
@@ -16,19 +17,8 @@ describe.skipIf(process.platform === "win32")("proposal.0009 supervised login pr
     for (const mode of ["success", "sigint", "sigterm", "repeated", "broken"] as const) {
         test(`${mode} preserves the login output and cancellation contract`, async () => {
             const dataDir = mkdtempSync(join(tmpdir(), "pico-login-process-"));
-            const child = Bun.spawn([process.execPath, probe, mode, dataDir], {
-                env: {
-                    HOME: userInfo().homedir,
-                    PATH: "/usr/bin:/bin",
-                    PI_CODING_AGENT_DIR: join(dataDir, "engine"),
-                },
-                stdin: "ignore",
-                stdout: "pipe",
-                stderr: "pipe",
-                timeout: 15_000,
-                killSignal: "SIGKILL",
-            });
-            const reader = child.stdout.getReader();
+            const { child, consumer, output } = spawnLoginProbe(mode, dataDir);
+            const reader = output.getReader();
             const diagnostics = new Response(child.stderr).text();
             const decoder = new TextDecoder();
             const events: LoginEvent[] = [];
@@ -56,6 +46,7 @@ describe.skipIf(process.platform === "win32")("proposal.0009 supervised login pr
                 expect(events[0]?.type).toBe("started");
                 if (mode === "success") await fetch(authorization.url);
                 else if (mode === "broken") {
+                    expect(await consumer!.exited).toBe(0);
                     await reader.cancel();
                     await fetch(new URL("/progress", authorization.url)).catch(error => {
                         if (
@@ -107,9 +98,61 @@ describe.skipIf(process.platform === "win32")("proposal.0009 supervised login pr
                 }
             } finally {
                 if (child.exitCode === null) child.kill("SIGKILL");
-                await child.exited;
+                if (consumer?.exitCode === null) consumer.kill("SIGKILL");
+                await Promise.all([child.exited, consumer?.exited]);
                 rmSync(dataDir, { recursive: true, force: true });
             }
         }, 30_000);
     }
 });
+
+function spawnLoginProbe(mode: string, dataDir: string) {
+    let holder: number | undefined;
+    let readDescriptor: number | undefined;
+    let writeDescriptor: number | undefined;
+    try {
+        if (mode === "broken") {
+            const pipe = join(dataDir, "stdout.pipe");
+            const created = Bun.spawnSync(["mkfifo", "-m", "600", pipe]);
+            if (created.exitCode !== 0) throw new Error(created.stderr.toString());
+            holder = openSync(pipe, "r+");
+            readDescriptor = openSync(pipe, "r");
+            writeDescriptor = openSync(pipe, "w");
+        }
+        // Stream cancellation can precede Linux fd closure; process exit closes the last reader.
+        const consumer =
+            readDescriptor === undefined
+                ? undefined
+                : Bun.spawn([process.execPath, pipeReader], {
+                      stdin: readDescriptor,
+                      stdout: "pipe",
+                      stderr: "pipe",
+                      timeout: 15_000,
+                      killSignal: "SIGKILL",
+                  });
+        try {
+            const child = Bun.spawn([process.execPath, probe, mode, dataDir], {
+                env: {
+                    HOME: userInfo().homedir,
+                    PATH: "/usr/bin:/bin",
+                    PI_CODING_AGENT_DIR: join(dataDir, "engine"),
+                },
+                stdin: "ignore",
+                stdout: writeDescriptor ?? "pipe",
+                stderr: "pipe",
+                timeout: 15_000,
+                killSignal: "SIGKILL",
+            });
+            const output = consumer?.stdout ?? child.stdout;
+            if (typeof output === "number") throw new Error("The login pipe has no reader");
+            return { child, consumer, output };
+        } catch (error) {
+            consumer?.kill("SIGKILL");
+            throw error;
+        }
+    } finally {
+        for (const descriptor of [writeDescriptor, readDescriptor, holder]) {
+            if (descriptor !== undefined) closeSync(descriptor);
+        }
+    }
+}

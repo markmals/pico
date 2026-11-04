@@ -2,7 +2,7 @@
 id: proposal.0009
 title: Pico Credentials and Provider Login
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/47
 issues: [https://github.com/markmals/pico/issues/12, https://github.com/markmals/pico/issues/7]
 supersedes: []

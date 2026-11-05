@@ -108,6 +108,6 @@ Not implemented. Nothing below is faked; where the Mac app shows a control for s
 - approval prompts, by design: Pico auto-approves every tool call.
 - the Mac app's provider sign-in and credential management, runtime readiness or version inspection, Sesh registration, and bundled engine or runtime. Models and the Settings file row use real configuration; the remaining controls are unconnected stubs. Providers & Accounts remains Beads `pico-bfk.7`.
 
-`proposals/` holds proposals 0001–0007, and `guides/` holds their guides; `decisions/` and `policies/` hold only their index READMEs. Empty record directories are the healthy state, not a gap to fill.
+`proposals/` holds proposals 0001–0009, and `guides/` holds their guides. `policies/` holds the [optimistic configuration saves](policies/0001-optimistic-configuration-saves.md) policy; `decisions/` holds only its index README. Empty record directories are healthy, not gaps to fill.
 
 [`CHANGELOG.md`](CHANGELOG.md) records the initial template adaptation.

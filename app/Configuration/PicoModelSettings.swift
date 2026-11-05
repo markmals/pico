@@ -50,6 +50,7 @@ struct PicoModel: Decodable, Equatable, Identifiable, Sendable {
     let name: String
     let provider: String
     let thinking: [ThinkingChoice]
+    let defaultThinking: String
 
     var id: String { value }
 }
@@ -73,14 +74,15 @@ enum PicoSettingsLoad: Equatable, Sendable {
     case invalid(PicoSettingsProblem)
 }
 
-enum PicoSettingsChange: Sendable {
+enum PicoSettingsChange: Equatable, Sendable {
     case model(String)
-    case thinking(String)
+    case thinking(model: String, level: String)
 
     var arguments: [String] {
         switch self {
         case .model(let model): ["--default-model", model]
-        case .thinking(let thinking): ["--default-thinking", thinking]
+        case .thinking(let model, let level):
+            ["--default-model", model, "--default-thinking", level]
         }
     }
 }

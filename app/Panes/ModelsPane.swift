@@ -20,7 +20,7 @@ struct ModelsPane: View {
                 if let snapshot = settings.snapshot {
                     AvailableModelRows(
                         models: snapshot.models,
-                        defaultModel: snapshot.item.defaultModel
+                        defaultModel: settings.displayedDefaults?.defaultModel
                     )
                 } else {
                     Text("Unavailable")

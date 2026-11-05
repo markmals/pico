@@ -16,23 +16,31 @@ final class ModelSettings {
         self.client = client
     }
 
+    var displayedDefaults: PicoDefaults? {
+        switch state {
+        case .ready(let snapshot): snapshot.item
+        case .saving(let pending): pending.displayedDefaults
+        case .loading, .failed, .invalid: nil
+        }
+    }
+
     var isSaving: Bool {
         if case .saving = state { true } else { false }
     }
 
     var modelSelection: String {
-        get { snapshot?.item.defaultModel ?? "" }
+        get { displayedDefaults?.defaultModel ?? "" }
         set { chooseModel(newValue) }
     }
 
     var selectedModel: PicoModel? {
-        guard let snapshot, let selected = snapshot.item.defaultModel else { return nil }
+        guard let snapshot, let selected = displayedDefaults?.defaultModel else { return nil }
         return snapshot.models.first { $0.value == selected }
     }
 
     var settingsFile: String? {
         switch state {
-        case .ready(let snapshot), .saving(let snapshot): snapshot.settingsFile
+        case .ready, .saving: snapshot?.settingsFile
         case .invalid(let problem): problem.settingsFile
         case .loading, .failed: nil
         }
@@ -45,13 +53,14 @@ final class ModelSettings {
 
     var snapshot: PicoModelSettings? {
         switch state {
-        case .ready(let snapshot), .saving(let snapshot): snapshot
+        case .ready(let snapshot): snapshot
+        case .saving(let pending): pending.confirmed
         case .loading, .failed, .invalid: nil
         }
     }
 
     var thinkingSelection: String {
-        get { snapshot?.item.defaultThinking ?? "" }
+        get { displayedDefaults?.defaultThinking ?? "" }
         set { chooseThinking(newValue) }
     }
 
@@ -60,18 +69,23 @@ final class ModelSettings {
         operation?.cancel()
         operation = nil
         reloadRequested = false
+        if case .saving(let pending) = state {
+            state = .ready(pending.confirmed)
+        }
     }
 
     @discardableResult
     func chooseModel(_ model: String) -> Task<Void, Never>? {
-        guard !model.isEmpty, model != snapshot?.item.defaultModel else { return nil }
+        guard !model.isEmpty, model != displayedDefaults?.defaultModel else { return nil }
         return save(.model(model))
     }
 
     @discardableResult
     func chooseThinking(_ thinking: String) -> Task<Void, Never>? {
-        guard !thinking.isEmpty, thinking != snapshot?.item.defaultThinking else { return nil }
-        return save(.thinking(thinking))
+        guard !thinking.isEmpty, thinking != displayedDefaults?.defaultThinking,
+            let model = displayedDefaults?.defaultModel
+        else { return nil }
+        return save(.thinking(model: model, level: thinking))
     }
 
     @discardableResult
@@ -91,11 +105,46 @@ final class ModelSettings {
         return task
     }
 
+    private func advanceSave(receipt: PicoSettingsReceipt?) {
+        guard case .saving(let pending) = state else { return }
+        let confirmed = receipt.map { pending.confirmed.applying($0) } ?? pending.confirmed
+        if let next = pending.next(after: confirmed) {
+            state = .saving(next)
+        } else {
+            state = .ready(confirmed)
+        }
+    }
+
     private func apply(_ loaded: PicoSettingsLoad) {
         switch loaded {
         case .ready(let snapshot): state = .ready(snapshot)
         case .invalid(let problem): state = .invalid(problem)
         }
+    }
+
+    private func drainSaves(request: Int) async {
+        while case .saving(let pending) = state {
+            do {
+                let receipt = try await client.update(
+                    pending.change,
+                    revision: pending.confirmed.revision
+                )
+                guard !Task.isCancelled, generation == request else { return }
+                advanceSave(receipt: receipt)
+            } catch {
+                guard !Task.isCancelled, generation == request else { return }
+                if let failure = error as? PicoCommandError, failure.code == "CONFLICT" {
+                    await recoverConflict(request: request)
+                    return
+                }
+                advanceSave(receipt: nil)
+                saveError = error.localizedDescription
+            }
+        }
+        guard !Task.isCancelled, generation == request, reloadRequested else { return }
+        reloadRequested = false
+        state = .loading
+        await load(request: request)
     }
 
     private func load(request: Int) async {
@@ -111,53 +160,46 @@ final class ModelSettings {
 
     private func recoverConflict(request: Int) async {
         reloadRequested = false
+        state = .loading
+        saveError = String(
+            localized:
+                "Pico's settings changed outside this window. Pending changes weren't saved. Review the current settings before trying again."
+        )
         do {
             let loaded = try await client.load()
             guard !Task.isCancelled, generation == request else { return }
             apply(loaded)
-            saveError = String(
-                localized:
-                    "Pico's settings changed outside this window. Nothing was saved. The current settings are shown."
-            )
         } catch {
             guard !Task.isCancelled, generation == request else { return }
             state = .failed(error.localizedDescription)
             saveError = String(
                 localized:
-                    "Pico's settings changed outside this window. Nothing was saved, and the current settings could not be reloaded: \(error.localizedDescription)"
+                    "Pico's settings changed outside this window. Pending changes weren't saved, and the current settings could not be reloaded: \(error.localizedDescription)"
             )
         }
     }
 
     private func save(_ change: PicoSettingsChange) -> Task<Void, Never>? {
-        guard case .ready(let previous) = state else { return nil }
-        cancel()
-        let request = generation
-        saveError = nil
-        state = .saving(previous)
-        let task = Task { [weak self, client] in
-            do {
-                let receipt = try await client.update(change, revision: previous.revision)
-                guard !Task.isCancelled, let self, generation == request else { return }
-                state = .ready(previous.applying(receipt))
-            } catch {
-                guard !Task.isCancelled, let self, generation == request else { return }
-                if let failure = error as? PicoCommandError, failure.code == "CONFLICT" {
-                    await recoverConflict(request: request)
-                } else {
-                    state = .ready(previous)
-                    saveError = error.localizedDescription
-                }
+        switch state {
+        case .saving(var pending):
+            pending.append(change)
+            state = .saving(pending)
+            saveError = nil
+            return operation
+        case .ready(let confirmed):
+            cancel()
+            let request = generation
+            saveError = nil
+            state = .saving(PendingModelSettings(confirmed: confirmed, change: change))
+            let task = Task { [weak self] in
+                guard let self else { return }
+                await drainSaves(request: request)
             }
-            guard !Task.isCancelled, let self, generation == request, reloadRequested else {
-                return
-            }
-            reloadRequested = false
-            state = .loading
-            await load(request: request)
+            operation = task
+            return task
+        case .loading, .failed, .invalid:
+            return nil
         }
-        operation = task
-        return task
     }
 }
 
@@ -165,7 +207,7 @@ extension ModelSettings {
     enum State: Equatable {
         case loading
         case ready(PicoModelSettings)
-        case saving(PicoModelSettings)
+        case saving(PendingModelSettings)
         case invalid(PicoSettingsProblem)
         case failed(String)
     }

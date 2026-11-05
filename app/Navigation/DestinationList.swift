@@ -35,6 +35,6 @@ private struct DestinationRow: View {
     }
 
     private var needsDefaultModel: Bool {
-        destination == .models && settings.snapshot.map { $0.item.defaultModel == nil } == true
+        destination == .models && settings.displayedDefaults.map { $0.defaultModel == nil } == true
     }
 }

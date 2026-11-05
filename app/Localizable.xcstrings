@@ -251,10 +251,10 @@
     "Pico uses this model and reasoning level for new sessions without a model override from Sesh. Open sessions keep their own choices." : {
 
     },
-    "Pico's settings changed outside this window. Nothing was saved, and the current settings could not be reloaded: %@" : {
+    "Pico's settings changed outside this window. Pending changes weren't saved, and the current settings could not be reloaded: %@" : {
 
     },
-    "Pico's settings changed outside this window. Nothing was saved. The current settings are shown." : {
+    "Pico's settings changed outside this window. Pending changes weren't saved. Review the current settings before trying again." : {
 
     },
     "Provider accounts, and where their credentials come from." : {
@@ -288,6 +288,9 @@
 
     },
     "Runtime readiness, installed versions, and where Pico keeps its settings." : {
+
+    },
+    "Saving changes…" : {
 
     },
     "Search" : {

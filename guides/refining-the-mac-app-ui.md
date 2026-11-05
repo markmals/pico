@@ -62,13 +62,13 @@ Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `
 
 ### Model defaults
 
-Pico loads settings and the available model catalog when the window opens and whenever you return to Models. A reload requested during a save waits for that save to finish. While loading, both pickers are disabled. The catalog comes from `pico`, using the provider credentials selected in Pico; it is not a list of invented or assumed models.
+Pico loads settings and the available model catalog when the window opens and whenever you return to Models. A reload requested while changes are saving waits for those changes to finish. While loading, both pickers are disabled. The catalog comes from `pico`, using the provider credentials selected in Pico; it is not a list of invented or assumed models.
 
-Choose a model to save it immediately. The picker shows model names without provider suffixes; Available Models retains each model's `provider/id` for reference. The reasoning picker offers only that model's supported levels, with readable labels such as Extra High and Maximum. When you change models, `pico` keeps the saved level if the new model supports it, or chooses its own default level otherwise. Both pickers are disabled while a save runs, and update from the save receipt rather than reporting success early.
+Choose a model or reasoning level and the selection changes immediately. Both pickers stay usable while Pico saves changes in the background, in the order you made them. The picker shows model names without provider suffixes; Available Models retains each model's `provider/id` for reference. The reasoning picker offers only that model's supported levels, with readable labels such as Extra High and Maximum. When you change models, the app previews the retained level or the new model's catalog default; `pico` makes the authoritative choice when saving. The footer indicates when changes are still saving.
 
 With no saved default and an available catalog, the pickers read “Not Set”; with an empty catalog, the model picker reads “None available”. If `pico` reports a built-in starting model, the footer names it; choosing a model replaces that implicit default with an explicit choice. If no automatic default is available, choose a model before starting a session without a model override. There is no option to clear a saved default. Available Models lists the catalog in its supplied order, with each model's `provider/id` and a Default marker on the saved choice.
 
-Once settings load, an attention badge marks Models in the sidebar if no default model has been saved. The badge clears after a default is saved; a loading or failed read does not count as a missing default.
+Once settings load, an attention badge marks Models in the sidebar if no default model has been chosen. The badge follows your selection immediately and returns if the first model save fails. A loading or failed read does not count as a missing default.
 
 A saved model that is no longer available remains visible as unavailable; Pico does not silently replace it. Choose another model before starting a new session. With no available models, connect and select a provider credential using Pico's commands, then return to Models.
 
@@ -80,7 +80,7 @@ General's Settings file row displays the location returned by `pico`. Show in Fi
 
 ### Recovering from errors
 
-If settings change outside the window before your save, Pico refuses the stale save, reloads, and tells you that nothing was saved. Review the current values before choosing again. Other save failures show their cause and retain the last loaded choices.
+If settings change outside the window before a save completes, Pico refuses the stale save, discards changes still waiting to be saved, reloads, and tells you what happened. Review the current values before choosing again. Other save failures show their cause and roll back the failed choice without erasing newer choices you made while it was saving. A reasoning-level choice stays tied to the model you were editing.
 
 A failed load makes the model controls unavailable and shows its cause with Try Again. An invalid or unsupported settings file instead shows the reported problem and asks you to fix or remove the file, with Show in Finder when the location exists. Pico does not overwrite the broken document. A missing executable, incompatible command API, or command that exceeds 30 seconds is reported rather than treated as an empty catalog.
 

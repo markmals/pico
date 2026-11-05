@@ -6,9 +6,12 @@ import Testing
 @MainActor
 @Suite("Pico model settings transitions", .timeLimit(.minutes(1)))
 struct ModelSettingsTests {
-    @Test("a refused save keeps the last loaded model and exposes the cause")
-    func refusedSave() async {
-        let original = snapshot(model: "provider/first", revision: "first")
+    @Test(
+        "a refused save restores confirmed choices and exposes the cause",
+        arguments: [nil, "provider/first"] as [String?]
+    )
+    func refusedSave(model: String?) async {
+        let original = snapshot(model: model, revision: "first")
         let client = ScenarioClient(
             loads: [.ready(original)],
             update: .failure(
@@ -19,6 +22,7 @@ struct ModelSettingsTests {
         await settings.reload().value
         await settings.chooseModel("provider/second")?.value
         #expect(settings.snapshot == original)
+        #expect(settings.modelSelection == (model ?? ""))
         #expect(settings.saveError == "Credential is unavailable")
         #expect(!settings.isSaving)
     }
@@ -114,7 +118,7 @@ struct ModelSettingsTests {
         }
     }
 
-    @Test("a pending save rejects another mutation but preserves a requested catalog reload")
+    @Test("a pending save shows its selection immediately and preserves a requested catalog reload")
     func pendingSave() async {
         let original = snapshot(model: "provider/first", revision: "first")
         let client = SuspendedSave(snapshot: original)
@@ -122,8 +126,9 @@ struct ModelSettingsTests {
         await settings.reload().value
         let save = settings.chooseModel("provider/second")
         #expect(settings.isSaving)
-        #expect(settings.modelSelection == "provider/first")
-        #expect(settings.chooseThinking("off") == nil)
+        #expect(settings.modelSelection == "provider/second")
+        #expect(settings.thinkingSelection == "off")
+        #expect(settings.snapshot?.item == original.item)
         let refresh = settings.reload()
         #expect(settings.isSaving)
         let refreshedModels = original.models.filter { $0.value == "provider/second" }
@@ -159,13 +164,15 @@ struct ModelSettingsTests {
                     value: "provider/first",
                     name: "First",
                     provider: "provider",
-                    thinking: [.init(value: "high", name: "High")]
+                    thinking: [.init(value: "high", name: "High")],
+                    defaultThinking: "high"
                 ),
                 .init(
                     value: "provider/second",
                     name: "Second",
                     provider: "provider",
-                    thinking: [.init(value: "off", name: "Off")]
+                    thinking: [.init(value: "off", name: "Off")],
+                    defaultThinking: "off"
                 ),
             ]
         )

@@ -18,7 +18,9 @@ struct ModelDefaultsFooter: View {
                 Text("Fix or remove this settings file before changing model defaults.")
                 ShowSettingsFileButton(path: problem.settingsFile)
             }
-        case .ready(let snapshot), .saving(let snapshot):
+        case .saving:
+            Text("Saving changes…")
+        case .ready(let snapshot):
             if snapshot.item.defaultModel != nil && !snapshot.effective.available {
                 Text(
                     "The saved model or reasoning level is unavailable. New sessions will fail to start until you choose an available model and level."

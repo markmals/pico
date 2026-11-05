@@ -20,6 +20,8 @@ struct DestinationList: View {
 private struct DestinationRow: View {
     let destination: SettingsDestination
 
+    @Environment(ModelSettings.self) private var settings
+
     var body: some View {
         Label {
             Text(destination.title)
@@ -27,5 +29,12 @@ private struct DestinationRow: View {
             AppIconTile(destination: destination, size: 20)
         }
         .tag(destination)
+        .badge(needsDefaultModel ? 1 : 0)
+        .badgeProminence(.increased)
+        .accessibilityValue(needsDefaultModel ? Text("Default model not set") : Text(""))
+    }
+
+    private var needsDefaultModel: Bool {
+        destination == .models && settings.snapshot.map { $0.item.defaultModel == nil } == true
     }
 }

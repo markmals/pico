@@ -12,7 +12,9 @@ struct DefaultModelPickerRow: View {
                     Text("\(saved) (unavailable)").tag(saved)
                 }
                 ForEach(snapshot.models) { model in
-                    Text("\(model.name) (\(model.provider))").tag(model.value)
+                    Text(verbatim: model.name)
+                        .tag(model.value)
+                        .help(model.provider)
                 }
             } label: {
                 Text(SettingsItem.model.title)
@@ -43,11 +45,14 @@ struct ReasoningLevelPickerRow: View {
         if let model = settings.selectedModel, !model.thinking.isEmpty {
             Picker(selection: $settings.thinkingSelection) {
                 if !model.thinking.contains(where: { $0.value == settings.thinkingSelection }) {
-                    Text("\(settings.thinkingSelection) (unavailable)")
+                    let title: LocalizedStringResource =
+                        PicoModel.ThinkingChoice.displayName(for: settings.thinkingSelection)
+                        ?? "\(settings.thinkingSelection)"
+                    Text("\(Text(title)) (unavailable)")
                         .tag(settings.thinkingSelection)
                 }
                 ForEach(model.thinking) { level in
-                    Text(verbatim: level.name).tag(level.value)
+                    Text(level.displayName).tag(level.value)
                 }
             } label: {
                 Text(SettingsItem.reasoningLevel.title)

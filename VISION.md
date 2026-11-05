@@ -1,6 +1,6 @@
 ---
 title: A Vision for Pico
-updated: 2026-11-03
+updated: 2026-11-05
 ---
 
 # A Vision for Pico
@@ -11,7 +11,7 @@ Pico exists to let Sesh drive an agent built on the OMP SDK over the Agent Clien
 
 OMP supplies the provider/model loop and permitted coding tools. Sesh supplies the conversation UI, host tools through MCP, workspaces, and the visible child-session tree. Pico connects those systems and enforces a selected runtime policy.
 
-The user installs and updates Pico with Homebrew and configures it in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. What exists of that app in the repository today is a UI scaffold: a window, sidebar navigation, and six settings panes whose controls are visibly unconnected, with a labelled sample-data mode for reviewing their working state. No setting, authentication flow, or diagnostic reaches anything real yet.
+The user installs and updates Pico with Homebrew and configures it in a native macOS companion app rather than a terminal: providers and credentials, model and reasoning selection, the runtime policy, and diagnostics when something is wrong. The app now reads the real model catalog and saves model and reasoning defaults through `pico`'s commands; General shows the settings file location. Sample-data mode has been removed. Provider setup, runtime inspection, integrations, Sesh setup and diagnostics remain visibly unconnected.
 
 ## Goals
 
@@ -29,13 +29,13 @@ Session restoration now works through ACP load, list and resume ([proposal 0004]
 
 The agent's task list now reaches Sesh as its plan ([proposal 0006](proposals/0006-todo-plan-updates.md)). OMP's `todo` tool reports a flat list through ACP plan updates instead of transcript rows, failed updates remain visible as failed tool calls, and a reopened session shows the current list. A real Sesh session verified the plan panel, the absence of todo rows and the restored plan after resume.
 
-Pico owns its configuration ([proposal 0007](proposals/0007-pico-owned-configuration.md)). A versioned settings file holds model/thinking defaults, the background-command setting, and provider credential references, read and changed through agent-first commands. Credentials belong to Pico's login-Keychain store ([proposal 0009](proposals/0009-pico-credentials-and-provider-login.md)): the agent hands the human an SDK authorization URL, then explicitly selects the stored credential. A changed selection applies to every session's next provider request without changing its model or reasoning level. No OMP credential store or implicit environment credential authorizes Pico. Connecting these commands to the companion app remains follow-up work.
+Pico owns its configuration ([proposal 0007](proposals/0007-pico-owned-configuration.md)). A versioned settings file holds model/thinking defaults, the background-command setting, and provider credential references, read and changed through agent-first commands. Credentials belong to Pico's login-Keychain store ([proposal 0009](proposals/0009-pico-credentials-and-provider-login.md)): the agent hands the human an SDK authorization URL, then explicitly selects the stored credential. A changed selection applies to every session's next provider request without changing its model or reasoning level. No OMP credential store or implicit environment credential authorizes Pico. The companion app uses the model/settings commands; its credential and provider controls remain follow-up work.
 
 Background commands are visible and owned by their turn ([proposal 0008](proposals/0008-background-bash-jobs.md)). A `bash` command that moves to the background, by request or after a Pico-set threshold, stays one tool call that streams its output and ends with the job's outcome; OMP's `wait` reports the jobs it blocks on. A turn ends only after its jobs and the runs they wake, which Sesh shows in that turn, and Stop, failure or disconnect stops every running job and waits for its processes. Processes a finished command leaves behind, and daemons, are not yet tracked. Real Sesh sessions verified the streamed job card, the same-turn follow-up, `wait`, Stop, agent shutdown and the auto-background setting.
 
 Permissions, cancellation, and session restoration must work through that same interaction surface.
 
-The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project definition and pinned toolchain that generate the project, and the UI scaffold they build — the window, its navigation, history, search and `pico://` links, and six settings panes whose controls are still unconnected, with a labelled, in-memory sample-data mode for reviewing their working state ([proposal 0005](proposals/0005-mac-app-ui-workspace.md)). The shared configuration contract the panes need now exists as `pico`'s commands; connecting them is next.
+The companion app is part of that minimum: a native macOS application, installed with Pico through Homebrew, that signs the user in to their providers, selects the model and reasoning effort, and registers the agent with Sesh. Its layout follows macOS System Settings, and its provider and model configuration follows CodexBar's; the [native macOS configuration app](PROTOTYPE.md#native-macos-configuration-app) section of the brief carries the detail. Shipping it through Homebrew needs a cask, which needs Developer ID signing and notarization. Built so far: the Tuist project and native window, navigation, history, search and `pico://` links from [proposal 0005](proposals/0005-mac-app-ui-workspace.md), plus the connected Models pane and Settings file row. Model and reasoning choices save optimistically with ordered writes, rollback and conflict recovery ([policy 0001](policies/0001-optimistic-configuration-saves.md)). The remaining controls and app distribution are tracked under Beads `pico-bfk`; the app is still an unsigned development build.
 
 [`PROTOTYPE.md`](PROTOTYPE.md) supplies the implementation brief and observable acceptance scenarios. It informs Workbench proposal development and does not replace proposal approval.
 
@@ -49,7 +49,7 @@ Sesh MCP tools are first-class named tools for questions, artifacts, notificatio
 
 Pico’s runtime delegation uses Sesh child sessions running the same registered Pico agent. Native worker execution hidden behind a synthetic session card would defeat the desired visibility.
 
-Configuration is native and truthful. The companion app's eventual controls use Pico's command contract, offer only the engine's real capabilities, and never simulate authentication outside labelled sample mode. Pico's behavior comes from its own settings, explicit credential selections and fixed policy, never from the user's OMP configuration. Every setting is reachable through commands an agent can discover and verify.
+Configuration is native and truthful. The companion app's connected controls use Pico's command contract and offer only the engine's real capabilities; unfinished controls remain visibly unavailable and never simulate success. Pico's behavior comes from its own settings, explicit credential selections and fixed policy, never from the user's OMP configuration. Every setting is reachable through commands an agent can discover and verify.
 
 ## Beyond the minimum
 
@@ -84,3 +84,4 @@ The repository retains the template's Workbench process and Beads work tracker. 
 | 2026-11-02 | Record Pico-owned configuration: a versioned settings file and agent-first `pico` commands for the default model and thinking level, and Pico sessions that reuse nothing from OMP's configuration but credentials. | [proposal.0007](proposals/0007-pico-owned-configuration.md) |
 | 2026-11-03 | Record background `bash` jobs and `wait`: jobs reported in their starting call and owned by their turn, stopped with the turn or the session, and auto-background as a Pico setting; leftover and daemon processes remain untracked. | [proposal.0008](proposals/0008-background-bash-jobs.md) |
 | 2026-11-03 | Add Pico-owned Keychain credentials and agent-only URL login, explicit global provider selections, and no implicit OMP credential reuse; GUI setup and Autonomous support remain separate. | [proposal.0009](proposals/0009-pico-credentials-and-provider-login.md) |
+| 2026-11-05 | Connect the Mac app's model/reasoning defaults and Settings file row, remove sample mode, and establish optimistic saves for reversible settings; other controls remain separate work. | [proposal.0007](proposals/0007-pico-owned-configuration.md), Beads `pico-bfk.5` and `pico-bfk.8` |

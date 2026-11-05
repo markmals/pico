@@ -6,10 +6,12 @@ struct DefaultModelPickerRow: View {
     var body: some View {
         if let snapshot = settings.snapshot, !snapshot.models.isEmpty {
             Picker(selection: $settings.modelSelection) {
-                if snapshot.item.defaultModel == nil {
+                if settings.displayedDefaults?.defaultModel == nil {
                     Text("Not Set").tag("")
-                } else if settings.selectedModel == nil, let saved = snapshot.item.defaultModel {
-                    Text("\(saved) (unavailable)").tag(saved)
+                } else if settings.selectedModel == nil,
+                    let selected = settings.displayedDefaults?.defaultModel
+                {
+                    Text("\(selected) (unavailable)").tag(selected)
                 }
                 ForEach(snapshot.models) { model in
                     Text(verbatim: model.name)
@@ -19,10 +21,9 @@ struct DefaultModelPickerRow: View {
             } label: {
                 Text(SettingsItem.model.title)
             }
-            .disabled(settings.isSaving)
             .accessibilityLabel(Text(SettingsItem.model.title))
             .settingsRow(.model)
-        } else if let saved = settings.snapshot?.item.defaultModel {
+        } else if let saved = settings.displayedDefaults?.defaultModel {
             UnavailablePicker(item: .model, reason: "\(saved) (unavailable)")
         } else {
             UnavailablePicker(item: .model, reason: unavailableReason)
@@ -57,7 +58,6 @@ struct ReasoningLevelPickerRow: View {
             } label: {
                 Text(SettingsItem.reasoningLevel.title)
             }
-            .disabled(settings.isSaving)
             .accessibilityLabel(Text(SettingsItem.reasoningLevel.title))
             .settingsRow(.reasoningLevel)
         } else {
@@ -68,8 +68,8 @@ struct ReasoningLevelPickerRow: View {
     private var unavailableReason: LocalizedStringResource {
         switch settings.state {
         case .loading: "Loading…"
-        case .ready(let snapshot), .saving(let snapshot):
-            snapshot.item.defaultModel == nil ? "Not Set" : "Unavailable"
+        case .ready, .saving:
+            settings.displayedDefaults?.defaultModel == nil ? "Not Set" : "Unavailable"
         case .failed, .invalid: "Unavailable"
         }
     }

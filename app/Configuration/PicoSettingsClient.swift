@@ -1,33 +1,22 @@
 import Foundation
 
 protocol PicoSettingsServing: Sendable {
-    func load() async throws -> PicoSettingsLoad
+    func readCatalog() async throws -> [PicoModel]
+    func readSettings() async throws -> PicoSettingsRead
     func update(_ change: PicoSettingsChange, revision: String) async throws -> PicoSettingsReceipt
 }
 
 struct PicoSettingsClient: PicoSettingsServing {
     let executableOverride: String?
 
-    func load() async throws -> PicoSettingsLoad {
-        let command = try makeCommand()
-        async let catalogOutput = command.run(["models", "list"])
-        let settingsOutput = try await command.run(["settings", "get"])
-        let settings = try decode(PicoSettingsRead.self, from: settingsOutput)
-        switch settings {
-        case .invalid(let problem):
-            return .invalid(problem)
-        case .ready(let path, let revision, let item, let effective):
-            let catalog = try decode(Catalog.self, from: await catalogOutput)
-            return .ready(
-                PicoModelSettings(
-                    settingsFile: path,
-                    revision: revision,
-                    item: item,
-                    effective: effective,
-                    models: catalog.items
-                )
-            )
-        }
+    func readCatalog() async throws -> [PicoModel] {
+        let output = try await makeCommand().run(["models", "list"])
+        return try decode(Catalog.self, from: output).items
+    }
+
+    func readSettings() async throws -> PicoSettingsRead {
+        let output = try await makeCommand().run(["settings", "get"])
+        return try decode(PicoSettingsRead.self, from: output)
     }
 
     func update(_ change: PicoSettingsChange, revision: String) async throws -> PicoSettingsReceipt

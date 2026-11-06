@@ -69,11 +69,6 @@ struct PicoSettingsProblem: Equatable, Sendable {
     let message: String
 }
 
-enum PicoSettingsLoad: Equatable, Sendable {
-    case ready(PicoModelSettings)
-    case invalid(PicoSettingsProblem)
-}
-
 enum PicoSettingsChange: Equatable, Sendable {
     case model(String)
     case thinking(model: String, level: String)

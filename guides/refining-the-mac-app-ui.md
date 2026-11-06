@@ -78,6 +78,8 @@ Pico uses these defaults for new sessions without a model override from Sesh. Se
 
 General's Settings file row displays the location returned by `pico`. Show in Finder selects the file when it exists, or opens its containing folder when only that folder exists. It is disabled if neither exists. Right-click the row and choose Copy Path to copy a displayed path.
 
+The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the catalog error with Try Again. If the settings command itself fails, General shows its cause and Try Again instead of an unexplained unavailable value.
+
 ### Recovering from errors
 
 If settings change outside the window before a save completes, Pico refuses the stale save, discards changes still waiting to be saved, reloads, and tells you what happened. Review the current values before choosing again. Other save failures show their cause and roll back the failed choice without erasing newer choices you made while it was saving. A reasoning-level choice stays tied to the model you were editing.

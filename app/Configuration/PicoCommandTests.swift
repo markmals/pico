@@ -312,7 +312,7 @@ struct TemporaryTestDirectory {
 }
 
 /// Waits for a script to record its process id, so a test can watch that process afterwards.
-private func recordedProcessIdentifier(at url: URL) async -> pid_t? {
+func recordedProcessIdentifier(at url: URL) async -> pid_t? {
     for _ in 0..<500 {
         let recorded = try? String(contentsOf: url, encoding: .utf8)
         if let identifier = pid_t(recorded?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") {
@@ -325,7 +325,7 @@ private func recordedProcessIdentifier(at url: URL) async -> pid_t? {
 
 /// Waits for a process to stop existing, which is how a test tells that a command was really
 /// stopped and reaped rather than left running.
-private func hasStopped(_ identifier: pid_t) async -> Bool {
+func hasStopped(_ identifier: pid_t) async -> Bool {
     for _ in 0..<500 {
         if kill(identifier, 0) == -1 && errno == ESRCH { return true }
         try? await Task.sleep(for: .milliseconds(10))

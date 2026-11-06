@@ -7,15 +7,7 @@ struct GeneralPane: View {
         Form {
             PaneHeader(destination: .general)
 
-            Section {
-                SettingsValueRow(item: .installed, value: nil)
-                SettingsValueRow(item: .starts, value: nil)
-                SettingsValueRow(item: .upToDate, value: nil)
-            } header: {
-                Text("Runtime")
-            } footer: {
-                Text("Readiness is not inspected while settings stay unconnected.")
-            }
+            RuntimeSection()
 
             Section {
                 SettingsValueRow(item: .generalAppVersion, value: nil)

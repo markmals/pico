@@ -8,7 +8,7 @@ describes: [proposal.0005, proposal.0007]
 
 ## What it does
 
-Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General shows the actual settings file location. Other configuration controls remain unavailable and read “Not connected”.
+Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General checks runtime readiness, offers confirmed Homebrew recovery actions, and shows the actual settings file location. Other configuration controls remain unavailable and read “Not connected”.
 
 The app reads and changes configuration through `pico`'s commands, not by opening the settings document itself. Provider sign-in and credential management still use [Pico's commands](running-pico-in-sesh.md); Providers & Accounts is not connected yet. The app does not change OMP configuration or register an agent in Sesh. Sample-data mode has been removed.
 
@@ -26,9 +26,21 @@ The task builds this checkout's `pico` executable and app, then opens `.build/ma
 
 Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
 
-The sidebar lists the panes in four groups. Choose one to open it; the pane's title appears in the toolbar. “Some settings aren't connected yet” appears below every pane except Models. Runtime readiness, versions, provider accounts, integrations, and Sesh registration remain unconnected.
+The sidebar lists the panes in four groups. Choose one to open it; the pane's title appears in the toolbar. “Some settings aren't connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected.
 
 Each pane keeps its scroll position while the app runs, including when you return to it with back or forward. Choose Pico > Settings or press Command-Comma to bring the same window forward. Closing the window quits the app; reopening starts at General with no history.
+
+### Runtime readiness
+
+General checks the local `pico` command when the window opens and when you return to General. Installed shows the executable's location or explains why it could not be found. Starts runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Retry repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
+
+Up to date begins as Not checked. Choose Check for Updates to refresh Homebrew's metadata, re-read the local command, and compare it with `markmals/tap/pico`. A failed check shows its cause instead of reporting that Pico is current. A newer development command is distinguished from the published version. An executable selected with `-PicoExecutable` is not assumed to be the Homebrew installation.
+
+When recovery is available, General offers Install, Reinstall, or Update. Each action requires confirmation, runs Homebrew without a terminal or administrator prompt, and then checks the actual installation again. A successful package command alone is not proof that Pico starts. Package operations disable automatic cleanup of old versions; Pico does not stop Sesh sessions. Reinstall is refused when Pico observes the command running. Stop those sessions before confirming a reinstall, and do not start another until it finishes.
+
+If Homebrew has Pico installed but its command link is missing, the checklist offers Reinstall to restore the installation rather than repeating an install that Homebrew would skip. The reinstall check also looks for running Pico executables in unlinked kegs.
+
+If Homebrew is missing or older than version 6, Open Homebrew Installer opens its official graphical installer download page. Complete that installer, then return to Pico and retry. If Homebrew requires trust for `markmals/tap`, Pico offers a separate confirmation before trusting the tap; checking readiness does not grant trust. A first install is blocked until that approval is supplied rather than letting Homebrew grant formula trust implicitly. Homebrew permission, network, or package failures remain visible in General.
 
 ### Back and forward
 

@@ -2,9 +2,12 @@ import Foundation
 
 // Finder launches do not inherit a shell's PATH; only the explicit override and Homebrew paths apply.
 enum PicoExecutable {
+    /// Where Homebrew links `pico`, on Apple silicon and on Intel.
+    static let homebrewCandidates = ["/opt/homebrew/bin/pico", "/usr/local/bin/pico"]
+
     static func resolve(
         override: String?,
-        candidates: [String] = ["/opt/homebrew/bin/pico", "/usr/local/bin/pico"]
+        candidates: [String] = homebrewCandidates
     ) throws -> URL {
         if let override {
             guard canRun(override) else {

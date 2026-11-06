@@ -6,6 +6,7 @@ struct SettingsWindowView: View {
     @Bindable var navigator: SettingsNavigator
 
     @Environment(ModelSettings.self) private var settings
+    @Environment(RuntimeReadiness.self) private var runtime
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -40,10 +41,17 @@ struct SettingsWindowView: View {
         .onOpenURL { url in
             navigator.handle(url)
         }
-        .onAppear { settings.reload() }
-        .onDisappear { settings.cancel() }
+        .onAppear {
+            settings.reload()
+            runtime.check()
+        }
+        .onDisappear {
+            settings.cancel()
+            runtime.cancel()
+        }
         .onChange(of: navigator.destination) { _, destination in
             if destination == .models { settings.reload() }
+            if destination == .general { runtime.check() }
         }
         .modifier(ModelSettingsAlert(settings: settings))
         .alert(

@@ -2,15 +2,21 @@ import SwiftUI
 
 @main
 struct PicoApp: App {
+    @NSApplicationDelegateAdaptor(RuntimeTerminationDelegate.self) private var lifecycle
     @State private var navigator = SettingsNavigator()
     @State private var settings = ModelSettings(
         client: PicoSettingsClient(executableOverride: Self.executableOverride)
+    )
+    @State private var runtime = RuntimeReadiness(
+        client: PicoRuntimeClient(executableOverride: Self.executableOverride)
     )
 
     var body: some Scene {
         Window("Pico", id: SettingsWindowView.sceneID) {
             SettingsWindowView(navigator: navigator)
                 .environment(settings)
+                .environment(runtime)
+                .onAppear { lifecycle.runtime = runtime }
         }
         .defaultSize(width: 715, height: 680)
         .windowResizability(.contentSize)

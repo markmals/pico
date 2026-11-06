@@ -2,6 +2,9 @@ import Darwin
 import Foundation
 
 struct PicoProcessOutcome: Sendable {
+    /// Set when the command printed more than the caller allowed. Whatever was collected is
+    /// incomplete, so a caller that reads the output must report the failure rather than it.
+    let isOutputTruncated: Bool
     let standardError: Data
     let standardOutput: Data
     let status: Int32
@@ -18,11 +21,13 @@ final class PicoProcessRun: @unchecked Sendable {
     private static let graceAfterStopping: TimeInterval = 1
 
     private let arguments: [String]
+    private let environment: [String: String]?
     private let executable: URL
     private let process = Process()
     private let queue = DispatchQueue(label: "me.malstrom.pico.command", qos: .userInitiated)
-    private let standardError = PicoPipeDrain(retention: .last(64 * 1024))
-    private let standardOutput = PicoPipeDrain(retention: .all)
+    private let standardError = PicoPipeDrain(retention: .tail(64 * 1024))
+    private let standardOutput: PicoPipeDrain
+    private let stopsDescendants: Bool
     private let timeout: TimeInterval
 
     private var continuation: CheckedContinuation<PicoProcessOutcome, any Error>?
@@ -30,11 +35,28 @@ final class PicoProcessRun: @unchecked Sendable {
     private var hasLaunched = false
     private var isFinished = false
     private var killTimer: (any DispatchSourceTimer)?
+    private var launchedGroup: pid_t?
     private var stop: Stop?
 
-    init(executable: URL, arguments: [String], timeout: TimeInterval) {
+    /// A nil environment runs the command with the one this process was launched with. An
+    /// explicit one replaces it outright, so a command cannot read a shell's PATH or settings.
+    ///
+    /// Stopping descendants signals the whole process group a stopped command leads, which is
+    /// what a command that runs programs of its own, such as Homebrew, needs. Output retention
+    /// bounds what a verbose command keeps in memory.
+    init(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String]? = nil,
+        outputRetention: OutputRetention = .all,
+        stopsDescendants: Bool = false,
+        timeout: TimeInterval
+    ) {
         self.arguments = arguments
+        self.environment = environment
         self.executable = executable
+        self.standardOutput = PicoPipeDrain(retention: outputRetention)
+        self.stopsDescendants = stopsDescendants
         self.timeout = timeout
     }
 
@@ -65,6 +87,7 @@ final class PicoProcessRun: @unchecked Sendable {
 
     private func killIfStillRunning() {
         guard !isFinished, hasLaunched, process.isRunning else { return }
+        if let launchedGroup { kill(-launchedGroup, SIGKILL) }
         kill(process.processIdentifier, SIGKILL)
     }
 
@@ -72,6 +95,8 @@ final class PicoProcessRun: @unchecked Sendable {
         guard !isFinished else { return }
         standardOutput.drainAvailable()
         standardError.drainAvailable()
+        // Descendants can outlive their leader; signal the recorded group before returning.
+        if stop != nil, let launchedGroup { kill(-launchedGroup, SIGKILL) }
         switch stop {
         case .cancelled:
             finish(.failure(CancellationError()))
@@ -79,6 +104,7 @@ final class PicoProcessRun: @unchecked Sendable {
             finish(.failure(PicoProcessFailure.timedOut))
         case nil:
             let outcome = PicoProcessOutcome(
+                isOutputTruncated: standardOutput.isTruncated,
                 standardError: standardError.collected,
                 standardOutput: standardOutput.collected,
                 status: process.terminationStatus
@@ -87,11 +113,23 @@ final class PicoProcessRun: @unchecked Sendable {
         }
     }
 
+    /// Remembers the process group the command leads, once, while it is still running.
+    /// Foundation starts a command in a group of its own, which the programs it starts
+    /// inherit. Anything else — a command sharing this app's group — is never recorded, so
+    /// Pico can only ever signal a group it started.
+    private func recordGroup() {
+        guard stopsDescendants else { return }
+        let identifier = process.processIdentifier
+        let group = getpgid(identifier)
+        guard group == identifier, group != getpgrp() else { return }
+        launchedGroup = group
+    }
+
     private func requestStop(_ reason: Stop) {
         guard !isFinished, stop == nil else { return }
         stop = reason
         guard hasLaunched, process.isRunning else { return }
-        process.terminate()
+        if let launchedGroup { kill(-launchedGroup, SIGTERM) } else { process.terminate() }
         let killTimer = DispatchSource.makeTimerSource(queue: queue)
         killTimer.schedule(deadline: .now() + Self.graceAfterStopping)
         killTimer.setEventHandler { [weak self] in self?.killIfStillRunning() }
@@ -107,6 +145,7 @@ final class PicoProcessRun: @unchecked Sendable {
         }
         process.executableURL = executable
         process.arguments = arguments
+        if let environment { process.environment = environment }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = standardOutput.pipe
         process.standardError = standardError.pipe
@@ -121,6 +160,7 @@ final class PicoProcessRun: @unchecked Sendable {
             return
         }
         hasLaunched = true
+        recordGroup()
         standardOutput.begin(on: queue)
         standardError.begin(on: queue)
         startDeadline()
@@ -137,6 +177,15 @@ final class PicoProcessRun: @unchecked Sendable {
 }
 
 extension PicoProcessRun {
+    /// How much of what a command prints is kept. `all` keeps everything, `bounded` keeps
+    /// everything up to a limit and reports the rest as truncated, and `tail` keeps only the
+    /// end, for output that is shown rather than read.
+    enum OutputRetention: Equatable, Sendable {
+        case all
+        case bounded(Int)
+        case tail(Int)
+    }
+
     fileprivate enum Stop {
         case cancelled
         case deadline
@@ -146,13 +195,14 @@ extension PicoProcessRun {
 private final class PicoPipeDrain {
     let pipe = Pipe()
     private(set) var collected = Data()
+    private(set) var isTruncated = false
 
     private var isClosed = false
-    private let retention: Retention
+    private let retention: PicoProcessRun.OutputRetention
     private var scratch = [UInt8](repeating: 0, count: 64 * 1024)
     private var source: (any DispatchSourceRead)?
 
-    init(retention: Retention) {
+    init(retention: PicoProcessRun.OutputRetention) {
         self.retention = retention
     }
 
@@ -203,16 +253,18 @@ private final class PicoPipeDrain {
         switch retention {
         case .all:
             collected.append(contentsOf: scratch[..<count])
-        case .last(let limit):
+        case .bounded(let limit):
+            // Keep reading past the limit: a full pipe would block the command instead.
+            let room = limit - collected.count
+            guard room > 0 else {
+                isTruncated = true
+                return
+            }
+            collected.append(contentsOf: scratch[..<min(count, room)])
+            if count > room { isTruncated = true }
+        case .tail(let limit):
             collected.append(contentsOf: scratch[..<count])
             if collected.count > limit { collected.removeFirst(collected.count - limit) }
         }
-    }
-}
-
-extension PicoPipeDrain {
-    enum Retention {
-        case all
-        case last(Int)
     }
 }

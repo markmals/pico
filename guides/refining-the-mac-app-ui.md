@@ -80,6 +80,12 @@ General's Settings file row displays the location returned by `pico`. Show in Fi
 
 The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the catalog error with Try Again. If the settings command itself fails, General shows its cause and Try Again instead of an unexplained unavailable value.
 
+### Built-in tool policy
+
+Tools & Integrations lists Read, Search (`grep` and `glob`), Edit, Write, Shell (`bash`), Web search, Task list (`todo`), and Wait. Task list updates appear as Sesh's plan; Wait waits for background shell jobs. Search for `todo` or `plan` to find Task list, and `wait` or `background jobs` to find Wait.
+
+These are fixed policy, not editable toggles. Eval, built-in LSP, and native OMP delegation remain excluded. Sesh supplies additional tools for each session.
+
 ### Recovering from errors
 
 If settings change outside the window before a save completes, Pico refuses the stale save, discards changes still waiting to be saved, reloads, and tells you what happened. Review the current values before choosing again. Other save failures show their cause and roll back the failed choice without erasing newer choices you made while it was saving. A reasoning-level choice stays tied to the model you were editing.

@@ -85,6 +85,18 @@ extension SettingsItem {
         keywords: ["bash", "terminal", "command"]
     )
     static let webSearch = SettingsItem(.tools, "web-search", title: "Web search")
+    static let taskList = SettingsItem(
+        .tools,
+        "task-list",
+        title: "Task list",
+        keywords: ["todo", "plan"]
+    )
+    static let wait = SettingsItem(
+        .tools,
+        "wait",
+        title: "Wait",
+        keywords: ["background jobs", "bash"]
+    )
     static let eval = SettingsItem(
         .tools,
         "eval",

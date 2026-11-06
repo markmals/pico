@@ -31,10 +31,8 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         case .models:
             [.model, .reasoningLevel, .availableModels]
         case .tools:
-            [
-                .read, .search, .edit, .write, .shell, .webSearch, .eval, .builtInLSP,
-                .nativeDelegation, .intellisenseLocation,
-            ]
+            BuiltinToolPolicy.included.map(\.item)
+                + [.eval, .builtInLSP, .nativeDelegation, .intellisenseLocation]
         case .sesh:
             [.helperLocation, .launchArguments, .customAgent, .seshConnectionStatus, .setupStatus]
         case .diagnostics:

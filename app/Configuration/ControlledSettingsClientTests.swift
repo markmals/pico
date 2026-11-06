@@ -44,9 +44,13 @@ actor ControlledSettingsClient: PicoSettingsServing {
         responses.continuation.finish()
     }
 
-    func load() async throws -> PicoSettingsLoad {
+    func readCatalog() async throws -> [PicoModel] {
+        saved.models
+    }
+
+    func readSettings() async throws -> PicoSettingsRead {
         loadCount += 1
-        return .ready(saved)
+        return saved.settingsRead
     }
 
     func release(_ failure: PicoCommandError? = nil) {

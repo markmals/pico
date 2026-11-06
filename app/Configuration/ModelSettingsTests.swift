@@ -13,7 +13,7 @@ struct ModelSettingsTests {
     func refusedSave(model: String?) async {
         let original = snapshot(model: model, revision: "first")
         let client = ScenarioClient(
-            loads: [.ready(original)],
+            loads: [original],
             update: .failure(
                 PicoCommandError(code: "AUTH_REQUIRED", message: "Credential is unavailable")
             )
@@ -32,7 +32,7 @@ struct ModelSettingsTests {
         let original = snapshot(model: "provider/first", revision: "first")
         let external = snapshot(model: "provider/external", revision: "external")
         let client = ScenarioClient(
-            loads: [.ready(original), .ready(external)],
+            loads: [original, external],
             update: .failure(
                 PicoCommandError(code: "CONFLICT", message: "Changed outside this window")
             )
@@ -55,7 +55,7 @@ struct ModelSettingsTests {
                 item: .init(defaultModel: "provider/second", defaultThinking: "off")
             )
         )
-        let client = ScenarioClient(loads: [.ready(original)], update: .success(receipt))
+        let client = ScenarioClient(loads: [original], update: .success(receipt))
         let settings = ModelSettings(client: client)
         await settings.reload().value
         await settings.chooseModel("provider/second")?.value
@@ -68,7 +68,7 @@ struct ModelSettingsTests {
     @Test("a saved unavailable model is not replaced by an available one")
     func unavailableSavedModel() async {
         let original = snapshot(model: "provider/missing", revision: "first")
-        let settings = ModelSettings(client: ScenarioClient(loads: [.ready(original)]))
+        let settings = ModelSettings(client: ScenarioClient(loads: [original]))
         await settings.reload().value
         #expect(settings.modelSelection == "provider/missing")
         #expect(settings.selectedModel == nil)
@@ -78,7 +78,7 @@ struct ModelSettingsTests {
     @Test("a built-in choice does not become a saved choice")
     func implicitDefault() async {
         let original = snapshot(model: nil, revision: "none")
-        let settings = ModelSettings(client: ScenarioClient(loads: [.ready(original)]))
+        let settings = ModelSettings(client: ScenarioClient(loads: [original]))
         await settings.reload().value
         #expect(settings.modelSelection == "")
         #expect(settings.thinkingSelection == "")
@@ -88,25 +88,30 @@ struct ModelSettingsTests {
 
     @Test("only the newest load is displayed in either completion order", arguments: [true, false])
     func staleLoad(olderFinishesFirst: Bool) async throws {
-        let client = SuspendedLoads()
+        let client = SuspendedReadsClient()
         let settings = ModelSettings(client: client)
         let older = settings.reload()
         var newer: Task<Void, Never>?
         do {
-            try await client.waitForLoads(1)
+            try await client.waitForCatalogReads(1)
+            try await client.waitForSettingsReads(1)
             newer = settings.reload()
-            try await client.waitForLoads(2)
+            try await client.waitForCatalogReads(2)
+            try await client.waitForSettingsReads(2)
             let latest = snapshot(model: "provider/second", revision: "latest")
             let outdated = snapshot(model: "provider/first", revision: "old")
             if olderFinishesFirst {
-                await client.finish(0, with: .ready(outdated))
+                await client.finishSettings(0, with: .success(outdated.settingsRead))
+                await client.finishCatalog(0, with: .success(outdated.models))
                 await older.value
                 #expect(settings.state == .loading)
             }
-            await client.finish(1, with: .ready(latest))
+            await client.finishSettings(1, with: .success(latest.settingsRead))
+            await client.finishCatalog(1, with: .success(latest.models))
             await newer?.value
             if !olderFinishesFirst {
-                await client.finish(0, with: .ready(outdated))
+                await client.finishSettings(0, with: .success(outdated.settingsRead))
+                await client.finishCatalog(0, with: .success(outdated.models))
                 await older.value
             }
             #expect(settings.snapshot == latest)
@@ -181,62 +186,33 @@ struct ModelSettingsTests {
 
 private actor ScenarioClient: PicoSettingsServing {
     private(set) var updateCount = 0
-    private var loads: [PicoSettingsLoad]
+    private let catalog: [PicoModel]
+    private var reads: [PicoSettingsRead]
     private let updateResult: Result<PicoSettingsReceipt, PicoCommandError>
 
     init(
-        loads: [PicoSettingsLoad],
+        loads: [PicoModelSettings],
         update: Result<PicoSettingsReceipt, PicoCommandError> = .failure(
             .init(message: "Unexpected save")
         )
     ) {
-        self.loads = loads
+        catalog = loads.first?.models ?? []
+        reads = loads.map(\.settingsRead)
         updateResult = update
     }
 
-    func load() async throws -> PicoSettingsLoad {
-        loads.removeFirst()
+    func readCatalog() async throws -> [PicoModel] {
+        catalog
+    }
+
+    func readSettings() async throws -> PicoSettingsRead {
+        reads.removeFirst()
     }
 
     func update(_ change: PicoSettingsChange, revision: String) async throws -> PicoSettingsReceipt
     {
         updateCount += 1
         return try updateResult.get()
-    }
-}
-
-private actor SuspendedLoads: PicoSettingsServing {
-    private var pending: [CheckedContinuation<PicoSettingsLoad, any Error>?] = []
-
-    func cancelAll() {
-        for index in pending.indices {
-            pending[index]?.resume(throwing: CancellationError())
-            pending[index] = nil
-        }
-    }
-
-    func finish(_ index: Int, with snapshot: PicoSettingsLoad) {
-        pending[index]?.resume(returning: snapshot)
-        pending[index] = nil
-    }
-
-    func load() async throws -> PicoSettingsLoad {
-        try await withCheckedThrowingContinuation { pending.append($0) }
-    }
-
-    func update(_ change: PicoSettingsChange, revision: String) async throws -> PicoSettingsReceipt
-    {
-        throw PicoCommandError(message: "Unexpected save")
-    }
-
-    func waitForLoads(_ count: Int) async throws {
-        let deadline = ContinuousClock.now + .seconds(5)
-        while pending.count < count {
-            guard ContinuousClock.now < deadline else {
-                throw PicoCommandError(message: "The expected load did not start")
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
     }
 }
 
@@ -261,8 +237,12 @@ private actor SuspendedSave: PicoSettingsServing {
         receipt.continuation.finish()
     }
 
-    func load() async throws -> PicoSettingsLoad {
-        .ready(snapshot)
+    func readCatalog() async throws -> [PicoModel] {
+        snapshot.models
+    }
+
+    func readSettings() async throws -> PicoSettingsRead {
+        snapshot.settingsRead
     }
 
     func update(_ change: PicoSettingsChange, revision: String) async throws -> PicoSettingsReceipt

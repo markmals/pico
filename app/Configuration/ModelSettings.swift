@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class ModelSettings {
+    private(set) var settingsFile: SettingsFileState = .loading
     private(set) var state: State = .loading
     var saveError: String?
 
@@ -36,14 +37,6 @@ final class ModelSettings {
     var selectedModel: PicoModel? {
         guard let snapshot, let selected = displayedDefaults?.defaultModel else { return nil }
         return snapshot.models.first { $0.value == selected }
-    }
-
-    var settingsFile: String? {
-        switch state {
-        case .ready, .saving: snapshot?.settingsFile
-        case .invalid(let problem): problem.settingsFile
-        case .loading, .failed: nil
-        }
     }
 
     var showsSaveError: Bool {
@@ -115,13 +108,6 @@ final class ModelSettings {
         }
     }
 
-    private func apply(_ loaded: PicoSettingsLoad) {
-        switch loaded {
-        case .ready(let snapshot): state = .ready(snapshot)
-        case .invalid(let problem): state = .invalid(problem)
-        }
-    }
-
     private func drainSaves(request: Int) async {
         while case .saving(let pending) = state {
             do {
@@ -129,10 +115,10 @@ final class ModelSettings {
                     pending.change,
                     revision: pending.confirmed.revision
                 )
-                guard !Task.isCancelled, generation == request else { return }
+                guard isCurrent(request) else { return }
                 advanceSave(receipt: receipt)
             } catch {
-                guard !Task.isCancelled, generation == request else { return }
+                guard isCurrent(request) else { return }
                 if let failure = error as? PicoCommandError, failure.code == "CONFLICT" {
                     await recoverConflict(request: request)
                     return
@@ -147,14 +133,46 @@ final class ModelSettings {
         await load(request: request)
     }
 
+    private func isCurrent(_ request: Int) -> Bool {
+        !Task.isCancelled && generation == request
+    }
+
     private func load(request: Int) async {
+        guard isCurrent(request) else { return }
+        settingsFile = .loading
+        async let catalog = client.readCatalog()
+        let read: PicoSettingsRead
         do {
-            let loaded = try await client.load()
-            guard !Task.isCancelled, generation == request else { return }
-            apply(loaded)
+            read = try await client.readSettings()
         } catch {
-            guard !Task.isCancelled, generation == request else { return }
+            guard isCurrent(request) else { return }
+            settingsFile = .failed(error.localizedDescription)
             state = .failed(error.localizedDescription)
+            return
+        }
+        guard isCurrent(request) else { return }
+        switch read {
+        case .invalid(let problem):
+            settingsFile = .known(problem.settingsFile)
+            state = .invalid(problem)
+        case .ready(let path, let revision, let item, let effective):
+            settingsFile = .known(path)
+            do {
+                let models = try await catalog
+                guard isCurrent(request) else { return }
+                state = .ready(
+                    PicoModelSettings(
+                        settingsFile: path,
+                        revision: revision,
+                        item: item,
+                        effective: effective,
+                        models: models
+                    )
+                )
+            } catch {
+                guard isCurrent(request) else { return }
+                state = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -165,18 +183,12 @@ final class ModelSettings {
             localized:
                 "Pico's settings changed outside this window. Pending changes weren't saved. Review the current settings before trying again."
         )
-        do {
-            let loaded = try await client.load()
-            guard !Task.isCancelled, generation == request else { return }
-            apply(loaded)
-        } catch {
-            guard !Task.isCancelled, generation == request else { return }
-            state = .failed(error.localizedDescription)
-            saveError = String(
-                localized:
-                    "Pico's settings changed outside this window. Pending changes weren't saved, and the current settings could not be reloaded: \(error.localizedDescription)"
-            )
-        }
+        await load(request: request)
+        guard isCurrent(request), case .failed(let message) = state else { return }
+        saveError = String(
+            localized:
+                "Pico's settings changed outside this window. Pending changes weren't saved, and the current settings could not be reloaded: \(message)"
+        )
     }
 
     private func save(_ change: PicoSettingsChange) -> Task<Void, Never>? {
@@ -199,6 +211,20 @@ final class ModelSettings {
             return task
         case .loading, .failed, .invalid:
             return nil
+        }
+    }
+}
+
+extension ModelSettings {
+    /// Where Pico's settings file is, as the last `settings get` reported it. It is published
+    /// as soon as that read answers, whether or not the model catalog is usable.
+    enum SettingsFileState: Equatable {
+        case loading
+        case known(String)
+        case failed(String)
+
+        var path: String? {
+            if case .known(let path) = self { path } else { nil }
         }
     }
 }

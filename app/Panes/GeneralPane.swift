@@ -28,7 +28,7 @@ struct GeneralPane: View {
             }
 
             Section {
-                SettingsFileRow(path: settings.settingsFile, isLoading: settings.state == .loading)
+                SettingsFileRow(settings: settings)
             } header: {
                 Text("Configuration")
             } footer: {

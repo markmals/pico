@@ -1,15 +1,7 @@
+import builtinTools from "./builtin-tools.json" with { type: "json" };
+
 /** The built-in tools every Pico session carries. Everything else OMP offers is excluded or deferred. */
-export const PICO_BUILTIN_TOOLS = [
-    "read",
-    "grep",
-    "glob",
-    "edit",
-    "write",
-    "bash",
-    "web_search",
-    "todo",
-    "wait",
-];
+export const PICO_BUILTIN_TOOLS = builtinTools;
 
 /**
  * The active tools that the allowlist does not cover, each named once in the

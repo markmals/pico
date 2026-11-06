@@ -3,12 +3,9 @@ import SwiftUI
 struct ToolPolicySection: View {
     var body: some View {
         Section {
-            ToolPolicyRow(isIncluded: true, item: .read, symbol: "doc.text")
-            ToolPolicyRow(isIncluded: true, item: .search, symbol: "magnifyingglass")
-            ToolPolicyRow(isIncluded: true, item: .edit, symbol: "pencil")
-            ToolPolicyRow(isIncluded: true, item: .write, symbol: "square.and.pencil")
-            ToolPolicyRow(isIncluded: true, item: .shell, symbol: "terminal")
-            ToolPolicyRow(isIncluded: true, item: .webSearch, symbol: "globe")
+            ForEach(BuiltinToolPolicy.included, id: \.item) { policy in
+                ToolPolicyRow(isIncluded: true, item: policy.item, symbol: policy.symbol)
+            }
             ToolPolicyRow(isIncluded: false, item: .eval, symbol: "curlybraces")
             ToolPolicyRow(
                 isIncluded: false,

@@ -28,13 +28,13 @@ struct RuntimeUpdatesRow<Actions: View>: View {
         case .notInstalled(let latest):
             RuntimeCheckRow(
                 item: .upToDate,
-                status: "Not installed",
+                status: "Not in Homebrew",
                 detail: .text("Homebrew offers Pico \(latest).")
             ) { actions }
         case .unlinked(let versions):
             RuntimeCheckRow(
                 item: .upToDate,
-                status: "Not linked",
+                status: "Command link missing",
                 detail: .text(
                     "Homebrew has Pico \(versions.formatted(.list(type: .and))) installed. Reinstall to restore its command link."
                 )

@@ -96,6 +96,13 @@ struct AvailableModelRows: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: model.name))
+            .accessibilityValue(
+                model.value == defaultModel
+                    ? Text("\(model.value), Default") : Text(verbatim: model.value)
+            )
+            .accessibilityAddTraits(.isStaticText)
         }
     }
 }

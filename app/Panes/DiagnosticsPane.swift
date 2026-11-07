@@ -13,7 +13,7 @@ struct DiagnosticsPane: View {
             } header: {
                 Text("About")
             } footer: {
-                Text("Installed versions are not read while settings stay unconnected.")
+                Text("Pico doesn’t read installed versions here yet.")
             }
 
             Section {
@@ -22,7 +22,7 @@ struct DiagnosticsPane: View {
             } header: {
                 Text("Diagnostics")
             } footer: {
-                Text("No diagnostics are collected, redacted, or exported here.")
+                Text("Pico doesn’t collect, redact, or export diagnostics yet.")
             }
         }
         .formStyle(.grouped)

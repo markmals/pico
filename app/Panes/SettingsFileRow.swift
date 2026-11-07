@@ -16,8 +16,7 @@ struct SettingsFileRow: View {
                     case .known(let path):
                         ShowSettingsFileButton(path: path)
                     case .failed:
-                        Label("Couldn’t load", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.secondary)
+                        RowStatus(text: "Couldn’t load", needsAttention: true)
                         Button("Try Again") { settings.reload() }
                     }
                 }
@@ -34,7 +33,7 @@ struct SettingsFileRow: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(SettingsItem.settingsFile.displayTitle))
+        .accessibilityLabel(Text(verbatim: SettingsItem.settingsFile.plainTitle))
         .settingsRow(.settingsFile)
         .contextMenu {
             Button("Copy Path", action: copyPath)

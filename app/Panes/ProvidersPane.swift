@@ -7,16 +7,14 @@ struct ProvidersPane: View {
             PaneHeader(destination: .providers)
 
             Section {
-                SettingsValueRow(item: .providerList, value: nil)
-            } header: {
-                Text(SettingsItem.providerList.displayTitle)
-            } footer: {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Supported providers come from the engine; none are listed here.")
-                    Spacer()
+                SettingsValueRow(item: .providerList, value: nil) {
                     Button("Add Provider…") {}
                         .disabled(true)
                 }
+            } footer: {
+                Text(
+                    "Pico doesn’t show provider accounts here yet. Connect and manage them with `pico`’s commands."
+                )
             }
         }
         .formStyle(.grouped)

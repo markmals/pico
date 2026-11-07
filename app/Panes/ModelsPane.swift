@@ -10,21 +10,7 @@ struct ModelsPane: View {
             Section {
                 DefaultModelPickerRow(settings: settings)
                 ReasoningLevelPickerRow(settings: settings)
-                if case .failed(let message) = settings.state {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label(
-                                "Couldn’t load model settings",
-                                systemImage: "exclamationmark.triangle"
-                            )
-                            Spacer()
-                            Button("Try Again") { settings.reload() }
-                        }
-                        CommandErrorDetails(message: message)
-                    }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("Model defaults")
-                }
+                ModelSettingsProblemRow(settings: settings)
             } header: {
                 Text("Defaults")
             } footer: {

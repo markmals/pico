@@ -125,8 +125,8 @@ extension SettingsItem {
     static let helperLocation = SettingsItem(
         .sesh,
         "helper-location",
-        title: "Helper location",
-        keywords: ["executable"]
+        title: "`pico` location",
+        keywords: ["executable", "helper"]
     )
     static let launchArguments = SettingsItem(
         .sesh,
@@ -150,18 +150,20 @@ extension SettingsItem {
     static let diagnosticsAppVersion = SettingsItem(
         .diagnostics,
         "app-version",
-        title: "App version"
+        title: "Pico app",
+        keywords: ["version"]
     )
     static let diagnosticsPicoVersion = SettingsItem(
         .diagnostics,
         "pico-version",
-        title: "`pico` version"
+        title: "`pico`",
+        keywords: ["version", "runtime"]
     )
     static let diagnosticsOMPVersion = SettingsItem(
         .diagnostics,
         "omp-version",
-        title: "OMP version",
-        keywords: ["Oh My Pi", "engine"]
+        title: "OMP",
+        keywords: ["version", "Oh My Pi", "engine"]
     )
     static let recentErrors = SettingsItem(
         .diagnostics,

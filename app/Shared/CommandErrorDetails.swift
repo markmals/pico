@@ -1,10 +1,14 @@
 import SwiftUI
 
+/// A failure's full cause, open from the moment the failure appears so the user reads why
+/// before deciding what to do; they can still collapse it.
 struct CommandErrorDetails: View {
     let message: String
 
+    @State private var isExpanded = true
+
     var body: some View {
-        DisclosureGroup("Error Details") {
+        DisclosureGroup("Error Details", isExpanded: $isExpanded) {
             ViewThatFits(in: .vertical) {
                 messageText
                 ScrollView {

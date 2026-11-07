@@ -21,12 +21,13 @@ private struct DestinationRow: View {
     let destination: SettingsDestination
 
     @Environment(ModelSettings.self) private var settings
+    @Environment(\.sidebarRowSize) private var rowSize
 
     var body: some View {
         Label {
             Text(destination.title)
         } icon: {
-            AppIconTile(destination: destination, size: 20)
+            AppIconTile(destination: destination, size: rowSize.appIconTileSize)
         }
         .tag(destination)
         .badge(needsDefaultModel ? 1 : 0)

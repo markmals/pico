@@ -18,7 +18,7 @@ struct RuntimeSection: View {
             }
             if let message = runtime.actionFailure {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("The Homebrew action failed.", systemImage: "exclamationmark.triangle")
+                    CautionLabel("The Homebrew action failed.")
                     CommandErrorDetails(message: message)
                 }
                 .accessibilityElement(children: .contain)

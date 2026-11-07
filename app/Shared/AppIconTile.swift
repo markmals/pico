@@ -23,3 +23,16 @@ struct AppIconTile: View {
             .accessibilityHidden(true)
     }
 }
+
+extension SidebarRowSize {
+    /// A destination tile's size beside a sidebar row, following the Sidebar icon size people
+    /// choose in System Settings › Appearance.
+    var appIconTileSize: CGFloat {
+        switch self {
+        case .small: 16
+        case .medium: 20
+        case .large: 24
+        @unknown default: 20
+        }
+    }
+}

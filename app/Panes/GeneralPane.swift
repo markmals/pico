@@ -24,7 +24,7 @@ struct GeneralPane: View {
             } header: {
                 Text("Versions")
             } footer: {
-                Text("Installed versions are not read here.")
+                Text("Pico doesn’t read installed versions here yet.")
             }
         }
         .formStyle(.grouped)

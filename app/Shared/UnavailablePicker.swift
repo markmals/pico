@@ -12,7 +12,7 @@ struct UnavailablePicker: View {
             Text(item.displayTitle)
         }
         .disabled(true)
-        .accessibilityLabel(Text(item.displayTitle))
+        .accessibilityLabel(Text(verbatim: item.plainTitle))
         .settingsRow(item)
     }
 }

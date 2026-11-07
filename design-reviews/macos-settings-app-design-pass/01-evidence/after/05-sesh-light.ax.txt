@@ -1,0 +1,67 @@
+AXWindow/AXStandardWindow title="Sesh"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Sesh, How Sesh launches Pico as a custom agent."
+        AXHeading description="Launch details"
+        AXGroup
+          AXStaticText description="pico location" value="Not connected"
+          AXStaticText description="Launch arguments" value="Not connected"
+        AXStaticText value="Pico doesn’t look up its launch details here yet."
+        AXHeading description="Connection"
+        AXGroup
+          AXGroup description="Sesh custom agent"
+            AXStaticText value="Sesh custom agent"
+            AXStaticText value="Not checked"
+              AXStaticText value="Not checked"
+            AXButton description="Register" disabled
+          AXStaticText description="Connection status" value="Not checked"
+        AXStaticText value="Pico can’t check Sesh or its custom agents yet. Nothing is read from Sesh."
+        AXHeading description="Setup"
+        AXStaticText description="Setup status" value="Not checked"
+        AXStaticText value="Guided setup through Sesh isn’t available yet."
+      AXStaticText value="Some settings aren’t connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton

@@ -40,3 +40,7 @@ hk.local.pkl
 /*.xcworkspace/
 # Where Tuist writes the Info.plist and other inputs it derives for that project.
 Derived/
+
+# Design council captures stay in the checkout that took them; the review record
+# (Markdown and accessibility outlines) is committed without its screenshots.
+design-reviews/**/*.png

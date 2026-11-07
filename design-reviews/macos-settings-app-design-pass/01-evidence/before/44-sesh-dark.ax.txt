@@ -1,0 +1,76 @@
+AXWindow/AXStandardWindow title="Sesh"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Sesh, How Sesh launches Pico as a custom agent."
+        AXHeading description="Launch details"
+        AXGroup
+          AXStaticText value="Helper location"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXStaticText value="Launch arguments"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="The helper's location is not resolved while settings stay unconnected."
+        AXHeading description="Connection"
+        AXGroup
+          AXStaticText value="Sesh custom agent"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXButton description="Register" disabled
+          AXStaticText value="Connection status"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="Nothing is read from Sesh, and no registration is inspected."
+        AXHeading description="Setup"
+        AXGroup
+          AXStaticText value="Setup status"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="Guided setup through Sesh is not available from this scaffold."
+      AXStaticText value="Some settings aren't connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Sesh"

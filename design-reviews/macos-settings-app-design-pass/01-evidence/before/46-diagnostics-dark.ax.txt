@@ -1,0 +1,73 @@
+AXWindow/AXStandardWindow title="Diagnostics & About"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Diagnostics & About, Versions, recent errors, and reports for troubleshooting."
+        AXHeading description="About"
+        AXGroup
+          AXStaticText value="Pico, Native configuration for the Pico ACP adapter."
+          AXStaticText value="App version"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXStaticText value="pico version"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXStaticText value="OMP version"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="Installed versions are not read while settings stay unconnected."
+        AXHeading description="Diagnostics"
+        AXGroup
+          AXStaticText value="Recent errors"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXStaticText value="Diagnostic report"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="No diagnostics are collected, redacted, or exported here."
+      AXStaticText value="Some settings aren't connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Diagnostics & About"

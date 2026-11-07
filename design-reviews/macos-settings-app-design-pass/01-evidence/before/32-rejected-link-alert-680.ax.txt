@@ -1,0 +1,65 @@
+AXWindow/AXStandardWindow title="Models"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXScrollArea
+      AXHeading description="Models, The default model and reasoning level for new sessions."
+      AXHeading description="Defaults"
+      AXGroup
+        AXStaticText value="Model" disabled
+        AXPopUpButton description="Model" value="Unavailable" disabled
+        AXStaticText value="Reasoning level" disabled
+        AXPopUpButton description="Reasoning level" value="Unavailable" disabled
+        AXGroup description="Model defaults"
+          AXStaticText value="Couldn’t load model settings"
+          AXButton description="Try Again"
+          AXDisclosureTriangle description="Error Details" value=false
+      AXHeading description="Available models"
+      AXStaticText value="Unavailable"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton disabled
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Models"
+  AXSheet description="alert" focused
+    AXStaticText value="Pico Can't Open This Link"
+    AXStaticText value="“pico://settings/bogus” doesn't name a pane or setting in Pico."
+    AXButton description="OK"

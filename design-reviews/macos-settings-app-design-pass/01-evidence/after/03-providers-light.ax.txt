@@ -1,0 +1,56 @@
+AXWindow/AXStandardWindow title="Providers & Accounts"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Providers & Accounts, Provider accounts, and where their credentials come from."
+        AXGroup description="Providers"
+          AXStaticText value="Providers"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+          AXButton description="Add Provider…" disabled
+        AXStaticText value="Pico doesn’t show provider accounts here yet. Connect and manage them with pico’s commands."
+      AXStaticText value="Some settings aren’t connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton

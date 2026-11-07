@@ -1,0 +1,94 @@
+AXWindow/AXStandardWindow title="Tools & Integrations"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Tools & Integrations, Pico’s built-in tool policy is fixed. Sesh supplies additional tools for each session."
+        AXHeading description="Included tools"
+        AXGroup
+          AXStaticText value="Read"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Search"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Edit"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Write"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Shell"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Web search"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Task list"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+          AXStaticText value="Wait"
+          AXStaticText value="Included"
+            AXStaticText value="Included"
+        AXHeading description="Excluded tools"
+        AXGroup
+          AXStaticText value="Eval"
+          AXStaticText value="Excluded"
+            AXStaticText value="Excluded"
+          AXStaticText value="Built-in LSP"
+          AXStaticText value="Excluded"
+            AXStaticText value="Excluded"
+          AXStaticText value="Native delegation"
+          AXStaticText value="Excluded"
+            AXStaticText value="Excluded"
+        AXHeading description="Integrations"
+        AXGroup
+          AXStaticText value="intellisense location"
+          AXStaticText value="Not connected"
+            AXStaticText value="Not connected"
+        AXStaticText value="Choosing or checking the intellisense program is not available here."
+      AXStaticText value="Some settings aren't connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Tools & Integrations"

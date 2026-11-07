@@ -1,0 +1,62 @@
+AXWindow/AXStandardWindow title="Diagnostics & About"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Diagnostics & About, Versions, recent errors, and reports for troubleshooting."
+        AXHeading description="About"
+        AXGroup
+          AXStaticText value="Pico, Native configuration for the Pico ACP adapter."
+          AXStaticText description="Pico app" value="Not connected"
+          AXStaticText description="pico" value="Not connected"
+          AXStaticText description="OMP" value="Not connected"
+        AXStaticText value="Pico doesn’t read installed versions here yet."
+        AXHeading description="Diagnostics"
+        AXGroup
+          AXStaticText description="Recent errors" value="Not connected"
+          AXStaticText description="Diagnostic report" value="Not connected"
+        AXStaticText value="Pico doesn’t collect, redact, or export diagnostics yet."
+      AXStaticText value="Some settings aren’t connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton

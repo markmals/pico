@@ -1,0 +1,75 @@
+AXWindow/AXStandardWindow title="Tools & Integrations"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXGroup/AXHostingView
+      AXScrollArea
+        AXHeading description="Tools & Integrations, Pico’s built-in tool policy is fixed. Sesh supplies additional tools for each session."
+        AXHeading description="Included tools"
+        AXGroup
+          AXStaticText description="Read" value="Included"
+          AXStaticText description="Search" value="Included"
+          AXStaticText description="Edit" value="Included"
+          AXStaticText description="Write" value="Included"
+          AXStaticText description="Shell" value="Included"
+          AXStaticText description="Web search" value="Included"
+          AXStaticText description="Task list" value="Included"
+          AXStaticText description="Wait" value="Included"
+        AXHeading description="Excluded tools"
+        AXGroup
+          AXStaticText description="Eval" value="Excluded"
+          AXStaticText description="Built-in LSP" value="Excluded"
+          AXStaticText description="Native delegation" value="Excluded"
+        AXHeading description="Integrations"
+        AXStaticText description="intellisense location" value="Not connected"
+        AXStaticText value="Pico doesn’t choose or check the intellisense program here yet."
+        AXScrollBar value=1
+          AXValueIndicator value=1
+          AXButton/AXIncrementArrow
+          AXButton/AXDecrementArrow
+          AXButton/AXIncrementPage
+          AXButton/AXDecrementPage
+      AXStaticText value="Some settings aren’t connected yet"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Tools & Integrations"

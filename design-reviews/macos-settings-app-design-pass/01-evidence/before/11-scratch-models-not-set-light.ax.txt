@@ -1,0 +1,70 @@
+AXWindow/AXStandardWindow title="Models"
+  AXSplitGroup
+    AXScrollArea
+      AXOutline description="Sidebar" focused
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="General"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Providers & Accounts"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Models" value="Default model not set"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Tools & Integrations"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Sesh"
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXGroup/AXHostingView
+        AXRow/AXOutlineRow
+          AXCell focused
+            AXStaticText description="Diagnostics & About"
+        AXColumn identifier="ListColumn"
+    AXTextField/AXSearchField
+      AXButton description="Search"
+    undefined
+    AXScrollArea
+      AXHeading description="Models, The default model and reasoning level for new sessions."
+      AXHeading description="Defaults"
+      AXGroup
+        AXStaticText value="Model"
+        AXPopUpButton description="Model" value="Not Set"
+        AXStaticText value="Reasoning level" disabled
+        AXPopUpButton description="Reasoning level" value="Not Set" disabled
+      AXStaticText value="Until you choose a model, Pico uses lm-studio/qwen/qwen3-coder-30b for new sessions without a model override from Sesh."
+      AXHeading description="Available models"
+      AXGroup
+        AXStaticText value="Apple AFM 3 Core Advanced"
+        AXStaticText value="apple/on-device"
+        AXStaticText value="qwen/qwen3-coder-30b"
+        AXStaticText value="lm-studio/qwen/qwen3-coder-30b"
+        AXStaticText value="gpt-oss-20b"
+        AXStaticText value="lm-studio/openai/gpt-oss-20b"
+        AXStaticText value="Devstral Small"
+        AXStaticText value="lm-studio/mistralai/devstral-small-2507"
+        AXStaticText value="google/gemma-3-27b"
+        AXStaticText value="lm-studio/google/gemma-3-27b"
+        AXStaticText value="DeepSeek R1 Distill Qwen3 8B 0528"
+        AXStaticText value="lm-studio/deepseek/deepseek-r1-0528-qwen3-8b"
+  AXToolbar
+    AXGroup
+      AXButton/AXSegment description="Back" identifier="chevron.left"
+      AXButton/AXSegment description="Forward" identifier="chevron.right" disabled
+  AXButton/AXCloseButton
+  AXButton/AXZoomButton
+    AXGroup
+  AXButton/AXMinimizeButton
+  AXStaticText value="Models"

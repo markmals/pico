@@ -22,9 +22,11 @@ struct SearchResultsList: View {
 private struct SearchResultRow: View {
     let location: SettingsLocation
 
+    @Environment(\.sidebarRowSize) private var rowSize
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            AppIconTile(destination: location.destination, size: 20)
+            AppIconTile(destination: location.destination, size: rowSize.appIconTileSize)
             VStack(alignment: .leading, spacing: 1) {
                 switch location {
                 case .destination(let destination):

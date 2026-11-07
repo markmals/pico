@@ -11,14 +11,7 @@ struct RuntimeCheckRow<Actions: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             LabeledContent {
                 HStack(spacing: 12) {
-                    HStack(spacing: 4) {
-                        if isFailure {
-                            Image(systemName: "exclamationmark.triangle")
-                                .accessibilityHidden(true)
-                        }
-                        Text(status)
-                    }
-                    .foregroundStyle(.secondary)
+                    RowStatus(text: status, needsAttention: isFailure)
                     actions
                 }
             } label: {
@@ -28,7 +21,7 @@ struct RuntimeCheckRow<Actions: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(item.displayTitle))
+        .accessibilityLabel(Text(verbatim: item.plainTitle))
         .settingsRow(item)
     }
 }

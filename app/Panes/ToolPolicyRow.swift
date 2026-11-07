@@ -16,8 +16,13 @@ struct ToolPolicyRow: View {
             } icon: {
                 Image(systemName: symbol)
                     .frame(width: 20)
+                    .accessibilityHidden(true)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: item.plainTitle))
+        .accessibilityValue(isIncluded ? Text("Included") : Text("Excluded"))
+        .accessibilityAddTraits(.isStaticText)
         .settingsRow(item)
     }
 }

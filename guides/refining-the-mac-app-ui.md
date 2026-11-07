@@ -26,19 +26,21 @@ The task builds this checkout's `pico` executable and app, then opens `.build/ma
 
 Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
 
-The sidebar lists the panes in four groups. Choose one to open it; the pane's title appears in the toolbar. “Some settings aren't connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected.
+The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
+
+A yellow caution symbol marks anything that needs your attention, such as a failed check, a settings file Pico can't read, or a saved model that new sessions can't start with. The words beside it say what is wrong; informational notes carry no symbol.
 
 Each pane keeps its scroll position while the app runs, including when you return to it with back or forward. Choose Pico > Settings or press Command-Comma to bring the same window forward. Closing the window quits the app; reopening starts at General with no history.
 
 ### Runtime readiness
 
-General checks the local `pico` command when the window opens and when you return to General. Installation shows the executable's location or explains why it could not be found. Command startup runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Check Runtime repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
+General checks the local `pico` command when the window opens and when you return to General. Installation shows the executable's location or, as Not found, why it could not be found. Command startup runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Check Runtime repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
 
 Updates begins as Not checked. Choose Check for Updates to refresh Homebrew's metadata, re-read the local command, and compare it with `markmals/tap/pico`. A failed check shows Check failed with its full cause under Error Details instead of reporting that Pico is current. A newer development command is distinguished from the published version. An executable selected with `-PicoExecutable` is not assumed to be the Homebrew installation; expand Details for its update limitations. Local and update checks show progress and can be cancelled.
 
-When recovery is available, General offers Install, Reinstall, or Update beside the relevant status. Each action has its own confirmation, runs Homebrew without a terminal or administrator prompt, and then checks the actual installation again. A successful package command alone is not proof that Pico starts. Package operations disable automatic cleanup of old versions; Pico does not stop Sesh sessions. Reinstall is refused when Pico observes the command running. Stop those sessions before confirming a reinstall, and do not start another until it finishes.
+When recovery is available, General offers Install, Reinstall, or Update beside the relevant status. Each action has its own confirmation, runs Homebrew without a terminal or administrator prompt, and then checks the actual installation again. Keep Pico open until an action finishes: closing the window quits Pico and stops Homebrew, and a running action can't otherwise be cancelled. A successful package command alone is not proof that Pico starts. Package operations disable automatic cleanup of old versions; Pico does not stop Sesh sessions. Reinstall is refused when Pico observes the command running. Stop those sessions before confirming a reinstall, and do not start another until it finishes.
 
-If Homebrew has Pico installed but its command link is missing, the checklist offers Reinstall to restore the installation rather than repeating an install that Homebrew would skip. The reinstall check also looks for running Pico executables in unlinked kegs.
+If Homebrew has Pico installed but its command link is missing, Updates reads Command link missing and offers Reinstall to restore the installation rather than repeating an install that Homebrew would skip. The reinstall check also looks for running Pico executables in unlinked kegs. If Homebrew doesn't have Pico at all, Updates reads Not in Homebrew.
 
 If Homebrew is missing or older than version 6, Open Homebrew Installer opens its official graphical installer download page. Complete that installer, then return to Pico and check again. If Homebrew requires trust for `markmals/tap`, Pico offers a separate confirmation describing tap-wide trust; checking readiness does not grant trust. A first install is blocked until that approval is supplied rather than letting Homebrew grant formula trust implicitly. Homebrew permission, network, or package failures remain visible in General, with their full cause under Error Details.
 
@@ -90,7 +92,7 @@ Pico uses these defaults for new sessions without a model override from Sesh. Se
 
 General's Settings file row displays the location returned by `pico`. Show in Finder… selects the file when it exists, or opens its containing folder when only that folder exists. It is disabled if neither exists. Right-click the row and choose Copy Path to copy a displayed path.
 
-The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the failure with Try Again beside it. If the settings command itself fails, General shows Couldn’t load and Try Again. Expand Error Details to read or select the full cause. Long errors scroll within the expanded details rather than displacing the recovery controls.
+The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the failure with Try Again beside it. If the settings command itself fails, General shows Couldn’t load and Try Again. Error Details opens with the full cause, which you can read or select; collapse it if you don't need it. Long errors scroll within the details rather than displacing the recovery controls.
 
 ### Built-in tool policy
 
@@ -102,7 +104,7 @@ Included and excluded tools appear in separate groups, with explicit read-only s
 
 If settings change outside the window before a save completes, Pico refuses the stale save, discards changes still waiting to be saved, reloads, and tells you what happened. Review the current values before choosing again. Other save failures show their cause and roll back the failed choice without erasing newer choices you made while it was saving. A reasoning-level choice stays tied to the model you were editing.
 
-A failed load makes the model controls unavailable and shows the failure with Try Again in the Defaults group; Error Details retains the full cause. An invalid or unsupported settings file instead shows the reported problem and asks you to fix or remove the file, with Show in Finder… when the location exists. Pico does not overwrite the broken document. A missing executable, incompatible command API, or command that exceeds 30 seconds is reported rather than treated as an empty catalog.
+A failed load makes the model controls unavailable and shows the failure with Try Again in the Defaults group; Error Details shows the full cause. An invalid or unsupported settings file instead shows “Pico can’t read its settings file” in the Defaults group with the file's location, Show in Finder… when the location exists, and the reported problem under Error Details. Fix or remove the file, then return to Models: Pico reads it again when you do. Pico does not overwrite the broken document. A missing executable, incompatible command API, or command that exceeds 30 seconds is reported rather than treated as an empty catalog.
 
 ## Worked example
 

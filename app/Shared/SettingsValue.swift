@@ -11,20 +11,24 @@ enum SettingsValue {
 struct SettingsValueText: View {
     let value: SettingsValue?
 
-    var body: some View {
+    /// The words a row shows for `value`, which are also what VoiceOver reads as its value.
+    static func text(for value: SettingsValue?) -> Text {
         switch value {
-        case nil:
-            Text("Not connected")
-                .foregroundStyle(.secondary)
-        case .text(let text):
-            Text(text)
-                .foregroundStyle(.secondary)
-        case .verbatim(let text):
-            Text(verbatim: text)
-                .foregroundStyle(.secondary)
+        case nil: Text("Not connected")
+        case .text(let text): Text(text)
+        case .verbatim(let text): Text(verbatim: text)
+        }
+    }
+
+    var body: some View {
+        let text = Self.text(for: value).foregroundStyle(.secondary)
+        if case .verbatim(let raw) = value {
+            text
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .help(text)
+                .help(raw)
+        } else {
+            text
         }
     }
 }

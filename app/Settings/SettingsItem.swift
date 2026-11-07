@@ -45,4 +45,9 @@ extension SettingsItem {
     var displayTitle: AttributedString {
         AttributedString(localized: title)
     }
+
+    /// The title without its code styling, as accessibility labels read it.
+    var plainTitle: String {
+        String(displayTitle.characters)
+    }
 }

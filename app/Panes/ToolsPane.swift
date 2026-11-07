@@ -12,7 +12,7 @@ struct ToolsPane: View {
             } header: {
                 Text("Integrations")
             } footer: {
-                Text("Choosing or checking the intellisense program is not available here.")
+                Text("Pico doesn’t choose or check the `intellisense` program here yet.")
             }
         }
         .formStyle(.grouped)

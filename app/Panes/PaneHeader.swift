@@ -4,6 +4,8 @@ import SwiftUI
 struct PaneHeader: View {
     let destination: SettingsDestination
 
+    @Environment(PaneHeaderVisibility.self) private var headerVisibility
+
     var body: some View {
         Section {
             HStack(alignment: .top, spacing: 12) {
@@ -19,6 +21,9 @@ struct PaneHeader: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
+            .onScrollVisibilityChange { isVisible in
+                headerVisibility.setVisible(isVisible, for: destination)
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ struct SettingsWindowView: View {
 
     @Environment(ModelSettings.self) private var settings
     @Environment(RuntimeReadiness.self) private var runtime
+    @State private var headerVisibility = PaneHeaderVisibility()
 
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
@@ -15,6 +16,7 @@ struct SettingsWindowView: View {
         } detail: {
             RetainedSettingsPanes(selection: navigator.destination)
                 .navigationTitle(Text(navigator.destination.title))
+                .toolbar(removing: headerVisibility.isVisible(navigator.destination) ? .title : nil)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
                         BackForwardControl(navigator: navigator)
@@ -26,6 +28,7 @@ struct SettingsWindowView: View {
                     }
                 }
                 .environment(\.settingsReveal, reveal)
+                .environment(headerVisibility)
         }
         .environment(navigator)
         .frame(width: 715)
@@ -55,13 +58,13 @@ struct SettingsWindowView: View {
         }
         .modifier(ModelSettingsAlert(settings: settings))
         .alert(
-            "Pico Can't Open This Link",
+            "Pico Can’t Open This Link",
             isPresented: $navigator.isShowingRejectedLink,
             presenting: navigator.rejectedLink
         ) { _ in
             Button("OK") {}
         } message: { link in
-            Text("“\(link.absoluteString)” doesn't name a pane or setting in Pico.")
+            Text("“\(link.absoluteString)” doesn’t name a pane or setting in Pico.")
         }
     }
 

@@ -16,7 +16,8 @@ struct RuntimeInstallationRow<Actions: View>: View {
             RuntimeCheckRow(
                 item: .installed,
                 status: "Not found",
-                detail: .explanation("\(message)")
+                detail: .error(message),
+                isFailure: true
             ) {
                 actions
             }

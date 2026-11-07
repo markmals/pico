@@ -1,6 +1,24 @@
 import Foundation
 
 extension HomebrewAction {
+    var confirmationTitle: LocalizedStringResource {
+        switch self {
+        case .install: "Install Pico?"
+        case .reinstall: "Reinstall Pico?"
+        case .upgrade: "Update Pico?"
+        case .trustTap: "Trust markmals/tap?"
+        }
+    }
+
+    var progressTitle: LocalizedStringResource {
+        switch self {
+        case .install: "Installing Pico…"
+        case .reinstall: "Reinstalling Pico…"
+        case .upgrade: "Updating Pico…"
+        case .trustTap: "Trusting markmals/tap…"
+        }
+    }
+
     var confirmation: LocalizedStringResource {
         switch self {
         case .install:
@@ -10,7 +28,7 @@ extension HomebrewAction {
         case .upgrade:
             "Homebrew will update markmals/tap/pico on this Mac. Automatic cleanup stays disabled so older installed versions remain available to running sessions."
         case .trustTap:
-            "Trust markmals/tap to run its Homebrew formula code on this Mac? This grants trust to the tap, not just this installation. Checking readiness never grants trust automatically."
+            "This lets Homebrew run formula code from markmals/tap on this Mac. Trust applies to the entire tap, not just Pico. Installing Pico still requires a separate confirmation."
         }
     }
 

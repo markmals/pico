@@ -23,8 +23,8 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         switch self {
         case .general:
             [
-                .installed, .starts, .upToDate, .generalAppVersion, .generalPicoVersion,
-                .generalOMPVersion, .settingsFile,
+                .installed, .starts, .upToDate, .settingsFile, .generalAppVersion,
+                .generalPicoVersion, .generalOMPVersion,
             ]
         case .providers:
             [.providerList]
@@ -45,10 +45,11 @@ enum SettingsDestination: String, CaseIterable, Hashable {
 
     var summary: LocalizedStringResource {
         switch self {
-        case .general: "Runtime readiness, installed versions, and where Pico keeps its settings."
+        case .general: "Check the Pico command and find its settings file."
         case .providers: "Provider accounts, and where their credentials come from."
         case .models: "The default model and reasoning level for new sessions."
-        case .tools: "The tools Pico's agent can use, and the programs it works with."
+        case .tools:
+            "Pico’s built-in tool policy is fixed. Sesh supplies additional tools for each session."
         case .sesh: "How Sesh launches Pico as a custom agent."
         case .diagnostics: "Versions, recent errors, and reports for troubleshooting."
         }

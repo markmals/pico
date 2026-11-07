@@ -24,6 +24,7 @@ struct SettingsValueText: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .help(text)
         }
     }
 }

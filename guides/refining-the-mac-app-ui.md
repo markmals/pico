@@ -32,15 +32,15 @@ Each pane keeps its scroll position while the app runs, including when you retur
 
 ### Runtime readiness
 
-General checks the local `pico` command when the window opens and when you return to General. Installed shows the executable's location or explains why it could not be found. Starts runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Retry repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
+General checks the local `pico` command when the window opens and when you return to General. Installation shows the executable's location or explains why it could not be found. Command startup runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Check Runtime repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
 
-Up to date begins as Not checked. Choose Check for Updates to refresh Homebrew's metadata, re-read the local command, and compare it with `markmals/tap/pico`. A failed check shows its cause instead of reporting that Pico is current. A newer development command is distinguished from the published version. An executable selected with `-PicoExecutable` is not assumed to be the Homebrew installation.
+Updates begins as Not checked. Choose Check for Updates to refresh Homebrew's metadata, re-read the local command, and compare it with `markmals/tap/pico`. A failed check shows Check failed with its full cause under Error Details instead of reporting that Pico is current. A newer development command is distinguished from the published version. An executable selected with `-PicoExecutable` is not assumed to be the Homebrew installation; expand Details for its update limitations. Local and update checks show progress and can be cancelled.
 
-When recovery is available, General offers Install, Reinstall, or Update. Each action requires confirmation, runs Homebrew without a terminal or administrator prompt, and then checks the actual installation again. A successful package command alone is not proof that Pico starts. Package operations disable automatic cleanup of old versions; Pico does not stop Sesh sessions. Reinstall is refused when Pico observes the command running. Stop those sessions before confirming a reinstall, and do not start another until it finishes.
+When recovery is available, General offers Install, Reinstall, or Update beside the relevant status. Each action has its own confirmation, runs Homebrew without a terminal or administrator prompt, and then checks the actual installation again. A successful package command alone is not proof that Pico starts. Package operations disable automatic cleanup of old versions; Pico does not stop Sesh sessions. Reinstall is refused when Pico observes the command running. Stop those sessions before confirming a reinstall, and do not start another until it finishes.
 
 If Homebrew has Pico installed but its command link is missing, the checklist offers Reinstall to restore the installation rather than repeating an install that Homebrew would skip. The reinstall check also looks for running Pico executables in unlinked kegs.
 
-If Homebrew is missing or older than version 6, Open Homebrew Installer opens its official graphical installer download page. Complete that installer, then return to Pico and retry. If Homebrew requires trust for `markmals/tap`, Pico offers a separate confirmation before trusting the tap; checking readiness does not grant trust. A first install is blocked until that approval is supplied rather than letting Homebrew grant formula trust implicitly. Homebrew permission, network, or package failures remain visible in General.
+If Homebrew is missing or older than version 6, Open Homebrew Installer opens its official graphical installer download page. Complete that installer, then return to Pico and check again. If Homebrew requires trust for `markmals/tap`, Pico offers a separate confirmation describing tap-wide trust; checking readiness does not grant trust. A first install is blocked until that approval is supplied rather than letting Homebrew grant formula trust implicitly. Homebrew permission, network, or package failures remain visible in General, with their full cause under Error Details.
 
 ### Back and forward
 
@@ -88,21 +88,21 @@ Pico uses these defaults for new sessions without a model override from Sesh. Se
 
 ### Settings file
 
-General's Settings file row displays the location returned by `pico`. Show in Finder selects the file when it exists, or opens its containing folder when only that folder exists. It is disabled if neither exists. Right-click the row and choose Copy Path to copy a displayed path.
+General's Settings file row displays the location returned by `pico`. Show in Finder… selects the file when it exists, or opens its containing folder when only that folder exists. It is disabled if neither exists. Right-click the row and choose Copy Path to copy a displayed path.
 
-The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the catalog error with Try Again. If the settings command itself fails, General shows its cause and Try Again instead of an unexplained unavailable value.
+The location loads independently of the model catalog. A catalog failure leaves the path and its file actions usable; Models shows the failure with Try Again beside it. If the settings command itself fails, General shows Couldn’t load and Try Again. Expand Error Details to read or select the full cause. Long errors scroll within the expanded details rather than displacing the recovery controls.
 
 ### Built-in tool policy
 
 Tools & Integrations lists Read, Search (`grep` and `glob`), Edit, Write, Shell (`bash`), Web search, Task list (`todo`), and Wait. Task list updates appear as Sesh's plan; Wait waits for background shell jobs. Search for `todo` or `plan` to find Task list, and `wait` or `background jobs` to find Wait.
 
-These are fixed policy, not editable toggles. Eval, built-in LSP, and native OMP delegation remain excluded. Sesh supplies additional tools for each session.
+Included and excluded tools appear in separate groups, with explicit read-only status labels rather than editable toggles. Eval, built-in LSP, and native OMP delegation remain excluded. The explanation above the groups distinguishes this fixed policy from the additional tools Sesh supplies for each session.
 
 ### Recovering from errors
 
 If settings change outside the window before a save completes, Pico refuses the stale save, discards changes still waiting to be saved, reloads, and tells you what happened. Review the current values before choosing again. Other save failures show their cause and roll back the failed choice without erasing newer choices you made while it was saving. A reasoning-level choice stays tied to the model you were editing.
 
-A failed load makes the model controls unavailable and shows its cause with Try Again. An invalid or unsupported settings file instead shows the reported problem and asks you to fix or remove the file, with Show in Finder when the location exists. Pico does not overwrite the broken document. A missing executable, incompatible command API, or command that exceeds 30 seconds is reported rather than treated as an empty catalog.
+A failed load makes the model controls unavailable and shows the failure with Try Again in the Defaults group; Error Details retains the full cause. An invalid or unsupported settings file instead shows the reported problem and asks you to fix or remove the file, with Show in Finder… when the location exists. Pico does not overwrite the broken document. A missing executable, incompatible command API, or command that exceeds 30 seconds is reported rather than treated as an empty catalog.
 
 ## Worked example
 

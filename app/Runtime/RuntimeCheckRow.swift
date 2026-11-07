@@ -1,26 +1,34 @@
 import SwiftUI
 
-struct RuntimeCheckRow: View {
+struct RuntimeCheckRow<Actions: View>: View {
     let item: SettingsItem
     let status: LocalizedStringResource
-    var detail: String?
+    var detail: RuntimeRowDetail?
+    var isFailure = false
+    @ViewBuilder let actions: Actions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            LabeledContent {
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        if isFailure {
+                            Image(systemName: "exclamationmark.triangle")
+                                .accessibilityHidden(true)
+                        }
+                        Text(status)
+                    }
+                    .foregroundStyle(.secondary)
+                    actions
+                }
+            } label: {
                 Text(item.displayTitle)
-                Spacer()
-                Text(status)
-                    .foregroundStyle(.secondary)
             }
-            if let detail {
-                Text(verbatim: detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            detail
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(item.displayTitle))
         .settingsRow(item)
     }
 }

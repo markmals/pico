@@ -15,6 +15,7 @@ struct ToolPolicyRow: View {
                 Text(item.title)
             } icon: {
                 Image(systemName: symbol)
+                    .frame(width: 20)
             }
         }
         .settingsRow(item)

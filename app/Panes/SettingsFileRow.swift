@@ -6,34 +6,39 @@ struct SettingsFileRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+            LabeledContent {
+                HStack(spacing: 12) {
+                    switch settings.settingsFile {
+                    case .loading:
+                        Text("Loading…")
+                            .foregroundStyle(.secondary)
+                        ShowSettingsFileButton(path: nil)
+                    case .known(let path):
+                        ShowSettingsFileButton(path: path)
+                    case .failed:
+                        Label("Couldn’t load", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.secondary)
+                        Button("Try Again") { settings.reload() }
+                    }
+                }
+            } label: {
                 Text(SettingsItem.settingsFile.displayTitle)
-                    .fixedSize()
-                Spacer(minLength: 0)
-                SettingsValueText(value: value)
-                    .layoutPriority(-1)
-                ShowSettingsFileButton(path: settings.settingsFile.path)
+            }
+            if case .known(let path) = settings.settingsFile {
+                SettingsValueText(value: .verbatim(path))
+                    .font(.caption)
+                    .textSelection(.enabled)
             }
             if case .failed(let message) = settings.settingsFile {
-                Text(verbatim: message)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Try Again") { settings.reload() }
+                CommandErrorDetails(message: message)
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(SettingsItem.settingsFile.displayTitle))
         .settingsRow(.settingsFile)
         .contextMenu {
             Button("Copy Path", action: copyPath)
                 .disabled(settings.settingsFile.path == nil)
-        }
-    }
-
-    private var value: SettingsValue {
-        switch settings.settingsFile {
-        case .loading: .text("Loading…")
-        case .known(let path): .verbatim(path)
-        case .failed: .text("Unavailable")
         }
     }
 

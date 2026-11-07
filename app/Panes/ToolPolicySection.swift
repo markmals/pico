@@ -6,6 +6,10 @@ struct ToolPolicySection: View {
             ForEach(BuiltinToolPolicy.included, id: \.item) { policy in
                 ToolPolicyRow(isIncluded: true, item: policy.item, symbol: policy.symbol)
             }
+        } header: {
+            Text("Included tools")
+        }
+        Section {
             ToolPolicyRow(isIncluded: false, item: .eval, symbol: "curlybraces")
             ToolPolicyRow(
                 isIncluded: false,
@@ -14,11 +18,7 @@ struct ToolPolicySection: View {
             )
             ToolPolicyRow(isIncluded: false, item: .nativeDelegation, symbol: "person.2")
         } header: {
-            Text("Built-in tool policy")
-        } footer: {
-            Text(
-                "The adapter fixes these built-in tools; each session also adds the tools Sesh supplies. Not editable here."
-            )
+            Text("Excluded tools")
         }
     }
 }

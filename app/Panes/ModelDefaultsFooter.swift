@@ -7,11 +7,8 @@ struct ModelDefaultsFooter: View {
         switch settings.state {
         case .loading:
             Text("Loading Pico's settings and model catalog…")
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Text(verbatim: message)
-                Button("Try Again") { settings.reload() }
-            }
+        case .failed:
+            EmptyView()
         case .invalid(let problem):
             VStack(alignment: .leading, spacing: 8) {
                 Text(verbatim: problem.message)

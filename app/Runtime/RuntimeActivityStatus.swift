@@ -4,15 +4,20 @@ struct RuntimeActivityStatus: View {
     let activity: RuntimeReadiness.Activity
 
     var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var title: LocalizedStringResource {
         switch activity {
-        case .checking:
-            ProgressView("Checking runtime…")
-        case .checkingUpdates:
-            ProgressView("Refreshing Homebrew…")
-        case .running(let action):
-            ProgressView(action.title)
-        case .stopping:
-            ProgressView("Stopping commands…")
+        case .checking: "Checking runtime…"
+        case .checkingUpdates: "Checking for updates…"
+        case .running(let action): action.progressTitle
+        case .stopping: "Stopping commands…"
         }
     }
 }

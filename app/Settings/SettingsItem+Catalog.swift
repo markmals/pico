@@ -6,20 +6,20 @@ extension SettingsItem {
     static let installed = SettingsItem(
         .general,
         "installed",
-        title: "Installed",
-        keywords: ["runtime", "readiness", "pico", "Homebrew"]
+        title: "Installation",
+        keywords: ["runtime", "readiness", "pico", "Homebrew", "installed"]
     )
     static let starts = SettingsItem(
         .general,
         "starts",
-        title: "Starts",
-        keywords: ["runtime", "readiness", "launch"]
+        title: "Command startup",
+        keywords: ["runtime", "readiness", "launch", "starts"]
     )
     static let upToDate = SettingsItem(
         .general,
         "up-to-date",
-        title: "Up to date",
-        keywords: ["runtime", "update", "version"]
+        title: "Updates",
+        keywords: ["runtime", "update", "version", "up to date"]
     )
     static let generalAppVersion = SettingsItem(
         .general,
@@ -118,7 +118,7 @@ extension SettingsItem {
     static let intellisenseLocation = SettingsItem(
         .tools,
         "intellisense-location",
-        title: "intellisense location",
+        title: "`intellisense` location",
         keywords: ["code intelligence", "executable"]
     )
 

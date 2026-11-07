@@ -5,7 +5,7 @@ struct ShowSettingsFileButton: View {
     let path: String?
 
     var body: some View {
-        Button("Show in Finder", action: reveal)
+        Button("Show in Finder…", action: reveal)
             .disabled(target == nil)
             .fixedSize()
     }

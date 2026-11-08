@@ -13,6 +13,7 @@ import { modelsGet, modelsList } from "./models.ts";
 import { providersGet, providersList, providersUpdate } from "./providers.ts";
 import { settingsGet } from "./settings-get.ts";
 import { settingsUpdate } from "./settings-update.ts";
+import { versionGet } from "./version.ts";
 
 export type HandledCommand =
     | "models list"
@@ -25,7 +26,8 @@ export type HandledCommand =
     | "credentials list"
     | "credentials get"
     | "credentials create"
-    | "credentials delete";
+    | "credentials delete"
+    | "version get";
 
 export type CommandHandlers = Record<HandledCommand, CommandHandler>;
 
@@ -62,5 +64,6 @@ export function createCommandHandlers(context: HandlerContext): CommandHandlers 
         "credentials get": credentialsGet(context),
         "credentials create": credentialsCreate(context),
         "credentials delete": credentialsDelete(context),
+        "version get": versionGet(),
     };
 }

@@ -130,6 +130,7 @@ Besides running as Sesh's agent, `pico` answers commands about its settings and 
 - `pico models list` and `pico models get <provider/model>` show the models you can use and their thinking levels.
 - `pico settings get` shows Pico's settings, whether the file is valid, and what new sessions start on.
 - `pico settings update` changes the default model or thinking level, and whether slow commands move to the background.
+- `pico version get` shows the installed `pico` version and the version of the OMP engine it carries.
 
 Apart from `--help`, `--version`, and the explicitly streaming `auth login`, every command prints one JSON document on standard output. An ordinary failure prints nothing there; the last line of standard error is a JSON error with a `code`, a `message`, whether retrying could help, and details. A command exits with status 2 for a command mistake, or 1 for another failure. `auth login` can emit progress before failing, so its final stderr error and exit status remain authoritative. No command opens a terminal prompt; API-key creation reads its explicitly supplied private stdin.
 

@@ -171,7 +171,7 @@ Every tool runs through a mise task; `package.json` has no `scripts` block.
 | `mise run acp:smoke` | drive `.build/pico-acp` through a real ACP session with the selected Pico credentials |
 | `mise run acp:tck` | check `.build/pico-acp` against the ACP compatibility kit |
 | `mise run pico:build` | compile `.build/pico`; fails when `THIRD-PARTY-NOTICES.md` no longer matches what it bundles (rerun `bun tools/build-pico.ts --outfile .build/pico --write-notices`) |
-| `mise run pico:verify` | run `.build/pico` offline with a scratch home and a fake LM Studio server: version, the `pico` commands (discovery, the settings round trip, a refused change), initialize, a session on the saved default, tool execution, restart, list, load replay and resume with saved context |
+| `mise run pico:verify` | run `.build/pico` offline with a scratch home and a fake LM Studio server: version, the `pico` commands (discovery, installed versions, the settings round trip, a refused change), initialize, a session on the saved default, tool execution, restart, list, load replay and resume with saved context |
 | `mise run pico:smoke` | drive `.build/pico` through a real ACP session with the selected Pico credentials |
 | `mise run pico:tck` | check `.build/pico` against the ACP compatibility kit |
 | `mise run keychain:build` | compile the synchronous Keychain addon with Xcode's compiler |

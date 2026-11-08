@@ -7,7 +7,7 @@ struct RuntimeSection: View {
 
     var body: some View {
         Section {
-            RuntimeInstallationRow(state: runtime.installation) {
+            RuntimeInstallationRow(item: .installed, state: runtime.installation) {
                 recoveryButton(for: .installed)
             }
             RuntimeStartupRow(state: runtime.startup) {

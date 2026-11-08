@@ -8,7 +8,7 @@ describes: [proposal.0005, proposal.0007]
 
 ## What it does
 
-Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General checks runtime readiness, offers confirmed Homebrew recovery actions, and shows the actual settings file location. Other configuration controls remain unavailable and read “Not connected”.
+Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General checks runtime readiness, offers confirmed Homebrew recovery actions, and shows the actual settings file location. Sesh shows the `pico` path to register in Sesh and how to add it as a custom agent. Other configuration controls remain unavailable and read “Not connected”.
 
 The app reads and changes configuration through `pico`'s commands, not by opening the settings document itself. Provider sign-in and credential management still use [Pico's commands](running-pico-in-sesh.md); Providers & Accounts is not connected yet. The app does not change OMP configuration or register an agent in Sesh. Sample-data mode has been removed.
 
@@ -26,7 +26,7 @@ The task builds this checkout's `pico` executable and app, then opens `.build/ma
 
 Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
 
-The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
+The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models and Sesh. Versions, provider accounts, and integrations remain unconnected: their rows read “Not connected”.
 
 A yellow caution symbol marks anything that needs your attention, such as a failed check, a settings file Pico can't read, or a saved model that new sessions can't start with. The words beside it say what is wrong; informational notes carry no symbol.
 
@@ -72,7 +72,7 @@ Every pane and setting has a link:
 
 Open a link from Terminal with `open`, from a browser, or from another app. If Pico is not running, the link launches it. A link Pico does not recognize shows an alert naming the link and leaves the window where it was.
 
-Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `diagnostics`. The setting names for each pane are listed in [proposal 0005](../proposals/0005-mac-app-ui-workspace.md#deep-links); a setting keeps its link name even if its label changes.
+Pane names in links are `general`, `providers`, `models`, `tools`, `sesh`, and `diagnostics`. The setting names for each pane are listed in [proposal 0005](../proposals/0005-mac-app-ui-workspace.md#deep-links); a setting keeps its link name even if its label changes. Sesh's settings are `helper-location`, `launch-arguments`, and `custom-agent`: the proposal's `connection-status` and `setup-status` were removed because Pico can't observe either, and links to them now show the unrecognized-link alert.
 
 ### Model defaults
 
@@ -99,6 +99,12 @@ The location loads independently of the model catalog. A catalog failure leaves 
 Tools & Integrations lists Read, Search (`grep` and `glob`), Edit, Write, Shell (`bash`), Web search, Task list (`todo`), and Wait. Task list updates appear as Sesh's plan; Wait waits for background shell jobs. Search for `todo` or `plan` to find Task list, and `wait` or `background jobs` to find Wait.
 
 Included and excluded tools appear in separate groups, with explicit read-only status labels rather than editable toggles. Eval, built-in LSP, and native OMP delegation remain excluded. The explanation above the groups distinguishes this fixed policy from the additional tools Sesh supplies for each session.
+
+### Adding Pico to Sesh
+
+Pico checks the `pico` command when you open the Sesh pane, the same way General does. The `pico` location row shows the path Pico runs: `/opt/homebrew/bin/pico` for a Homebrew installation, the Homebrew link that keeps working when Pico updates, or the `-PicoExecutable` path in a development build. Copy Path copies it and Show in Finder… selects it. If the command is missing, the row reads Not found with the cause under Error Details, and both actions are unavailable; General offers the recovery. Launch arguments reads None: Sesh runs the file with no arguments.
+
+Pico doesn't register itself with Sesh. Sesh offers no supported way for another app to add an agent or to tell which agent runs a given executable, and Pico doesn't read Sesh's files, so the pane shows no registration or connection status. Open Sesh opens the Sesh app; the steps under it say where to add a custom agent there. Name it Pico and enter the copied path as its program. When Sesh isn't installed, the row reads “Sesh isn’t installed” instead of offering Open Sesh.
 
 ### Recovering from errors
 
@@ -137,7 +143,7 @@ mise run check
 - History and search do not survive quitting Pico.
 - Model availability follows Pico's selected credentials. The app does not sign in, select credentials, or recover inaccessible Keychain items on your behalf.
 - The app inherits its launch environment, which can differ from your terminal's environment for local model servers.
-- Provider/account UI and Sesh setup remain separate work.
+- Provider/account UI remains separate work. Pico doesn't register itself with Sesh or show whether Sesh has it.
 - Links only work once macOS knows about a built copy of the app, which happens when it is first launched or opened. If another app also claims `pico://`, macOS chooses which one opens.
 - The app keeps `me.malstrom.pico` as its bundle identifier. The run task opens the exact app in this checkout, not an installed copy.
 - The local app is unsigned and has not been prepared for distribution. It is not installed over another app, and no signing, notarization, or quarantine workaround is performed by these tasks.

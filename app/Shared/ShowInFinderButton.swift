@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct ShowSettingsFileButton: View {
+struct ShowInFinderButton: View {
     let path: String?
 
     var body: some View {

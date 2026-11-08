@@ -59,7 +59,7 @@ struct SettingsSearchTests {
 
     @Test(
         "results follow sidebar order, each destination before its items",
-        arguments: ["s", "c", "n", "e", "a", "models", "status"]
+        arguments: ["s", "c", "n", "e", "a", "models", "location"]
     )
     func resultsFollowSidebarOrder(query: String) throws {
         let results = try #require(SettingsSearch.results(for: query))

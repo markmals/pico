@@ -138,14 +138,8 @@ extension SettingsItem {
         .sesh,
         "custom-agent",
         title: "Sesh custom agent",
-        keywords: ["register", "ACP"]
+        keywords: ["register", "ACP", "add", "setup"]
     )
-    static let seshConnectionStatus = SettingsItem(
-        .sesh,
-        "connection-status",
-        title: "Connection status"
-    )
-    static let setupStatus = SettingsItem(.sesh, "setup-status", title: "Setup status")
 
     static let diagnosticsAppVersion = SettingsItem(
         .diagnostics,

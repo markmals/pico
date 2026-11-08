@@ -23,7 +23,7 @@ struct SettingsWindowView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if navigator.destination != .models {
+                    if navigator.destination.hasUnconnectedSettings {
                         ScaffoldNotice()
                     }
                 }
@@ -54,7 +54,7 @@ struct SettingsWindowView: View {
         }
         .onChange(of: navigator.destination) { _, destination in
             if destination == .models { settings.reload() }
-            if destination == .general { runtime.check() }
+            if destination == .general || destination == .sesh { runtime.check() }
         }
         .modifier(ModelSettingsAlert(settings: settings))
         .alert(

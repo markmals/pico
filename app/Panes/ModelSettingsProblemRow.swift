@@ -23,7 +23,7 @@ struct ModelSettingsProblemRow: View {
                 HStack {
                     CautionLabel("Pico can’t read its settings file")
                     Spacer()
-                    ShowSettingsFileButton(path: problem.settingsFile)
+                    ShowInFinderButton(path: problem.settingsFile)
                 }
                 SettingsValueText(value: .verbatim(problem.settingsFile))
                     .font(.caption)

@@ -1,39 +1,29 @@
 import SwiftUI
 
 struct SeshPane: View {
+    @Environment(RuntimeReadiness.self) private var runtime
+
     var body: some View {
         Form {
             PaneHeader(destination: .sesh)
 
             Section {
-                SettingsValueRow(item: .helperLocation, value: nil)
-                SettingsValueRow(item: .launchArguments, value: nil)
+                PicoLocationRow(installation: runtime.installation)
+                SettingsValueRow(item: .launchArguments, value: .text("None"))
             } header: {
                 Text("Launch details")
             } footer: {
-                Text("Pico doesn’t look up its launch details here yet.")
-            }
-
-            // These rows name a connection or a status, so “Not connected” would read as a
-            // verdict; Pico has checked nothing.
-            Section {
-                SettingsValueRow(item: .customAgent, value: .text("Not checked")) {
-                    Button("Register") {}
-                        .disabled(true)
-                }
-                SettingsValueRow(item: .seshConnectionStatus, value: .text("Not checked"))
-            } header: {
-                Text("Connection")
-            } footer: {
-                Text("Pico can’t check Sesh or its custom agents yet. Nothing is read from Sesh.")
+                Text("Sesh starts Pico by running this file, with no arguments.")
             }
 
             Section {
-                SettingsValueRow(item: .setupStatus, value: .text("Not checked"))
+                SeshCustomAgentRow()
             } header: {
-                Text("Setup")
+                Text("Add Pico to Sesh")
             } footer: {
-                Text("Guided setup through Sesh isn’t available yet.")
+                Text(
+                    "In Sesh, choose **Settings › Machines** and click **Details…** next to this Mac. Click **Add an Agent…**, then **Custom…**, name the agent Pico, enter the `pico` location above as its program, leave its interpreter empty, and click **Add**. Pico can’t tell whether Sesh already has it."
+                )
             }
         }
         .formStyle(.grouped)

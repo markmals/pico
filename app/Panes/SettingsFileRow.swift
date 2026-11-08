@@ -12,9 +12,9 @@ struct SettingsFileRow: View {
                     case .loading:
                         Text("Loading…")
                             .foregroundStyle(.secondary)
-                        ShowSettingsFileButton(path: nil)
+                        ShowInFinderButton(path: nil)
                     case .known(let path):
-                        ShowSettingsFileButton(path: path)
+                        ShowInFinderButton(path: path)
                     case .failed:
                         RowStatus(text: "Couldn’t load", needsAttention: true)
                         Button("Try Again") { settings.reload() }

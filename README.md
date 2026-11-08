@@ -106,7 +106,7 @@ Not implemented. Nothing below is faked; where the Mac app shows a control for s
 
 - broader child-session handoff and integration workflows; Autonomous sessions; MCP servers beyond the ones Sesh sends. These remain follow-up work tracked in Beads.
 - approval prompts, by design: Pico auto-approves every tool call.
-- the Mac app's provider sign-in and credential management, runtime readiness or version inspection, Sesh registration, and bundled engine or runtime. Models and the Settings file row use real configuration; the remaining controls are unconnected stubs. Providers & Accounts remains Beads `pico-bfk.7`.
+- the Mac app's provider sign-in and credential management, runtime readiness or version inspection, automatic Sesh registration, and bundled engine or runtime. The Sesh pane shows the `pico` path and Sesh's custom-agent steps but registers nothing. Models and the Settings file row use real configuration; the remaining controls are unconnected stubs. Providers & Accounts remains Beads `pico-bfk.7`.
 
 `proposals/` holds proposals 0001–0009, and `guides/` holds their guides. `policies/` holds the [optimistic configuration saves](policies/0001-optimistic-configuration-saves.md) policy; `decisions/` holds only its index README. Empty record directories are healthy, not gaps to fill.
 

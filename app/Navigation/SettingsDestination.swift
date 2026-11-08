@@ -34,12 +34,20 @@ enum SettingsDestination: String, CaseIterable, Hashable {
             BuiltinToolPolicy.included.map(\.item)
                 + [.eval, .builtInLSP, .nativeDelegation, .intellisenseLocation]
         case .sesh:
-            [.helperLocation, .launchArguments, .customAgent, .seshConnectionStatus, .setupStatus]
+            [.helperLocation, .launchArguments, .customAgent]
         case .diagnostics:
             [
                 .diagnosticsAppVersion, .diagnosticsPicoVersion, .diagnosticsOMPVersion,
                 .recentErrors, .diagnosticReport,
             ]
+        }
+    }
+
+    /// Whether the pane still shows settings Pico doesn't read or change yet.
+    var hasUnconnectedSettings: Bool {
+        switch self {
+        case .models, .sesh: false
+        case .general, .providers, .tools, .diagnostics: true
         }
     }
 
@@ -50,7 +58,7 @@ enum SettingsDestination: String, CaseIterable, Hashable {
         case .models: "The default model and reasoning level for new sessions."
         case .tools:
             "Pico’s built-in tool policy is fixed. Sesh supplies additional tools for each session."
-        case .sesh: "How Sesh launches Pico as a custom agent."
+        case .sesh: "How Sesh launches Pico, and how to add Pico to Sesh."
         case .diagnostics: "Versions, recent errors, and reports for troubleshooting."
         }
     }

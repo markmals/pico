@@ -15,6 +15,7 @@ import {
     searchOutput,
     settingsGetOutput,
     settingsUpdateOutput,
+    versionGetOutput,
 } from "./result-schemas.ts";
 
 const schema: CommandSpec = {
@@ -1191,6 +1192,45 @@ const authLogin: CommandSpec = {
     ],
 };
 
+const versionGet: CommandSpec = {
+    path: ["version", "get"],
+    summary: "Show the installed pico and Oh My Pi engine versions",
+    description:
+        "Prints this pico's version and the version of the Oh My Pi engine it carries, which is versioned separately. It starts the engine to ask it, and reads nothing else.",
+    keywords: [
+        "version",
+        "versions",
+        "installed",
+        "engine",
+        "omp",
+        "oh",
+        "my",
+        "pi",
+        "about",
+        "release",
+        "which",
+    ],
+    arguments: [],
+    options: [],
+    constraints: [],
+    effects: "none",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: versionGetOutput,
+    errors: [
+        { code: "INVALID_ARGUMENT", when: "An option was given; version get takes none." },
+        { code: "IO_ERROR", when: "Pico's data directory cannot be used to start the engine." },
+    ],
+    examples: [
+        {
+            description: "Show the installed versions",
+            command: "pico version get",
+        },
+    ],
+};
+
 export const COMMANDS: readonly CommandSpec[] = [
     schema,
     cliSearch,
@@ -1206,4 +1246,5 @@ export const COMMANDS: readonly CommandSpec[] = [
     credentialsCreate,
     credentialsDelete,
     authLogin,
+    versionGet,
 ];

@@ -10,6 +10,7 @@ actor ControlledRuntimeClient: PicoRuntimeServing {
 
     private(set) var actions: [HomebrewAction] = []
     private(set) var inspections = 0
+    private(set) var installedVersionReads = 0
     private(set) var locations = 0
     private(set) var refreshes = 0
     private(set) var versions = 0
@@ -22,6 +23,7 @@ actor ControlledRuntimeClient: PicoRuntimeServing {
     private var inspectionResult: Result<HomebrewInspection, PicoCommandError>
     private var installedByAction: String?
     private var isHeld = false
+    private var installedVersionsResult: Result<InstalledVersions, PicoCommandError>
     private var suspendNextInspection = false
     private var heldCalls: [CheckedContinuation<Void, Never>] = []
     private var locationResult: Result<PicoRuntimeLocation, PicoCommandError>
@@ -33,12 +35,16 @@ actor ControlledRuntimeClient: PicoRuntimeServing {
         chosenExecutable: String? = nil,
         location: Result<PicoRuntimeLocation, PicoCommandError> = .success(.homebrew),
         version: Result<String, PicoCommandError> = .success("0.1.0"),
+        installedVersions: Result<InstalledVersions, PicoCommandError> = .success(
+            InstalledVersions(pico: "0.1.0", omp: "18.14.0")
+        ),
         inspection: Result<HomebrewInspection, PicoCommandError> = .success(.formula(.fixture()))
     ) {
         self.chosenExecutable = chosenExecutable
         homebrew = Availability(isHomebrewAvailable)
         inspectionResult = inspection
         locationResult = location
+        installedVersionsResult = installedVersions
         versionResult = version
     }
 
@@ -76,9 +82,15 @@ actor ControlledRuntimeClient: PicoRuntimeServing {
     }
 
     /// What a successful package action leaves behind: the version the command then reports,
-    /// and a formula whose linked keg matches it.
+    /// with the same engine, and a formula whose linked keg matches it.
     func installs(_ version: String) {
         installedByAction = version
+    }
+
+    func installedVersions(of location: PicoRuntimeLocation) async throws -> InstalledVersions {
+        installedVersionReads += 1
+        await waitWhileHeld()
+        return try installedVersionsResult.get()
     }
 
     func locate() async throws -> PicoRuntimeLocation {
@@ -93,6 +105,9 @@ actor ControlledRuntimeClient: PicoRuntimeServing {
         try actionResult.get()
         guard let installedByAction else { return }
         versionResult = .success(installedByAction)
+        installedVersionsResult = .success(
+            InstalledVersions(pico: installedByAction, omp: "18.14.0")
+        )
         inspectionResult = .success(
             .formula(
                 .fixture(

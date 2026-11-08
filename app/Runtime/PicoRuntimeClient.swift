@@ -56,6 +56,7 @@ protocol PicoRuntimeServing: Sendable {
     var isHomebrewAvailable: Bool { get }
 
     func inspectFormula() async throws -> HomebrewInspection
+    func installedVersions(of location: PicoRuntimeLocation) async throws -> InstalledVersions
     func locate() async throws -> PicoRuntimeLocation
     func perform(_ action: HomebrewAction) async throws
     func refreshFormula() async throws
@@ -118,6 +119,17 @@ struct PicoRuntimeClient: PicoRuntimeServing {
             timeout: Self.inspectionTimeout
         )
         return .formula(try formula(from: output))
+    }
+
+    func installedVersions(of location: PicoRuntimeLocation) async throws -> InstalledVersions {
+        let output = try await PicoCommand(executable: URL(fileURLWithPath: location.path))
+            .run(["version", "get"])
+        guard let document = try? JSONDecoder().decode(VersionDocument.self, from: output),
+            !document.item.pico.isEmpty, !document.item.omp.isEmpty
+        else {
+            throw PicoCommandError(message: .answerWithoutVersions(path: location.path))
+        }
+        return document.item
     }
 
     func locate() throws -> PicoRuntimeLocation {
@@ -387,6 +399,10 @@ extension PicoRuntimeClient {
         let formulae: [String]
         let taps: [String]
     }
+
+    private struct VersionDocument: Decodable {
+        let item: InstalledVersions
+    }
 }
 
 extension String {
@@ -394,6 +410,13 @@ extension String {
         String(
             localized:
                 "Homebrew answered about \(answered) when Pico asked about \(asked), so Pico can't tell whether the command is up to date."
+        )
+    }
+
+    fileprivate static func answerWithoutVersions(path: String) -> String {
+        String(
+            localized:
+                "The pico command at \(path) answered without its version and its engine's."
         )
     }
 

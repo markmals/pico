@@ -20,6 +20,7 @@ const DECLARED = [
     "credentials create",
     "credentials delete",
     "auth login",
+    "version get",
 ];
 
 describe("proposal.0007 command registry", () => {
@@ -81,6 +82,7 @@ describe("proposal.0007 command registry", () => {
             "credentials create": "writes",
             "credentials delete": "writes",
             "auth login": "writes",
+            "version get": "none",
         });
     });
 

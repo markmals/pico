@@ -93,6 +93,42 @@ struct PicoRuntimeClientTests {
         #expect(failure?.message.contains(pico.path) == true)
     }
 
+    @Test("installed versions are what the command's version get reports")
+    func readsTheInstalledVersions() async throws {
+        let directory = try TemporaryTestDirectory()
+        defer { directory.remove() }
+        let pico = try directory.script(
+            "pico",
+            #"""
+            [ "$1 $2" = "version get" ] || exit 2
+            printf '{"apiVersion":1,"item":{"pico":"0.3.0","omp":"18.14.0"}}'
+            """#
+        )
+        let client = PicoRuntimeClient(executableOverride: pico.path, homebrew: .fixed(nil))
+
+        let versions = try await client.installedVersions(of: client.locate())
+
+        #expect(versions == InstalledVersions(pico: "0.3.0", omp: "18.14.0"))
+    }
+
+    @Test("an answer missing a version is refused instead of shown as an empty one")
+    func refusesAnAnswerWithoutBothVersions() async throws {
+        let directory = try TemporaryTestDirectory()
+        defer { directory.remove() }
+        let pico = try directory.script(
+            "pico",
+            #"printf '{"apiVersion":1,"item":{"pico":"0.3.0","omp":""}}'"#
+        )
+        let client = PicoRuntimeClient(executableOverride: pico.path, homebrew: .fixed(nil))
+        let location = try client.locate()
+
+        let failure = await #expect(throws: PicoCommandError.self) {
+            try await client.installedVersions(of: location)
+        }
+
+        #expect(failure?.message.contains(pico.path) == true)
+    }
+
     @Test("the formula's published version and the keg Homebrew has linked are read")
     func readsTheFormula() async throws {
         let homebrew = try FakeHomebrew(stable: "0.2.0", installed: "0.1.0")

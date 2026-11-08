@@ -162,6 +162,12 @@ export const searchOutput = z.object({
     items: z.array(z.object({ command: z.string(), summary: z.string(), usage: z.string() })),
 });
 
+/** The installed `pico` and the Oh My Pi engine it carries, which are versioned separately. */
+export const versionGetOutput = z.object({
+    apiVersion,
+    item: z.object({ pico: z.string(), omp: z.string() }),
+});
+
 /** One stored credential as a command reports it: identity and account facts, never payload. */
 export const credentialSchema = z.object({
     reference: z.string(),

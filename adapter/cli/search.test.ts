@@ -9,6 +9,7 @@ describe("proposal.0007 cli search", () => {
         ["change the default model", "settings update"],
         ["which models can I use", "models list"],
         ["what model do new sessions start with", "settings get"],
+        ["which version of OMP is installed", "version get"],
     ])("%p ranks %p first", (query: string, expected: string) => {
         const result = searchCommands(query);
 

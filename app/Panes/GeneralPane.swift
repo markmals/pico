@@ -18,13 +18,15 @@ struct GeneralPane: View {
             }
 
             Section {
-                SettingsValueRow(item: .generalAppVersion, value: nil)
-                SettingsValueRow(item: .generalPicoVersion, value: nil)
-                SettingsValueRow(item: .generalOMPVersion, value: nil)
+                InstalledVersionRows(
+                    app: .generalAppVersion,
+                    pico: .generalPicoVersion,
+                    omp: .generalOMPVersion
+                )
             } header: {
                 Text("Versions")
             } footer: {
-                Text("Pico doesn’t read installed versions here yet.")
+                Text("`pico` and OMP are read from the command Pico runs, each time it checks it.")
             }
         }
         .formStyle(.grouped)

@@ -1,22 +1,24 @@
 // `mise run pico:verify`'s checks of the compiled `pico` command line (proposal.0007): discovery
-// answers, the settings round trip through the offline catalog, and a refused change. Each
-// result is parsed with the schema its command declares, so the binary's output is checked too.
+// answers, the installed versions, the settings round trip through the offline catalog, and a
+// refused change. Each result is parsed with the schema its command declares, so the binary's
+// output is checked too.
 // Commands run asynchronously: the fake model server lives in this process and must keep
 // answering Oh My Pi's discovery while `pico` runs.
 
-import type { z } from "zod/v4";
-
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { z } from "zod/v4";
 
 import type { Checklist } from "./checklist.ts";
 import type { Scratch } from "./verify.ts";
 
+import manifest from "../../package.json" with { type: "json" };
 import {
     schemaOutput,
     searchOutput,
     settingsGetOutput,
     settingsUpdateOutput,
+    versionGetOutput,
 } from "../cli/result-schemas.ts";
 
 /** The offline catalog's one model, which every new verify session starts on once saved. */
@@ -119,6 +121,29 @@ async function checkDiscovery(
     checklist.record(
         "`pico schema settings update` describes the command",
         spec.problem ?? ("command" in spec.value ? null : "it printed the index"),
+    );
+}
+
+async function checkVersions(
+    executable: string,
+    scratch: Scratch,
+    checklist: Checklist,
+): Promise<void> {
+    const engineManifest = Bun.resolveSync(
+        "@oh-my-pi/pi-coding-agent/package.json",
+        import.meta.dir,
+    );
+    const engine = z
+        .object({ version: z.string() })
+        .parse(JSON.parse(readFileSync(engineManifest, "utf8"))).version;
+    const expected = { pico: manifest.version, omp: engine };
+    const versions = parsed(await run(executable, scratch, ["version", "get"]), versionGetOutput);
+    checklist.record(
+        "`pico version get` reports pico's version and the Oh My Pi engine it carries",
+        versions.problem ??
+            (Bun.deepEquals(versions.value.item, expected)
+                ? null
+                : `got ${JSON.stringify(versions.value.item)}, expected ${JSON.stringify(expected)}`),
     );
 }
 
@@ -239,6 +264,7 @@ export async function checkCommands(
     checklist: Checklist,
 ): Promise<void> {
     await checkDiscovery(executable, scratch, checklist);
+    await checkVersions(executable, scratch, checklist);
     await checkSettingsRoundTrip(executable, scratch, checklist);
     await checkRefusal(executable, scratch, checklist);
     await checkCredentialBoundaries(executable, scratch, checklist);

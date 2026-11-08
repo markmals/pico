@@ -8,6 +8,7 @@ import { CliError } from "../errors.ts";
 import { readApiKey } from "../stdin.ts";
 import { authLoginPreview } from "./auth-login.ts";
 import { credentialsCreate, credentialsDelete, credentialsList } from "./credentials.ts";
+import { intellisenseCheck } from "./intellisense.ts";
 import { providersGet, providersList, providersUpdate } from "./providers.ts";
 
 /** Answers one invocation without a runtime; the caller has already decided it belongs here. */
@@ -32,6 +33,8 @@ export function runtimeFreeCommand(
             return providersUpdate(context)(input);
         case "auth login":
             return authLoginPreview(context, input);
+        case "intellisense check":
+            return intellisenseCheck(context)(input);
         default:
             throw new CliError("INTERNAL", `pico ${command} has no runtime-free answer.`, {
                 details: { command },

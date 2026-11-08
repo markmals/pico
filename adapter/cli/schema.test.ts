@@ -53,10 +53,11 @@ describe("proposal.0007 schema command", () => {
             "--default-model",
             "--default-thinking",
             "--auto-background",
+            "--intellisense-path",
             "--if-revision",
             "--dry-run",
         ]);
-        expect(specification.options[4]).toEqual({
+        expect(specification.options[5]).toEqual({
             name: "--dry-run",
             valueName: null,
             type: "boolean",

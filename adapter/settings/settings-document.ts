@@ -5,13 +5,16 @@ export const SETTINGS_FILENAME = "settings.json";
 
 /**
  * A saved default model and its thinking level, both null when none is saved, whether a slow
- * command moves to the background on its own, null when the file does not set it, and the
- * credential each model provider is bound to: a Pico reference, never a secret (proposal.0009).
+ * command moves to the background on its own, null when the file does not set it, where the
+ * user's `intellisense` executable is, null when Pico finds it on its own (pico-bfk.20), and
+ * the credential each model provider is bound to: a Pico reference, never a secret
+ * (proposal.0009).
  */
 export interface PicoSettings {
     defaultModel: string | null;
     defaultThinking: string | null;
     autoBackground: boolean | null;
+    intellisensePath: string | null;
     providerCredentials: Record<string, string>;
 }
 
@@ -23,8 +26,11 @@ export type SettingsState =
 /** Pico's own auto-background value, used by a session whose settings file leaves it unset. */
 export const DEFAULT_AUTO_BACKGROUND = true;
 
-/** The version a save writes. Version 1, which has no bindings, is still read (proposal.0009). */
-const VERSION = 2;
+/**
+ * The version a save writes. Version 1, which has no bindings, and version 2, which has no
+ * intellisense location, are still read (proposal.0009, pico-bfk.20).
+ */
+const VERSION = 3;
 
 /** A provider id and a credential reference are both opaque, non-empty, non-secret text. */
 const identifier = z.string().min(1);
@@ -58,13 +64,22 @@ const settingsDocumentV1 = z
 
 const settingsDocumentV2 = z
     .strictObject({
-        version: z.literal(VERSION),
+        version: z.literal(2),
         ...sharedMembers,
         providerCredentials: z.record(identifier, identifier).optional(),
     })
     .check(pairedDefault);
 
-type SettingsDocument = z.infer<typeof settingsDocumentV2>;
+const settingsDocumentV3 = z
+    .strictObject({
+        version: z.literal(VERSION),
+        ...sharedMembers,
+        intellisensePath: z.string().regex(/^\/./s, "must be an absolute path").optional(),
+        providerCredentials: z.record(identifier, identifier).optional(),
+    })
+    .check(pairedDefault);
+
+type SettingsDocument = z.infer<typeof settingsDocumentV3>;
 
 /** Reads the settings file's bytes, or `undefined` when there is no file. */
 export function readSettingsState(bytes: Uint8Array | undefined): SettingsState {
@@ -76,6 +91,7 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         };
@@ -93,11 +109,14 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
         return { status: "unsupported", revision, problem };
     }
 
-    // Version 1 knows no bindings, and reading it neither invents nor rewrites any (proposal.0009).
+    // Version 1 knows no bindings, and version 2 no intellisense location; reading either
+    // neither invents nor rewrites one (proposal.0009, pico-bfk.20).
     const document =
         version === 1
             ? settingsDocumentV1.safeParse(parsed.object)
-            : settingsDocumentV2.safeParse(parsed.object);
+            : version === 2
+              ? settingsDocumentV2.safeParse(parsed.object)
+              : settingsDocumentV3.safeParse(parsed.object);
     if (!document.success) {
         return { status: "invalid", revision, problem: describeIssue(document.error.issues[0]) };
     }
@@ -108,6 +127,10 @@ export function readSettingsState(bytes: Uint8Array | undefined): SettingsState 
             defaultModel: document.data.defaultModel ?? null,
             defaultThinking: document.data.defaultThinking ?? null,
             autoBackground: document.data.autoBackground ?? null,
+            intellisensePath:
+                "intellisensePath" in document.data
+                    ? (document.data.intellisensePath ?? null)
+                    : null,
             providerCredentials:
                 "providerCredentials" in document.data
                     ? { ...document.data.providerCredentials }
@@ -127,9 +150,12 @@ export function revisionOf(bytes: Uint8Array | undefined): string {
 }
 
 function settingsDocument(item: PicoSettings): SettingsDocument {
-    const { defaultModel, defaultThinking, autoBackground } = item;
+    const { defaultModel, defaultThinking, autoBackground, intellisensePath } = item;
     if ((defaultModel === null) !== (defaultThinking === null)) {
         throw new Error("a default model and its thinking level are saved together");
+    }
+    if (intellisensePath !== null && !/^\/./s.test(intellisensePath)) {
+        throw new Error("the intellisense path is saved as an absolute path");
     }
     const providerCredentials = canonicalBindings(item.providerCredentials);
     return {
@@ -138,6 +164,7 @@ function settingsDocument(item: PicoSettings): SettingsDocument {
             ? { defaultModel, defaultThinking }
             : {}),
         ...(autoBackground === null ? {} : { autoBackground }),
+        ...(intellisensePath === null ? {} : { intellisensePath }),
         ...(providerCredentials && { providerCredentials }),
     };
 }

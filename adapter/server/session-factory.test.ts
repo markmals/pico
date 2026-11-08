@@ -56,6 +56,7 @@ describe("proposal.0007 sessions start from the settings file", () => {
             defaultModel: "pico-test/alpha",
             defaultThinking: "off",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
         const first = (await client.agent.request("session/new", {
@@ -66,6 +67,7 @@ describe("proposal.0007 sessions start from the settings file", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
         const second = (await client.agent.request("session/new", {
@@ -85,6 +87,7 @@ describe("proposal.0007 sessions start from the settings file", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         };
         writeSettings(dataDir, saved);

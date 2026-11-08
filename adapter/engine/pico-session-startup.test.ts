@@ -102,6 +102,7 @@ describe("proposal.0009 Pico's own credentials", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
 

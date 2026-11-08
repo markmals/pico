@@ -6,13 +6,14 @@
 
 import type { z } from "zod/v4";
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Checklist } from "./checklist.ts";
 import type { Scratch } from "./verify.ts";
 
 import {
+    intellisenseCheckOutput,
     schemaOutput,
     searchOutput,
     settingsGetOutput,
@@ -232,6 +233,59 @@ async function checkCredentialBoundaries(
     );
 }
 
+/** The version the scratch home's stand-in `intellisense` prints, which the check must read back. */
+const FAKE_INTELLISENSE_VERSION = "intellisense 0.0.0-pico-verify";
+
+/**
+ * The GUI PATH problem this setting exists for: with a bare PATH and a scratch home, Pico finds
+ * no `intellisense` until one is chosen, and then runs exactly the one that was chosen.
+ */
+async function checkIntellisenseLocation(
+    executable: string,
+    scratch: Scratch,
+    checklist: Checklist,
+): Promise<void> {
+    const fake = path.join(scratch.home, "tools", "intellisense");
+    mkdirSync(path.dirname(fake), { recursive: true });
+    writeFileSync(fake, `#!/bin/sh\necho '${FAKE_INTELLISENSE_VERSION}'\n`, { mode: 0o755 });
+    const missing = parsed(
+        await run(executable, scratch, ["intellisense", "check"]),
+        intellisenseCheckOutput,
+    );
+    checklist.record(
+        "`pico intellisense check` reports no intellisense on a bare PATH",
+        missing.problem ??
+            (missing.value.status === "missing"
+                ? null
+                : `status ${missing.value.status}, path ${JSON.stringify(missing.value.path)}`),
+    );
+    const saved = parsed(
+        await run(executable, scratch, ["settings", "update", "--intellisense-path", fake]),
+        settingsUpdateOutput,
+    );
+    checklist.record(
+        "`pico settings update --intellisense-path` saves the chosen executable",
+        saved.problem ??
+            (saved.value.changed && saved.value.after.item.intellisensePath === fake
+                ? null
+                : `receipt ${JSON.stringify(saved.value.after.item)}`),
+    );
+    const ready = parsed(
+        await run(executable, scratch, ["intellisense", "check"]),
+        intellisenseCheckOutput,
+    );
+    checklist.record(
+        "`pico intellisense check` runs the chosen executable and reports its version",
+        ready.problem ??
+            (ready.value.status === "ready" &&
+            ready.value.source === "settings" &&
+            ready.value.path === fake &&
+            ready.value.version === FAKE_INTELLISENSE_VERSION
+                ? null
+                : `document ${JSON.stringify(ready.value)}`),
+    );
+}
+
 /** Saves the offline model as the default, which the session checks then start on. */
 export async function checkCommands(
     executable: string,
@@ -242,4 +296,5 @@ export async function checkCommands(
     await checkSettingsRoundTrip(executable, scratch, checklist);
     await checkRefusal(executable, scratch, checklist);
     await checkCredentialBoundaries(executable, scratch, checklist);
+    await checkIntellisenseLocation(executable, scratch, checklist);
 }

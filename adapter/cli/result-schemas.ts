@@ -47,6 +47,7 @@ const savedSettings = z.object({
     defaultModel: z.string().nullable(),
     defaultThinking: z.string().nullable(),
     autoBackground: z.boolean().nullable(),
+    intellisensePath: z.string().nullable(),
     providerCredentials,
 });
 
@@ -96,6 +97,35 @@ export const settingsUpdateOutput = z.object({
     before: settingsSnapshot,
     after: settingsSnapshot,
 });
+
+/** Where `pico intellisense check` found the user's CLI, and whether it could run it. */
+export const intellisenseCheckOutput = z.discriminatedUnion("status", [
+    z.object({
+        apiVersion,
+        settingsFile: z.string(),
+        status: z.literal("ready"),
+        source: z.enum(["settings", "discovered"]),
+        path: z.string(),
+        version: z.string(),
+    }),
+    z.object({
+        apiVersion,
+        settingsFile: z.string(),
+        status: z.literal("missing"),
+        source: z.literal("discovered"),
+        path: z.null(),
+        searched: z.array(z.string()),
+        problem: z.string(),
+    }),
+    z.object({
+        apiVersion,
+        settingsFile: z.string(),
+        status: z.literal("unusable"),
+        source: z.enum(["settings", "discovered"]),
+        path: z.string(),
+        problem: z.string(),
+    }),
+]);
 
 const acceptedValues = z.union([
     z.object({ values: z.array(z.string()) }),

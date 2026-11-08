@@ -108,6 +108,39 @@ What a session starts on:
 
 If `settings.json` has been edited by hand and can't be read, or was written by a newer Pico, new sessions fail to start with the file's path and the problem, and `pico settings update` refuses to change it until you fix or delete it. An existing or reopened session still keeps its model/thinking choice, but its next credential resolution also fails until the global credential bindings can be read. See [Background commands](#background-commands) for the other setting read when reopening.
 
+### Choosing where `intellisense` lives
+
+For code intelligence the agent runs your own `intellisense` CLI through `bash`. Sesh starts `pico` with the Mac's GUI `PATH`, so a copy installed by Cargo or Homebrew usually isn't on the `PATH` the agent inherits. Pico resolves the location itself and tells the agent the full path to run.
+
+To see what a new session would use:
+
+```sh
+pico intellisense check
+```
+
+It reads Pico's settings, resolves the location, runs that one program's `--version` and writes nothing, so it needs no credentials and no model list. It answers in one of three ways:
+
+- **Ready:** the executable, whether it came from your settings or from Pico's own search, and the first line `--version` printed, for example `intellisense 0.2.0`.
+- **Missing:** nothing was found, listing every directory it looked in.
+- **Unusable:** the saved path isn't a regular executable file, or `--version` failed, printed nothing, or didn't finish within five seconds. The answer says which.
+
+To choose a copy yourself:
+
+```sh
+pico settings update --intellisense-path /opt/homebrew/bin/intellisense
+```
+
+The path must be absolute and must name a file you can execute. `pico` checks it without running the program: nothing at that path fails with `NOT_FOUND`, and a relative path, a directory, or a file without the executable bit is refused as a command mistake. It is saved exactly as you typed it, so a Homebrew symlink keeps working across upgrades. `--intellisense-path auto` removes the saved path and goes back to finding one automatically. `pico settings get` shows your saved value as `intellisensePath` under `item` (`null` when you haven't chosen one); it isn't part of `effective`.
+
+What a session uses:
+
+- **With a path saved,** that path, and nothing else. If it stops working, the session is told the problem rather than quietly running another copy you didn't choose.
+- **With nothing saved,** the first usable `intellisense` in the directories of `pico`'s own `PATH`, then `~/.cargo/bin`, `~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin`, in that order.
+
+Every session resolves this when it attaches, new or reopened, from the settings saved at that moment, and without running the program. The agent is told the absolute path and to run it through `bash` because it may not be on its `PATH`. When there is nothing usable, the agent is told why, told not to go hunting for another copy, and told to ask you to choose one here or in the Mac app's Tools & Integrations settings. A session that is already open keeps the location it opened with; start or reopen a session to pick up a change.
+
+If `settings.json` can't be read at all, a new session fails to start (see [Choosing the default model](#choosing-the-default-model)); a conversation you reopen still opens, and its agent is told that Pico's settings file can't be used and that it has no `intellisense` to run.
+
 ### What Pico reads from OMP
 
 Pico uses OMP as its engine, with OMP's built-in defaults and Pico's own settings. It reads no OMP credential store and does not reuse OMP broker settings or provider credential environment variables as a fallback. It also does not read:
@@ -129,7 +162,8 @@ Besides running as Sesh's agent, `pico` answers commands about its settings and 
 - `pico schema <command>` describes a command's options, output and errors as JSON, for scripts and agents.
 - `pico models list` and `pico models get <provider/model>` show the models you can use and their thinking levels.
 - `pico settings get` shows Pico's settings, whether the file is valid, and what new sessions start on.
-- `pico settings update` changes the default model or thinking level, and whether slow commands move to the background.
+- `pico settings update` changes the default model or thinking level, whether slow commands move to the background, and where your `intellisense` executable is.
+- `pico intellisense check` reports where Pico finds your `intellisense` CLI and whether it runs.
 
 Apart from `--help`, `--version`, and the explicitly streaming `auth login`, every command prints one JSON document on standard output. An ordinary failure prints nothing there; the last line of standard error is a JSON error with a `code`, a `message`, whether retrying could help, and details. A command exits with status 2 for a command mistake, or 1 for another failure. `auth login` can emit progress before failing, so its final stderr error and exit status remain authoritative. No command opens a terminal prompt; API-key creation reads its explicitly supplied private stdin.
 
@@ -262,7 +296,7 @@ Pico’s instructions prohibit native workers and shell-launched harnesses as de
 
 ## What the agent can't do
 
-- **No Python or JavaScript eval** and **no built-in language server.** For code intelligence, the agent runs your `intellisense` CLI through `bash`, like any other command. Edits get no automatic diagnostics or formatting.
+- **No Python or JavaScript eval** and **no built-in language server.** For code intelligence, the agent runs your `intellisense` CLI through `bash`, at the location Pico resolved for that session (see [Choosing where `intellisense` lives](#choosing-where-intellisense-lives)). Edits get no automatic diagnostics or formatting.
 - **No OMP subagents** (`task`, or OMP's worker sessions). To split work up, the agent starts real Sesh sessions with Sesh's own tools. If it tries a tool it doesn't have, that tool call shows as failed and nothing runs.
 - **Not available yet:** OMP's `ask`, `find`, `ast_grep`, `ast_edit`, `checkpoint`, `rewind`, `debug` and its memory tools. OMP extensions don't load in Pico at all, so neither their tools nor their hooks run (see [What Pico reads from OMP](#what-pico-reads-from-omp)).
 - **No background services.** OMP's service mode, which keeps a server running between turns, is off: every background command ends with its turn (see [Background commands](#background-commands)).

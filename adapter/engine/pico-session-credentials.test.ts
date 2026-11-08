@@ -21,6 +21,7 @@ function bind(dataDir: string, reference: string): void {
         defaultModel: item?.defaultModel ?? null,
         defaultThinking: item?.defaultThinking ?? null,
         autoBackground: item?.autoBackground ?? null,
+        intellisensePath: item?.intellisensePath ?? null,
         providerCredentials: { [MOCK_PROVIDER]: reference },
     });
 }

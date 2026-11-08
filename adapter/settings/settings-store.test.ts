@@ -27,12 +27,14 @@ const SONNET = {
     defaultModel: "anthropic/claude-sonnet-5-5",
     defaultThinking: "high",
     autoBackground: null,
+    intellisensePath: null,
     providerCredentials: {},
 };
 const HAIKU = {
     defaultModel: "anthropic/claude-haiku-5",
     defaultThinking: "low",
     autoBackground: null,
+    intellisensePath: null,
     providerCredentials: {},
 };
 
@@ -106,6 +108,7 @@ describe("proposal.0007 saving settings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
@@ -161,6 +164,7 @@ describe("proposal.0009 saving provider bindings", () => {
         defaultModel: "anthropic/claude-sonnet-5-5",
         defaultThinking: "high",
         autoBackground: null,
+        intellisensePath: null,
         providerCredentials: {
             anthropic: "6f1c5f2e-0000-4000-8000-000000000001",
             "openai-codex": "6f1c5f2e-0000-4000-8000-000000000002",
@@ -204,6 +208,7 @@ describe("proposal.0009 saving provider bindings", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: false,
+            intellisensePath: null,
             providerCredentials: {},
         });
         expect(readFileSync(settingsFilePath(dataDir)).toString("utf8")).toBe(version1);
@@ -227,7 +232,7 @@ describe("proposal.0009 saving provider bindings", () => {
         expect(readFileSync(settingsFilePath(dataDir)).toString("utf8")).toBe(
             [
                 "{",
-                '    "version": 2,',
+                '    "version": 3,',
                 '    "autoBackground": false,',
                 '    "providerCredentials": {',
                 '        "anthropic": "6f1c5f2e-0000-4000-8000-000000000001"',
@@ -331,7 +336,7 @@ describe("proposal.0009 reading provider bindings", () => {
         expect(readProviderBindings(dataDir)).toEqual({});
     });
 
-    test("a version 2 file binds each provider to the reference it names", () => {
+    test("a version 3 file binds each provider to the reference it names", () => {
         const dataDir = temporaryDataDir();
         writeSettings(dataDir, {
             ...SONNET,
@@ -360,7 +365,7 @@ describe("proposal.0009 reading provider bindings", () => {
 
     test("a settings file a newer Pico wrote refuses to resolve bindings", () => {
         const dataDir = temporaryDataDir();
-        writeDocument(dataDir, '{"version":3,"providerCredentials":{"anthropic":"ref-a"}}');
+        writeDocument(dataDir, '{"version":4,"providerCredentials":{"anthropic":"ref-a"}}');
 
         const error = thrownBy(() => readProviderBindings(dataDir));
 

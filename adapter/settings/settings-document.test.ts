@@ -31,6 +31,7 @@ describe("proposal.0007 settings file states", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
@@ -44,6 +45,7 @@ describe("proposal.0007 settings file states", () => {
                 defaultModel: "anthropic/claude-sonnet-5-5",
                 defaultThinking: "high",
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
@@ -57,18 +59,19 @@ describe("proposal.0007 settings file states", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
     });
 
     test("an object with a later version is unsupported, naming the version and a newer Pico", () => {
-        const document = documentBytes('{"version":3,"defaultModel":"a/b","mood":"new"}');
+        const document = documentBytes('{"version":4,"defaultModel":"a/b","mood":"new"}');
 
         const state = readSettingsState(document);
 
         expect(state.status).toBe("unsupported");
-        expect(problemOf(state)).toContain("3");
+        expect(problemOf(state)).toContain("4");
         expect(problemOf(state)).toContain("newer version of Pico");
         expect(state.revision).toBe(revisionOf(document));
     });
@@ -94,6 +97,7 @@ describe("proposal.0009 provider credential bindings", () => {
                 defaultModel: "a/b",
                 defaultThinking: "high",
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: { "openai-codex": "6f1c5f2e-0000-4000-8000-000000000001" },
             },
         });
@@ -109,6 +113,7 @@ describe("proposal.0009 provider credential bindings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
@@ -126,6 +131,7 @@ describe("proposal.0009 provider credential bindings", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { anthropic: "6f1c5f2e-0000-4000-8000-000000000002" },
         });
     });
@@ -171,6 +177,7 @@ describe("proposal.0009 provider credential bindings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: false,
+                intellisensePath: null,
                 providerCredentials: { anthropic: "ref-a" },
             },
         });
@@ -293,18 +300,19 @@ describe("proposal.0007 settings file problems", () => {
 });
 
 describe("proposal.0009 serializing settings", () => {
-    test("a saved default is written as version 2, indented by four spaces, with a trailing newline", () => {
+    test("a saved default is written as version 3, indented by four spaces, with a trailing newline", () => {
         const text = serializeSettings({
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
 
         expect(text).toBe(
             [
                 "{",
-                '    "version": 2,',
+                '    "version": 3,',
                 '    "defaultModel": "anthropic/claude-sonnet-5-5",',
                 '    "defaultThinking": "high"',
                 "}",
@@ -319,9 +327,10 @@ describe("proposal.0009 serializing settings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             }),
-        ).toBe('{\n    "version": 2\n}\n');
+        ).toBe('{\n    "version": 3\n}\n');
     });
 
     test("bindings are written after the saved default", () => {
@@ -329,13 +338,14 @@ describe("proposal.0009 serializing settings", () => {
             defaultModel: "a/b",
             defaultThinking: "high",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { anthropic: "ref-a" },
         });
 
         expect(text).toBe(
             [
                 "{",
-                '    "version": 2,',
+                '    "version": 3,',
                 '    "defaultModel": "a/b",',
                 '    "defaultThinking": "high",',
                 '    "providerCredentials": {',
@@ -352,12 +362,14 @@ describe("proposal.0009 serializing settings", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { openai: "ref-b", anthropic: "ref-a" },
         });
         const other = serializeSettings({
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { anthropic: "ref-a", openai: "ref-b" },
         });
 
@@ -370,6 +382,7 @@ describe("proposal.0009 serializing settings", () => {
             defaultModel: "a/b",
             defaultThinking: "high",
             autoBackground: true,
+            intellisensePath: null,
             providerCredentials: { anthropic: "ref-a", "openai-codex": "ref-b" },
         };
 
@@ -385,6 +398,7 @@ describe("proposal.0009 serializing settings", () => {
                 defaultModel: "a/b",
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             }),
         ).toThrow();
@@ -396,6 +410,7 @@ describe("proposal.0009 serializing settings", () => {
                 defaultModel: null,
                 defaultThinking: "high",
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             }),
         ).toThrow();
@@ -407,6 +422,7 @@ describe("proposal.0009 serializing settings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: { anthropic: "" },
             }),
         ).toThrow();
@@ -418,6 +434,7 @@ describe("proposal.0009 serializing settings", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: { "": "ref-a" },
             }),
         ).toThrow();
@@ -452,6 +469,7 @@ describe("proposal.0008 the autoBackground setting", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: saved,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
             });
@@ -470,6 +488,7 @@ describe("proposal.0008 the autoBackground setting", () => {
                 defaultModel: "a/b",
                 defaultThinking: "high",
                 autoBackground: false,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         });
@@ -484,12 +503,14 @@ describe("proposal.0008 the autoBackground setting", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
             {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             },
         ]);
@@ -511,13 +532,14 @@ describe("proposal.0008 the autoBackground setting", () => {
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
             autoBackground: false,
+            intellisensePath: null,
             providerCredentials: {},
         });
 
         expect(text).toBe(
             [
                 "{",
-                '    "version": 2,',
+                '    "version": 3,',
                 '    "defaultModel": "anthropic/claude-sonnet-5-5",',
                 '    "defaultThinking": "high",',
                 '    "autoBackground": false',
@@ -532,13 +554,14 @@ describe("proposal.0008 the autoBackground setting", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            intellisensePath: null,
             providerCredentials: { anthropic: "ref-a" },
         });
 
         expect(text).toBe(
             [
                 "{",
-                '    "version": 2,',
+                '    "version": 3,',
                 '    "autoBackground": true,',
                 '    "providerCredentials": {',
                 '        "anthropic": "ref-a"',
@@ -554,20 +577,22 @@ describe("proposal.0008 the autoBackground setting", () => {
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
 
         expect(withDefault).toBe(
-            '{\n    "version": 2,\n    "defaultModel": "anthropic/claude-sonnet-5-5",\n    "defaultThinking": "high"\n}\n',
+            '{\n    "version": 3,\n    "defaultModel": "anthropic/claude-sonnet-5-5",\n    "defaultThinking": "high"\n}\n',
         );
         expect(
             serializeSettings({
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: null,
+                intellisensePath: null,
                 providerCredentials: {},
             }),
-        ).toBe('{\n    "version": 2\n}\n');
+        ).toBe('{\n    "version": 3\n}\n');
     });
 
     test("it is saved without a default model, and reads back the same", () => {
@@ -575,13 +600,114 @@ describe("proposal.0008 the autoBackground setting", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            intellisensePath: null,
             providerCredentials: {},
         };
         const bytes = new TextEncoder().encode(serializeSettings(item));
 
         expect(new TextDecoder().decode(bytes)).toBe(
-            '{\n    "version": 2,\n    "autoBackground": true\n}\n',
+            '{\n    "version": 3,\n    "autoBackground": true\n}\n',
         );
+        expect(readSettingsState(bytes)).toEqual({
+            status: "valid",
+            revision: revisionOf(bytes),
+            item,
+        });
+    });
+});
+
+describe("pico-bfk.20 the intellisense path", () => {
+    test("a version 3 document carries the saved path", () => {
+        const bytes = documentBytes(
+            '{"version":3,"intellisensePath":"/opt/homebrew/bin/intellisense"}',
+        );
+
+        expect(readSettingsState(bytes)).toEqual({
+            status: "valid",
+            revision: revisionOf(bytes),
+            item: {
+                defaultModel: null,
+                defaultThinking: null,
+                autoBackground: null,
+                intellisensePath: "/opt/homebrew/bin/intellisense",
+                providerCredentials: {},
+            },
+        });
+    });
+
+    test("version 1 and version 2 files are still read, with no saved path", () => {
+        for (const text of ['{"version":1}', '{"version":2,"providerCredentials":{"a":"b"}}']) {
+            const state = readSettingsState(documentBytes(text));
+
+            expect([text, state.status]).toEqual([text, "valid"]);
+            expect("item" in state ? state.item.intellisensePath : "no item").toBeNull();
+        }
+    });
+
+    test("a version 1 or 2 document that names the member is invalid", () => {
+        for (const version of [1, 2]) {
+            const state = readSettingsState(
+                documentBytes(`{"version":${version},"intellisensePath":"/usr/bin/intellisense"}`),
+            );
+
+            expect([version, state.status]).toEqual([version, "invalid"]);
+            expect(problemOf(state)).toBe('$: unknown member "intellisensePath"');
+        }
+    });
+
+    test("a path that is not absolute, or is not text, is invalid", () => {
+        for (const value of ['"intellisense"', '"~/.cargo/bin/intellisense"', '"/"', "7", "null"]) {
+            const state = readSettingsState(
+                documentBytes(`{"version":3,"intellisensePath":${value}}`),
+            );
+
+            expect([value, state.status]).toEqual([value, "invalid"]);
+            expect(problemOf(state)).toStartWith("$.intellisensePath: ");
+        }
+    });
+
+    test("a version 4 document is unsupported, as version 3 is to an older Pico", () => {
+        const state = readSettingsState(documentBytes('{"version":4}'));
+
+        expect(state.status).toBe("unsupported");
+        expect(problemOf(state)).toContain("newer version of Pico");
+    });
+
+    test("a save writes version 3, with the path after the auto-background setting", () => {
+        const text = serializeSettings({
+            defaultModel: null,
+            defaultThinking: null,
+            autoBackground: false,
+            intellisensePath: "/Users/pico/.cargo/bin/intellisense",
+            providerCredentials: { anthropic: "ref-a" },
+        });
+
+        expect(text).toBe(
+            [
+                "{",
+                '    "version": 3,',
+                '    "autoBackground": false,',
+                '    "intellisensePath": "/Users/pico/.cargo/bin/intellisense",',
+                '    "providerCredentials": {',
+                '        "anthropic": "ref-a"',
+                "    }",
+                "}",
+                "",
+            ].join("\n"),
+        );
+    });
+
+    test("no saved path leaves the member out, and the document reads back the same", () => {
+        const item = {
+            defaultModel: null,
+            defaultThinking: null,
+            autoBackground: null,
+            intellisensePath: null,
+            providerCredentials: {},
+        };
+        const bytes = documentBytes(serializeSettings(item));
+
+        expect(new TextDecoder().decode(bytes)).toBe('{\n    "version": 3\n}\n');
         expect(readSettingsState(bytes)).toEqual({
             status: "valid",
             revision: revisionOf(bytes),

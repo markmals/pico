@@ -48,18 +48,46 @@ function randomBindings(next: (bound: number) => number): Record<string, string>
 function randomItem(next: (bound: number) => number): PicoSettings {
     const autoBackground = AUTO_BACKGROUND[next(AUTO_BACKGROUND.length)] as boolean | null;
     const providerCredentials = randomBindings(next);
+    const intellisensePath = next(3) === 0 ? `/${randomText(next)}/intellisense` : null;
     if (next(5) === 0) {
-        return { defaultModel: null, defaultThinking: null, autoBackground, providerCredentials };
+        return {
+            defaultModel: null,
+            defaultThinking: null,
+            autoBackground,
+            intellisensePath,
+            providerCredentials,
+        };
     }
     return {
         defaultModel: randomText(next),
         defaultThinking: randomText(next),
         autoBackground,
+        intellisensePath,
         providerCredentials,
     };
 }
 
-const VERSIONS: unknown[] = [1, 1, 2, 2, 2, 3, 7, 1000, 1.5, "1", 0, -3, true, null, { major: 1 }];
+const VERSIONS: unknown[] = [
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    3,
+    7,
+    1000,
+    1.5,
+    "1",
+    0,
+    -3,
+    true,
+    null,
+    { major: 1 },
+];
+
+/** Absolute paths, and the shapes a hand-edited file might hold instead. */
+const PATH_VALUES: unknown[] = ["/usr/bin/intellisense", "/opt/bin/x", "bin/x", "/", "", 7, null];
 const MEMBER_VALUES: unknown[] = [
     "high",
     "anthropic/claude-sonnet-5-5",
@@ -96,6 +124,7 @@ function randomCandidate(next: (bound: number) => number): Record<string, unknow
     if (next(3) === 0) {
         candidate["providerCredentials"] = BINDING_VALUES[next(BINDING_VALUES.length)];
     }
+    if (next(3) === 0) candidate["intellisensePath"] = PATH_VALUES[next(PATH_VALUES.length)];
     if (next(4) === 0) candidate[UNKNOWN_KEYS[next(UNKNOWN_KEYS.length)] as string] = "anything";
     return candidate;
 }
@@ -103,13 +132,15 @@ function randomCandidate(next: (bound: number) => number): Record<string, unknow
 /** What the settings versions define, written out independently of the schema they compare against. */
 function expectedStatus(candidate: Record<string, unknown>): string {
     const version = candidate["version"];
-    if (typeof version === "number" && Number.isInteger(version) && version > 2) {
+    if (typeof version === "number" && Number.isInteger(version) && version > 3) {
         return "unsupported";
     }
-    if (version !== 1 && version !== 2) return "invalid";
+    if (version !== 1 && version !== 2 && version !== 3) return "invalid";
     const defined = ["version", "defaultModel", "defaultThinking", "autoBackground"];
-    if (version === 2) defined.push("providerCredentials");
+    if (version !== 1) defined.push("providerCredentials");
+    if (version === 3) defined.push("intellisensePath");
     if (Object.keys(candidate).some(key => !defined.includes(key))) return "invalid";
+    if (!pathIsValid(candidate["intellisensePath"])) return "invalid";
     const background = candidate["autoBackground"];
     if (background !== undefined && typeof background !== "boolean") return "invalid";
     if (!bindingsAreValid(candidate["providerCredentials"])) return "invalid";
@@ -118,6 +149,12 @@ function expectedStatus(candidate: Record<string, unknown>): string {
     if (model === undefined && thinking === undefined) return "valid";
     if (typeof model !== "string" || typeof thinking !== "string") return "invalid";
     return model.length > 0 && thinking.length > 0 ? "valid" : "invalid";
+}
+
+/** A saved intellisense path is absolute text naming something, so "/" alone is not one. */
+function pathIsValid(saved: unknown): boolean {
+    if (saved === undefined) return true;
+    return typeof saved === "string" && saved.length > 1 && saved.startsWith("/");
 }
 
 /** A binding map names providers and credential references, both non-empty text. */
@@ -187,7 +224,7 @@ describe("proposal.0007 settings file invariants", () => {
         expect(counts.unbound).toBeGreaterThan(0);
     });
 
-    test("a JSON object is valid only when it is exactly a version 1 or version 2 document, and a later integer version is unsupported", () => {
+    test("a JSON object is valid only when it is exactly a version 1, 2 or 3 document, and a later integer version is unsupported", () => {
         const counts: Record<string, number> = { valid: 0, unsupported: 0, invalid: 0 };
 
         for (let seed = 1; seed <= CASES; seed++) {

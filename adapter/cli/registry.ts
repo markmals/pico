@@ -6,6 +6,7 @@ import {
     credentialsDeleteOutput,
     credentialsGetOutput,
     credentialsListOutput,
+    intellisenseCheckOutput,
     modelsGetOutput,
     modelsListOutput,
     providersGetOutput,
@@ -317,9 +318,9 @@ const settingsGet: CommandSpec = {
 const settingsUpdate: CommandSpec = {
     path: ["settings", "update"],
     summary:
-        "Change the default model or thinking level, and whether slow commands move to the background",
+        "Change the default model or thinking level, whether slow commands move to the background, and where the intellisense CLI is",
     description:
-        "Saves the default model and thinking level in Pico's settings file. Given only --default-model, the saved thinking level is kept when the chosen model offers it, and replaced by that model's default level otherwise. Given only --default-thinking, the level applies to the saved default model. --auto-background decides whether a command still running after 60 seconds moves to the background on its own; given alone it reads no model catalog, so it needs no credentials. Preview the receipt with --dry-run, and refuse a settings file that moved since you read it with --if-revision.",
+        "Saves the default model and thinking level in Pico's settings file. Given only --default-model, the saved thinking level is kept when the chosen model offers it, and replaced by that model's default level otherwise. Given only --default-thinking, the level applies to the saved default model. --auto-background decides whether a command still running after 60 seconds moves to the background on its own. --intellisense-path saves where the user's intellisense executable is, or auto to let Pico find it; the path must name a regular executable file, which this command never runs. Given alone, either of those two reads no model catalog, so it needs no credentials. Preview the receipt with --dry-run, and refuse a settings file that moved since you read it with --if-revision.",
     keywords: [
         "settings",
         "update",
@@ -341,6 +342,9 @@ const settingsUpdate: CommandSpec = {
         "command",
         "job",
         "slow",
+        "intellisense",
+        "location",
+        "path",
     ],
     arguments: [],
     options: [
@@ -384,6 +388,20 @@ const settingsUpdate: CommandSpec = {
                 "Whether a command still running after 60 seconds moves to the background on its own.",
         },
         {
+            name: "--intellisense-path",
+            valueName: "path",
+            type: "string",
+            format: "text",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "format",
+                format: "an absolute path to the intellisense executable, or auto",
+            },
+            description:
+                "Where the user's intellisense executable is, or auto to find it automatically.",
+        },
+        {
             name: "--if-revision",
             valueName: "revision",
             type: "string",
@@ -410,8 +428,14 @@ const settingsUpdate: CommandSpec = {
     constraints: [
         {
             kind: "at-least-one-of",
-            options: ["--default-model", "--default-thinking", "--auto-background"],
-            description: "at least one of --default-model, --default-thinking or --auto-background",
+            options: [
+                "--default-model",
+                "--default-thinking",
+                "--auto-background",
+                "--intellisense-path",
+            ],
+            description:
+                "at least one of --default-model, --default-thinking, --auto-background or --intellisense-path",
         },
     ],
     effects: "writes",
@@ -423,11 +447,11 @@ const settingsUpdate: CommandSpec = {
     errors: [
         {
             code: "INVALID_ARGUMENT",
-            when: "None of --default-model, --default-thinking and --auto-background was given, a value is malformed or is not one the option accepts, or the thinking level is one the model does not offer. details lists the accepted values when they are known.",
+            when: "None of --default-model, --default-thinking, --auto-background and --intellisense-path was given, a value is malformed or is not one the option accepts, the thinking level is one the model does not offer, or --intellisense-path is not absolute or names something that is not a regular executable file. details lists the accepted values when they are known.",
         },
         {
             code: "NOT_FOUND",
-            when: "The model is not in the catalog, because it is unknown or has no usable credentials.",
+            when: "The model is not in the catalog, because it is unknown or has no usable credentials, or nothing exists at the --intellisense-path given.",
         },
         {
             code: "FAILED_PRECONDITION",
@@ -463,6 +487,14 @@ const settingsUpdate: CommandSpec = {
         {
             description: "Keep slow commands in the foreground",
             command: "pico settings update --auto-background off",
+        },
+        {
+            description: "Choose where the intellisense executable is",
+            command: "pico settings update --intellisense-path /opt/homebrew/bin/intellisense",
+        },
+        {
+            description: "Let Pico find the intellisense executable again",
+            command: "pico settings update --intellisense-path auto",
         },
         {
             description: "Refuse the update if the file moved since it was read",
@@ -1191,6 +1223,52 @@ const authLogin: CommandSpec = {
     ],
 };
 
+const intellisenseCheck: CommandSpec = {
+    path: ["intellisense", "check"],
+    summary: "Report where Pico finds the user's intellisense CLI, and whether it runs",
+    description:
+        "Resolves the location a new session would use — the path saved in Pico's settings, or the first intellisense executable in PATH, ~/.cargo/bin, ~/.local/bin, /opt/homebrew/bin and /usr/local/bin — then runs that program's --version once to prove Pico can use it. It changes nothing, reads no model catalog and opens no Keychain item. Choose a location with `pico settings update --intellisense-path`.",
+    keywords: [
+        "intellisense",
+        "code intelligence",
+        "executable",
+        "location",
+        "path",
+        "find",
+        "check",
+        "version",
+        "missing",
+        "installed",
+        "tool",
+    ],
+    arguments: [],
+    options: [],
+    constraints: [],
+    effects: "reads",
+    dryRun: false,
+    idempotent: true,
+    outputMode: "document",
+    platform: "any",
+    output: intellisenseCheckOutput,
+    errors: [
+        {
+            code: "INVALID_ARGUMENT",
+            when: "An argument or an option was given; intellisense check takes none.",
+        },
+        {
+            code: "FAILED_PRECONDITION",
+            when: "The settings file is unsupported or invalid, so the saved location cannot be read.",
+        },
+        { code: "IO_ERROR", when: "The settings file or Pico's data directory cannot be used." },
+    ],
+    examples: [
+        {
+            description: "Check that the agent's code intelligence tool is there and runs",
+            command: "pico intellisense check",
+        },
+    ],
+};
+
 export const COMMANDS: readonly CommandSpec[] = [
     schema,
     cliSearch,
@@ -1206,4 +1284,5 @@ export const COMMANDS: readonly CommandSpec[] = [
     credentialsCreate,
     credentialsDelete,
     authLogin,
+    intellisenseCheck,
 ];

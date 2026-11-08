@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 import { describe, test } from "node:test";
 
 import type { Cleanups } from "../../engine/testing/session-fixture.ts";
@@ -33,9 +34,15 @@ function fileBytes(dataDir: string): string | undefined {
     return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : undefined;
 }
 
-/** A saved default model and thinking level, with auto-background left unset. */
+/** A saved default model and thinking level, with auto-background and intellisense unset. */
 function savedDefault(defaultModel: string, defaultThinking: string): PicoSettings {
-    return { defaultModel, defaultThinking, autoBackground: null, providerCredentials: {} };
+    return {
+        defaultModel,
+        defaultThinking,
+        autoBackground: null,
+        intellisensePath: null,
+        providerCredentials: {},
+    };
 }
 
 /** Settings with nothing saved at all. */
@@ -44,6 +51,7 @@ function savedNothing(): PicoSettings {
         defaultModel: null,
         defaultThinking: null,
         autoBackground: null,
+        intellisensePath: null,
         providerCredentials: {},
     };
 }
@@ -102,7 +110,7 @@ describe("proposal.0007 pico settings get", () => {
 
         fs.writeFileSync(settingsFilePath(dataDir), '{ "version": 1, "defaultModel": "a/b" }');
         const invalid = await settingsGet(handlers);
-        fs.writeFileSync(settingsFilePath(dataDir), '{ "version": 3 }');
+        fs.writeFileSync(settingsFilePath(dataDir), '{ "version": 4 }');
         const newer = await settingsGet(handlers);
 
         assert.equal(invalid.status, "invalid");
@@ -375,6 +383,7 @@ describe("proposal.0008 pico settings get reports autoBackground", () => {
                 defaultModel: null,
                 defaultThinking: null,
                 autoBackground: saved,
+                intellisensePath: null,
                 providerCredentials: {},
             });
             const result = await settingsGet(handlers);
@@ -403,6 +412,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
 
@@ -413,6 +423,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/beta",
             defaultThinking: "low",
             autoBackground: false,
+            intellisensePath: null,
             providerCredentials: {},
         });
         assert.equal(
@@ -430,9 +441,10 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            intellisensePath: null,
             providerCredentials: {},
         });
-        assert.equal(fileBytes(dataDir), '{\n    "version": 2,\n    "autoBackground": true\n}\n');
+        assert.equal(fileBytes(dataDir), '{\n    "version": 3,\n    "autoBackground": true\n}\n');
     });
 
     test("a model change keeps the saved value", async t => {
@@ -441,6 +453,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: "pico-test/alpha",
             defaultThinking: "off",
             autoBackground: false,
+            intellisensePath: null,
             providerCredentials: {},
         });
 
@@ -467,6 +480,7 @@ describe("proposal.0008 pico settings update --auto-background", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: true,
+            intellisensePath: null,
             providerCredentials: {},
         });
         const before = fileBytes(dataDir);
@@ -549,4 +563,120 @@ describe("proposal.0009 independent settings decisions stay independent", () => 
             assert.equal(fileBytes(dataDir), selected);
         });
     }
+});
+
+describe("pico-bfk.20 pico settings update --intellisense-path", () => {
+    /** An executable that records every run, so a test can prove the command never ran it. */
+    function executable(dataDir: string, name: string): { file: string; ranMarker: string } {
+        const file = path.join(dataDir, name);
+        const ranMarker = path.join(dataDir, `${name}.ran`);
+        fs.writeFileSync(file, `#!/bin/sh\ntouch ${JSON.stringify(ranMarker)}\n`, { mode: 0o755 });
+        return { file, ranMarker };
+    }
+
+    test("an absolute path to an executable is saved, without a catalog and without running it", async t => {
+        const { handlers, dataDir } = handlersWithoutCatalog(t);
+        const { file, ranMarker } = executable(dataDir, "intellisense");
+
+        const receipt = await update(handlers, { intellisensePath: file });
+
+        assert.equal(receipt.changed, true);
+        assert.equal(receipt.before.item.intellisensePath, null);
+        assert.equal(receipt.after.item.intellisensePath, file);
+        assert.equal(fs.existsSync(ranMarker), false);
+        assert.ok(fileBytes(dataDir)?.includes('"intellisensePath"'));
+    });
+
+    test("auto removes the saved path", async t => {
+        const { handlers, dataDir } = handlersWithoutCatalog(t);
+        const { file } = executable(dataDir, "intellisense");
+        await update(handlers, { intellisensePath: file });
+
+        const receipt = await update(handlers, { intellisensePath: "auto" });
+
+        assert.equal(receipt.changed, true);
+        assert.equal(receipt.after.item.intellisensePath, null);
+        assert.equal(fileBytes(dataDir)?.includes("intellisensePath"), false);
+    });
+
+    test("a path that is not absolute is refused as an argument mistake", async t => {
+        const { handlers, dataDir } = handlersWithoutCatalog(t);
+
+        const failure = await rejection(
+            handlers,
+            "settings update",
+            input({ intellisensePath: "bin/intellisense" }),
+        );
+
+        assert.equal(failure.code, "INVALID_ARGUMENT");
+        assert.equal(failure.details["argument"], "--intellisense-path");
+        assert.equal(fileBytes(dataDir), undefined);
+    });
+
+    test("nothing at the path is NOT_FOUND", async t => {
+        const { handlers, dataDir } = handlersWithoutCatalog(t);
+
+        const failure = await rejection(
+            handlers,
+            "settings update",
+            input({ intellisensePath: path.join(dataDir, "nowhere") }),
+        );
+
+        assert.equal(failure.code, "NOT_FOUND");
+        assert.equal(fileBytes(dataDir), undefined);
+    });
+
+    test("something that is not a regular executable file is an argument mistake", async t => {
+        const { handlers, dataDir } = handlersWithoutCatalog(t);
+        const plain = path.join(dataDir, "plain");
+        fs.writeFileSync(plain, "#!/bin/sh\n", { mode: 0o644 });
+
+        for (const candidate of [dataDir, plain]) {
+            const failure = await rejection(
+                handlers,
+                "settings update",
+                input({ intellisensePath: candidate }),
+            );
+
+            assert.equal(failure.code, "INVALID_ARGUMENT");
+        }
+        assert.equal(fileBytes(dataDir), undefined);
+    });
+
+    test("a model change keeps the saved path, and the path keeps the saved default", async t => {
+        const { handlers, dataDir } = await testHandlers(t);
+        const { file } = executable(dataDir, "intellisense");
+        writeSettings(dataDir, {
+            ...savedDefault("pico-test/alpha", "off"),
+            intellisensePath: file,
+        });
+
+        const model = await update(handlers, { defaultModel: "pico-test/beta" });
+
+        assert.equal(model.after.item.intellisensePath, file);
+
+        const second = executable(dataDir, "other");
+        const changed = await update(handlers, { intellisensePath: second.file });
+
+        assert.equal(changed.after.item.defaultModel, "pico-test/beta");
+    });
+
+    test("pico settings get reports the saved path, and leaves effective unchanged", async t => {
+        const { handlers, dataDir } = await testHandlers(t);
+
+        const before = await settingsGet(handlers);
+        assert.equal(before.item?.intellisensePath, null);
+        assert.equal("intellisensePath" in (before.effective ?? {}), false);
+
+        const { file } = executable(dataDir, "intellisense");
+        writeSettings(dataDir, {
+            defaultModel: null,
+            defaultThinking: null,
+            autoBackground: null,
+            intellisensePath: file,
+            providerCredentials: {},
+        });
+
+        assert.equal((await settingsGet(handlers)).item?.intellisensePath, file);
+    });
 });

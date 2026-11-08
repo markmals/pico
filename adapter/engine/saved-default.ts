@@ -1,6 +1,8 @@
+import type { IntellisenseEnvironment, IntellisenseLocation } from "../intellisense/location.ts";
 import type { SettingsState } from "../settings/settings-document.ts";
 import type { SavedDefault } from "./pico-session.ts";
 
+import { processEnvironment, resolveIntellisense } from "../intellisense/location.ts";
 import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
 import { readSettings, SettingsIoError, settingsFilePath } from "../settings/settings-store.ts";
 import { PicoSessionError } from "./errors.ts";
@@ -45,6 +47,33 @@ export function autoBackgroundForSession(dataDir: string, fresh: boolean): boole
     const problem = unusable(dataDir, state.problem);
     if (fresh) throw new PicoSessionError(`${problem}. ${FIX_THE_FILE}`);
     return reopenedWithDefault(problem);
+}
+
+/**
+ * Where a session attaching now finds the user's `intellisense` CLI, resolved afresh on every
+ * attach from the settings read at that moment and without running the program (pico-bfk.20).
+ * A file Pico cannot use fails a new session, as it does for the saved default; a reopened
+ * session carries the problem into its own guidance instead.
+ */
+export function intellisenseForSession(
+    dataDir: string,
+    fresh: boolean,
+    environment: IntellisenseEnvironment = processEnvironment(),
+): IntellisenseLocation {
+    let state: SettingsState;
+    try {
+        state = readState(dataDir);
+    } catch (error) {
+        if (fresh || !(error instanceof PicoSessionError)) throw error;
+        return { status: "unusable", source: "settings", path: null, problem: error.message };
+    }
+    if (state.status === "missing") return resolveIntellisense(null, environment);
+    if (state.status === "valid") {
+        return resolveIntellisense(state.item.intellisensePath, environment);
+    }
+    const problem = unusable(dataDir, state.problem);
+    if (fresh) throw new PicoSessionError(`${problem}. ${FIX_THE_FILE}`);
+    return { status: "unusable", source: "settings", path: null, problem };
 }
 
 function reopenedWithDefault(problem: string): boolean {

@@ -45,6 +45,7 @@ describe("proposal.0009 the catalog commands read", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { anthropic: "6f1c5f2e-0000-4000-8000-000000000001" },
         });
 
@@ -72,7 +73,7 @@ describe("proposal.0009 the catalog commands read", () => {
     test("a settings file a newer Pico wrote is refused rather than read as unbound", async () => {
         const dataDir = temporaryDataDir();
         mkdirSync(dataDir, { recursive: true });
-        writeFileSync(settingsFilePath(dataDir), '{"version":3}');
+        writeFileSync(settingsFilePath(dataDir), '{"version":4}');
 
         const error = await failure(picoCatalog(dataDir));
 

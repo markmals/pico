@@ -10,6 +10,7 @@ import {
     offersThinking,
     thinkingChoices,
 } from "../../engine/model-catalog.ts";
+import { executableProblem } from "../../intellisense/location.ts";
 import { revisionOf, serializeSettings } from "../../settings/settings-document.ts";
 import {
     SettingsConflictError,
@@ -24,6 +25,7 @@ interface UpdateOptions {
     defaultModel?: string;
     defaultThinking?: string;
     autoBackground?: string;
+    intellisensePath?: string;
     ifRevision?: string;
     dryRun?: boolean;
 }
@@ -89,12 +91,48 @@ async function chosenSettings(
         options.autoBackground === undefined
             ? saved.autoBackground
             : options.autoBackground === "on";
+    // Checked before the catalog opens: a path mistake needs no credentials to report.
+    const intellisensePath = chosenIntellisensePath(options.intellisensePath, saved);
     if (options.defaultModel === undefined && options.defaultThinking === undefined) {
-        return { ...saved, autoBackground };
+        return { ...saved, autoBackground, intellisensePath };
     }
     const chosen = await chosenDefault(context, saved, options, settingsFile);
     // A default-model save keeps the provider selections: they are a separate decision.
-    return { ...chosen, autoBackground, providerCredentials: saved.providerCredentials };
+    return {
+        ...chosen,
+        autoBackground,
+        intellisensePath,
+        providerCredentials: saved.providerCredentials,
+    };
+}
+
+/** The chosen executable, checked but never run: `auto` means Pico finds it itself. */
+function chosenIntellisensePath(option: string | undefined, saved: PicoSettings): string | null {
+    if (option === undefined) return saved.intellisensePath;
+    if (option === "auto") return null;
+    const details = { argument: "--intellisense-path", path: option };
+    if (!option.startsWith("/")) {
+        throw new CliError(
+            "INVALID_ARGUMENT",
+            `--intellisense-path takes an absolute path to the intellisense executable, or auto; ${option} is neither.`,
+            {
+                details: {
+                    ...details,
+                    accepted: "an absolute path to the intellisense executable, or auto",
+                },
+            },
+        );
+    }
+    const problem = executableProblem(option);
+    if (problem === undefined) return option;
+    if (problem.kind === "absent") {
+        throw new CliError("NOT_FOUND", `Nothing exists at ${option}.`, { details });
+    }
+    throw new CliError(
+        "INVALID_ARGUMENT",
+        `${option} ${problem.description}, so it is not the intellisense executable.`,
+        { details },
+    );
 }
 
 async function chosenDefault(

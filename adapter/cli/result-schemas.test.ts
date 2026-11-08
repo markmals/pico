@@ -64,6 +64,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
                 effective: {
@@ -88,6 +89,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
                 effective: {
@@ -109,6 +111,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
                 effective: {
@@ -155,6 +158,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
             },
@@ -164,6 +168,7 @@ describe("proposal.0007 declared result shapes", () => {
                     defaultModel: "anthropic/claude-sonnet-5-5",
                     defaultThinking: "high",
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
             },
@@ -189,6 +194,7 @@ describe("proposal.0008 autoBackground in the declared result shapes", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: false,
+            intellisensePath: null,
             providerCredentials: {},
         },
         effective: {
@@ -243,6 +249,7 @@ describe("proposal.0008 autoBackground in the declared result shapes", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: null,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
             },
@@ -252,6 +259,7 @@ describe("proposal.0008 autoBackground in the declared result shapes", () => {
                     defaultModel: null,
                     defaultThinking: null,
                     autoBackground: false,
+                    intellisensePath: null,
                     providerCredentials: {},
                 },
             },

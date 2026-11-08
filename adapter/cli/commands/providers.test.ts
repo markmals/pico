@@ -148,6 +148,7 @@ describe("proposal.0009 pico providers update", () => {
             defaultModel: "pico-test/alpha",
             defaultThinking: "off",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
         const reference = await storeKey(handlers, "openai");
@@ -280,6 +281,7 @@ describe("proposal.0009 pico providers update", () => {
                     defaultModel: "pico-test/newer",
                     defaultThinking: "off",
                     autoBackground: true,
+                    intellisensePath: null,
                     providerCredentials: {},
                 });
                 newerBytes = fileBytes(dataDir);

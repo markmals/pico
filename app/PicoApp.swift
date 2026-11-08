@@ -10,12 +10,16 @@ struct PicoApp: App {
     @State private var runtime = RuntimeReadiness(
         client: PicoRuntimeClient(executableOverride: Self.executableOverride)
     )
+    @State private var intellisense = IntellisenseStatus(
+        client: IntellisenseClient(executableOverride: Self.executableOverride)
+    )
 
     var body: some Scene {
         Window("Pico", id: SettingsWindowView.sceneID) {
             SettingsWindowView(navigator: navigator)
                 .environment(settings)
                 .environment(runtime)
+                .environment(intellisense)
                 .onAppear { lifecycle.runtime = runtime }
         }
         .defaultSize(width: 715, height: 680)

@@ -36,19 +36,34 @@ struct PendingModelSettings: Equatable {
         models: [PicoModel]
     ) -> PicoDefaults {
         switch change {
+        case .intellisensePath(let path):
+            return PicoDefaults(
+                defaultModel: defaults.defaultModel,
+                defaultThinking: defaults.defaultThinking,
+                intellisensePath: path
+            )
         case .model(let value):
             guard let model = models.first(where: { $0.value == value }) else {
-                return PicoDefaults(defaultModel: value, defaultThinking: defaults.defaultThinking)
+                return PicoDefaults(
+                    defaultModel: value,
+                    defaultThinking: defaults.defaultThinking,
+                    intellisensePath: defaults.intellisensePath
+                )
             }
             let retained = defaults.defaultThinking.flatMap { level in
                 model.thinking.contains { $0.value == level } ? level : nil
             }
             return PicoDefaults(
                 defaultModel: value,
-                defaultThinking: retained ?? model.defaultThinking
+                defaultThinking: retained ?? model.defaultThinking,
+                intellisensePath: defaults.intellisensePath
             )
         case .thinking(let model, let level):
-            return PicoDefaults(defaultModel: model, defaultThinking: level)
+            return PicoDefaults(
+                defaultModel: model,
+                defaultThinking: level,
+                intellisensePath: defaults.intellisensePath
+            )
         }
     }
 }

@@ -67,6 +67,15 @@ final class ModelSettings {
         }
     }
 
+    /// Saves where new sessions run `intellisense` from, or nothing to leave Pico to find it.
+    @discardableResult
+    func chooseIntellisensePath(_ path: String?) -> Task<Void, Never>? {
+        guard path?.isEmpty != true, path != displayedDefaults?.intellisensePath else {
+            return nil
+        }
+        return save(.intellisensePath(path))
+    }
+
     @discardableResult
     func chooseModel(_ model: String) -> Task<Void, Never>? {
         guard !model.isEmpty, model != displayedDefaults?.defaultModel else { return nil }

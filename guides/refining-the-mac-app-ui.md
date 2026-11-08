@@ -8,7 +8,7 @@ describes: [proposal.0005, proposal.0007]
 
 ## What it does
 
-Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General checks runtime readiness, offers confirmed Homebrew recovery actions, and shows the actual settings file location. Other configuration controls remain unavailable and read “Not connected”.
+Pico's Mac app is a native settings window with General, Providers & Accounts, Models, Tools & Integrations, Sesh, and Diagnostics & About. Models reads the real Pico catalog and saves the default model and reasoning level for new sessions. General checks runtime readiness, offers confirmed Homebrew recovery actions, and shows the actual settings file location. Tools & Integrations chooses and checks the `intellisense` program new sessions run. Other configuration controls remain unavailable and read “Not connected”.
 
 The app reads and changes configuration through `pico`'s commands, not by opening the settings document itself. Provider sign-in and credential management still use [Pico's commands](running-pico-in-sesh.md); Providers & Accounts is not connected yet. The app does not change OMP configuration or register an agent in Sesh. Sample-data mode has been removed.
 
@@ -26,7 +26,7 @@ The task builds this checkout's `pico` executable and app, then opens `.build/ma
 
 Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
 
-The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
+The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Versions, provider accounts, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
 
 A yellow caution symbol marks anything that needs your attention, such as a failed check, a settings file Pico can't read, or a saved model that new sessions can't start with. The words beside it say what is wrong; informational notes carry no symbol.
 
@@ -99,6 +99,16 @@ The location loads independently of the model catalog. A catalog failure leaves 
 Tools & Integrations lists Read, Search (`grep` and `glob`), Edit, Write, Shell (`bash`), Web search, Task list (`todo`), and Wait. Task list updates appear as Sesh's plan; Wait waits for background shell jobs. Search for `todo` or `plan` to find Task list, and `wait` or `background jobs` to find Wait.
 
 Included and excluded tools appear in separate groups, with explicit read-only status labels rather than editable toggles. Eval, built-in LSP, and native OMP delegation remain excluded. The explanation above the groups distinguishes this fixed policy from the additional tools Sesh supplies for each session.
+
+### The `intellisense` location
+
+Code intelligence comes from your own `intellisense` program, and the “`intellisense` location” row in Integrations shows where a new session would run it from. Unless you choose a location, Pico looks for it on `PATH` and then in `~/.cargo/bin`, `~/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`, and the row shows the first one it finds.
+
+Choose… opens a file picker at the folder of the location shown, with hidden folders such as `~/.cargo/bin` visible, since that is where these programs are usually installed. What you choose is saved exactly as you chose it, so a Homebrew link keeps working after an upgrade. Find Automatically appears once a location is saved and returns Pico to its own search. A location Pico refuses — one that isn't absolute, or names something other than a program you can run — is reported rather than saved, and the row goes back to the location it had.
+
+Pico checks the location when the pane opens, after a change is saved, and whenever you choose Check Again. The check runs the program with `--version` and shows what it reported beside the row. Checking… shows while it runs, and the location stays visible. A location that can't be used, or none found at all, is marked with the caution symbol, and Error Details gives the cause: a file that doesn't exist, isn't a regular file, can't be run, didn't answer within five seconds, or ended with an error. When the location you chose can't be used, Pico does not fall back to another copy — fix it or choose again.
+
+New and reopened sessions resolve the location again when they attach, so a program you install or choose while a session is open reaches the next one. Choosing a location goes through Pico's settings, so Choose… and Find Automatically are unavailable while those settings can't be loaded or the settings file can't be read; the row says so, and Models shows the cause.
 
 ### Recovering from errors
 

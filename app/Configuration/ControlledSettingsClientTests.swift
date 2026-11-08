@@ -18,7 +18,11 @@ actor ControlledSettingsClient: PicoSettingsServing {
         saved = PicoModelSettings(
             settingsFile: "/tmp/pico-tests/settings.json",
             revision: "r0",
-            item: .init(defaultModel: "provider/first", defaultThinking: "high"),
+            item: .init(
+                defaultModel: "provider/first",
+                defaultThinking: "high",
+                intellisensePath: nil
+            ),
             effective: .init(
                 defaultModel: "provider/first",
                 defaultThinking: "high",
@@ -34,7 +38,11 @@ actor ControlledSettingsClient: PicoSettingsServing {
                 settingsFile: saved.settingsFile,
                 after: .init(
                     revision: "external",
-                    item: .init(defaultModel: "provider/third", defaultThinking: "xhigh")
+                    item: .init(
+                        defaultModel: "provider/third",
+                        defaultThinking: "xhigh",
+                        intellisensePath: saved.item.intellisensePath
+                    )
                 )
             )
         )
@@ -66,6 +74,21 @@ actor ControlledSettingsClient: PicoSettingsServing {
                 throw PicoCommandError(code: "CONFLICT", message: "Changed outside this window")
             }
             let arguments = change.arguments
+            if let chosen = option("--intellisense-path", in: arguments) {
+                let receipt = PicoSettingsReceipt(
+                    settingsFile: saved.settingsFile,
+                    after: .init(
+                        revision: "r\(writeCount)",
+                        item: .init(
+                            defaultModel: saved.item.defaultModel,
+                            defaultThinking: saved.item.defaultThinking,
+                            intellisensePath: chosen == "auto" ? nil : chosen
+                        )
+                    )
+                )
+                saved = saved.applying(receipt)
+                return receipt
+            }
             let modelValue = option("--default-model", in: arguments) ?? saved.item.defaultModel
             guard let model = saved.models.first(where: { $0.value == modelValue }) else {
                 throw PicoCommandError(code: "NOT_FOUND", message: "Unknown model")
@@ -85,7 +108,11 @@ actor ControlledSettingsClient: PicoSettingsServing {
                 settingsFile: saved.settingsFile,
                 after: .init(
                     revision: "r\(writeCount)",
-                    item: .init(defaultModel: model.value, defaultThinking: thinking)
+                    item: .init(
+                        defaultModel: model.value,
+                        defaultThinking: thinking,
+                        intellisensePath: saved.item.intellisensePath
+                    )
                 )
             )
             saved = saved.applying(receipt)

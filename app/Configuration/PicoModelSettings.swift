@@ -25,17 +25,21 @@ struct PicoModelSettings: Equatable, Sendable {
 struct PicoDefaults: Equatable, Sendable {
     let defaultModel: String?
     let defaultThinking: String?
+    /// Where the user chose to run `intellisense` from, exactly as they chose it. Nothing
+    /// saved leaves Pico to find the program itself.
+    let intellisensePath: String?
 }
 
 extension PicoDefaults: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case defaultModel, defaultThinking
+        case defaultModel, defaultThinking, intellisensePath
     }
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         defaultModel = try container.decode(String?.self, forKey: .defaultModel)
         defaultThinking = try container.decode(String?.self, forKey: .defaultThinking)
+        intellisensePath = try container.decodeIfPresent(String.self, forKey: .intellisensePath)
     }
 }
 
@@ -70,11 +74,14 @@ struct PicoSettingsProblem: Equatable, Sendable {
 }
 
 enum PicoSettingsChange: Equatable, Sendable {
+    /// A chosen location, or nothing to go back to the one Pico finds for itself.
+    case intellisensePath(String?)
     case model(String)
     case thinking(model: String, level: String)
 
     var arguments: [String] {
         switch self {
+        case .intellisensePath(let path): ["--intellisense-path", path ?? "auto"]
         case .model(let model): ["--default-model", model]
         case .thinking(let model, let level):
             ["--default-model", model, "--default-thinking", level]

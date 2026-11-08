@@ -34,6 +34,9 @@ let project = Project(
             infoPlist: .extendingDefault(
                 with: [
                     "CFBundleDisplayName": "Pico",
+                    // Tuist's default plist hard-codes 1.0; the app shows this as its version.
+                    "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+                    "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
                     "LSApplicationCategoryType": "public.app-category.productivity",
                     // pico://settings links open panes and settings (proposal 0005).
                     "CFBundleURLTypes": [

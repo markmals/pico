@@ -7,13 +7,15 @@ struct DiagnosticsPane: View {
 
             Section {
                 AppIdentityRow()
-                SettingsValueRow(item: .diagnosticsAppVersion, value: nil)
-                SettingsValueRow(item: .diagnosticsPicoVersion, value: nil)
-                SettingsValueRow(item: .diagnosticsOMPVersion, value: nil)
+                InstalledVersionRows(
+                    app: .diagnosticsAppVersion,
+                    pico: .diagnosticsPicoVersion,
+                    omp: .diagnosticsOMPVersion
+                )
             } header: {
                 Text("About")
             } footer: {
-                Text("Pico doesn’t read installed versions here yet.")
+                Text("`pico` and OMP are read from the command Pico runs, each time it checks it.")
             }
 
             Section {

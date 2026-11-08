@@ -13,6 +13,7 @@ final class RuntimeReadiness {
     private(set) var isHomebrewAvailable: Bool
     private(set) var startup: Startup = .unknown
     private(set) var updates: Updates = .notChecked
+    private(set) var versions: Versions = .unknown
 
     @ObservationIgnored private let client: any PicoRuntimeServing
     @ObservationIgnored private var generation = 0
@@ -140,7 +141,12 @@ final class RuntimeReadiness {
     private func begin(_ activity: Activity) -> Int {
         generation += 1
         isHomebrewAvailable = client.isHomebrewAvailable
-        lastKnown = Known(installation: installation, startup: startup, updates: updates)
+        lastKnown = Known(
+            installation: installation,
+            startup: startup,
+            updates: updates,
+            versions: versions
+        )
         self.activity = activity
         return generation
     }
@@ -151,17 +157,24 @@ final class RuntimeReadiness {
         let previousVersion = runningVersion
         installation = .checking
         startup = .checking
+        versions = .checking
         guard let observed = await observeCommand(), isCurrent(request) else { return }
         installation = observed.installation
         location = observed.location
         startup = observed.startup
+        versions = observed.versions
         // A different command, or a different version of it, says nothing about what the
         // last update check found.
         if observed.location?.path != previousPath || runningVersion != previousVersion {
             updates = .notChecked
         }
         let knownUpdates = updates == .checking ? lastKnown?.updates ?? .notChecked : updates
-        lastKnown = Known(installation: installation, startup: startup, updates: knownUpdates)
+        lastKnown = Known(
+            installation: installation,
+            startup: startup,
+            updates: knownUpdates,
+            versions: versions
+        )
     }
 
     private func checkUpdates(_ request: Int, refreshing: Bool) async {
@@ -252,7 +265,8 @@ final class RuntimeReadiness {
         request == generation
     }
 
-    /// Nil when the work was cancelled, so a cancelled check leaves the last state alone.
+    /// Nil when the work was cancelled, so a cancelled check leaves the last state alone. A
+    /// command that starts may still be too old to report its versions; each keeps its cause.
     private func observeCommand() async -> Observed? {
         let found: PicoRuntimeLocation
         do {
@@ -263,25 +277,32 @@ final class RuntimeReadiness {
             return Observed(
                 installation: .missing(describe(error)),
                 location: nil,
-                startup: .unknown
+                startup: .unknown,
+                versions: .failed(describe(error))
             )
         }
+        let startup: Startup
         do {
-            let version = try await client.version(of: found)
-            return Observed(
-                installation: .installed(found.path),
-                location: found,
-                startup: .starts(version)
-            )
+            startup = .starts(try await client.version(of: found))
         } catch is CancellationError {
             return nil
         } catch {
-            return Observed(
-                installation: .installed(found.path),
-                location: found,
-                startup: .failed(describe(error))
-            )
+            startup = .failed(describe(error))
         }
+        let versions: Versions
+        do {
+            versions = .read(try await client.installedVersions(of: found))
+        } catch is CancellationError {
+            return nil
+        } catch {
+            versions = .failed(describe(error))
+        }
+        return Observed(
+            installation: .installed(found.path),
+            location: found,
+            startup: startup,
+            versions: versions
+        )
     }
 
     private func restoreLastKnown() {
@@ -289,6 +310,7 @@ final class RuntimeReadiness {
         if installation == .checking { installation = lastKnown.installation }
         if startup == .checking { startup = lastKnown.startup }
         if updates == .checking { updates = lastKnown.updates }
+        if versions == .checking { versions = lastKnown.versions }
         self.lastKnown = nil
     }
 
@@ -363,18 +385,27 @@ extension RuntimeReadiness {
         case failed(String)
     }
 
+    enum Versions: Equatable, Sendable {
+        case unknown
+        case checking
+        case read(InstalledVersions)
+        case failed(String)
+    }
+
     /// What Pico last observed, so cancelling a check does not leave a row saying it is
     /// still checking.
     private struct Known {
         let installation: Installation
         let startup: Startup
         let updates: Updates
+        let versions: Versions
     }
 
     private struct Observed {
         let installation: Installation
         let location: PicoRuntimeLocation?
         let startup: Startup
+        let versions: Versions
     }
 }
 

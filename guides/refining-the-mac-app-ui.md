@@ -26,7 +26,7 @@ The task builds this checkout's `pico` executable and app, then opens `.build/ma
 
 Pico opens on General. The window is 715 points wide and does not change width; drag its top or bottom edge to change its height. The sidebar always shows: there is no button, menu command, or divider for hiding or resizing it.
 
-The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Versions, provider accounts, integrations, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
+The sidebar lists the panes in four groups; their icons follow the Sidebar icon size chosen in System Settings › Appearance. Choose one to open it. Each pane opens with its icon, name, and a sentence about what it's for; as in System Settings, the pane's name appears in the toolbar once that header scrolls away. “Some settings aren’t connected yet” appears below every pane except Models. Provider accounts, integrations, and Sesh registration remain unconnected: their rows read “Not connected”, except Sesh's status rows, which read “Not checked” because Pico checks nothing in Sesh yet.
 
 A yellow caution symbol marks anything that needs your attention, such as a failed check, a settings file Pico can't read, or a saved model that new sessions can't start with. The words beside it say what is wrong; informational notes carry no symbol.
 
@@ -35,6 +35,8 @@ Each pane keeps its scroll position while the app runs, including when you retur
 ### Runtime readiness
 
 General checks the local `pico` command when the window opens and when you return to General. Installation shows the executable's location or, as Not found, why it could not be found. Command startup runs `pico schema` and checks its command API and version response. This does not test provider authentication, model availability, or a Sesh turn. Check Runtime repeats the local checks. If both standard Homebrew installations exist, checks and package actions use the one that owns the resolved Pico command.
+
+General › Versions and Diagnostics & About › About show the same three versions. Pico app is the version in the app's own bundle. `pico` and OMP come from `pico version get`, run against the resolved command each time Pico checks it: when the window opens, when you return to General, on Check Runtime, and after a Homebrew action. They read Checking… while that runs. When the command is missing, or can't report its versions (an older `pico` has no `version get`), both rows read Couldn’t read and the cause appears beneath them; Command startup can still pass for that older command.
 
 Updates begins as Not checked. Choose Check for Updates to refresh Homebrew's metadata, re-read the local command, and compare it with `markmals/tap/pico`. A failed check shows Check failed with its full cause under Error Details instead of reporting that Pico is current. A newer development command is distinguished from the published version. An executable selected with `-PicoExecutable` is not assumed to be the Homebrew installation; expand Details for its update limitations. Local and update checks show progress and can be cancelled.
 

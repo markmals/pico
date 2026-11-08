@@ -21,7 +21,7 @@ describe("proposal.0007 cli search", () => {
         expect(first).toEqual({
             command: "settings update",
             summary:
-                "Change the default model or thinking level, and whether slow commands move to the background",
+                "Change the default model or thinking level, whether slow commands move to the background, and where the intellisense CLI is",
             usage: usageOf(findCommand(["settings", "update"]) as never),
         });
     });
@@ -55,6 +55,7 @@ describe("proposal.0007 cli search", () => {
         expect(searchCommands("settings").items.map(item => item.command)).toEqual([
             "settings get",
             "settings update",
+            "intellisense check",
         ]);
     });
 

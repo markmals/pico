@@ -271,6 +271,7 @@ describe("proposal.0009 the credential vault", () => {
             defaultModel: null,
             defaultThinking: null,
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: { openai: stored.reference },
         });
 
@@ -321,6 +322,7 @@ describe("proposal.0009 the credential vault", () => {
             defaultModel: "anthropic/claude-sonnet-5-5",
             defaultThinking: "high",
             autoBackground: null,
+            intellisensePath: null,
             providerCredentials: {},
         });
         const settingsBefore = readFileSync(join(dataDir, "settings.json"));

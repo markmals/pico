@@ -40,7 +40,34 @@
     "Built-in tool policy" : {
 
     },
+    "Can’t be used" : {
+
+    },
+    "Check Again" : {
+
+    },
+    "Check failed" : {
+
+    },
+    "Checking…" : {
+
+    },
+    "Choose" : {
+
+    },
     "Choose a model before starting a new session without a model override. No automatic default is available." : {
+
+    },
+    "Choose the intellisense program new sessions run." : {
+
+    },
+    "Choose…" : {
+
+    },
+    "Choosing a location needs Pico’s settings, which couldn’t be loaded. Models shows why." : {
+
+    },
+    "Choosing a location needs a settings file Pico can read. Models shows the problem." : {
 
     },
     "Choosing or checking the intellisense program is not available here." : {
@@ -86,6 +113,9 @@
 
     },
     "Extra High" : {
+
+    },
+    "Find Automatically" : {
 
     },
     "Finder" : {
@@ -172,6 +202,9 @@
     "Native delegation" : {
 
     },
+    "New sessions run `intellisense` from this location. Pico finds it on `PATH` and in common install folders unless you choose one." : {
+
+    },
     "No Results" : {
 
     },
@@ -187,7 +220,13 @@
     "Not Set" : {
 
     },
+    "Not checked" : {
+
+    },
     "Not connected" : {
+
+    },
+    "Not found" : {
 
     },
     "Nothing is read from Sesh, and no registration is inspected." : {

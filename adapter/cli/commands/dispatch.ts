@@ -44,6 +44,7 @@ export async function runWithoutRuntime(
 function answerable(command: CommandSpec, input: CommandInput): boolean {
     const id = commandId(command);
     if (id === "providers list" || id === "providers get" || id === "credentials list") return true;
+    if (id === "intellisense check") return true;
     if (PREVIEWABLE[id] === undefined) return false;
     if (id !== "auth login") return input.options.dryRun === true;
     const method = describeLoginMethod(input.arguments.method as string);

@@ -9,6 +9,7 @@ import {
     credentialsGet,
     credentialsList,
 } from "./credentials.ts";
+import { intellisenseCheck } from "./intellisense.ts";
 import { modelsGet, modelsList } from "./models.ts";
 import { providersGet, providersList, providersUpdate } from "./providers.ts";
 import { settingsGet } from "./settings-get.ts";
@@ -25,7 +26,8 @@ export type HandledCommand =
     | "credentials list"
     | "credentials get"
     | "credentials create"
-    | "credentials delete";
+    | "credentials delete"
+    | "intellisense check";
 
 export type CommandHandlers = Record<HandledCommand, CommandHandler>;
 
@@ -62,5 +64,6 @@ export function createCommandHandlers(context: HandlerContext): CommandHandlers 
         "credentials get": credentialsGet(context),
         "credentials create": credentialsCreate(context),
         "credentials delete": credentialsDelete(context),
+        "intellisense check": intellisenseCheck(context),
     };
 }

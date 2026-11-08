@@ -132,6 +132,7 @@ export async function picoCredentials(dataDir: string): Promise<PicoCredentialsF
                 defaultModel: item?.defaultModel ?? null,
                 defaultThinking: item?.defaultThinking ?? null,
                 autoBackground: item?.autoBackground ?? null,
+                intellisensePath: item?.intellisensePath ?? null,
                 providerCredentials: {
                     ...item?.providerCredentials,
                     [provider]: metadata.reference,

@@ -41,6 +41,30 @@ struct PicoSettingsReadTests {
         )
     }
 
+    @Test(
+        "a saved intellisense location is read, and a file without one is left to discovery",
+        arguments: [
+            (
+                #""intellisensePath":"/Users/mark/.cargo/bin/intellisense","#,
+                "/Users/mark/.cargo/bin/intellisense"
+            ),
+            (#""intellisensePath":null,"#, nil),
+            ("", nil),
+        ] as [(String, String?)]
+    )
+    func intellisenseLocation(member: String, path: String?) throws {
+        let document = try decode(
+            """
+            {"apiVersion":1,"settingsFile":"/tmp/Pico/settings.json","status":"valid","revision":"sha256:abc","item":{\(member)"defaultModel":"provider/model","defaultThinking":"high"},"effective":{"defaultModel":"provider/model","defaultThinking":"high","source":"settings","available":true}}
+            """
+        )
+        guard case .ready(_, _, let item, _) = document else {
+            Issue.record("A valid settings file is readable")
+            return
+        }
+        #expect(item.intellisensePath == path)
+    }
+
     @Test("a valid-status response missing its item is rejected")
     func incompleteValidDocument() {
         #expect(throws: (any Error).self) {

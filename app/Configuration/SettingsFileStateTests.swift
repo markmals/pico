@@ -134,7 +134,11 @@ struct SettingsFileStateTests {
         PicoModelSettings(
             settingsFile: path,
             revision: revision,
-            item: .init(defaultModel: "provider/first", defaultThinking: "high"),
+            item: .init(
+                defaultModel: "provider/first",
+                defaultThinking: "high",
+                intellisensePath: nil
+            ),
             effective: .init(
                 defaultModel: "provider/first",
                 defaultThinking: "high",

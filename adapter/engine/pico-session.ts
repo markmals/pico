@@ -8,12 +8,14 @@ import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
 import type { SecretStore } from "../credentials/keychain.ts";
+import type { IntellisenseLocation } from "../intellisense/location.ts";
 import type { PicoCredentials } from "./credential-policy.ts";
 import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedChange } from "./write-bridge.ts";
 
+import { processEnvironment, resolveIntellisense } from "../intellisense/location.ts";
 import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
-import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
+import { picoGuidance, withoutSubagentUrl } from "./agent-guidance.ts";
 import { BackgroundJobs, STOP_GRACE_MS } from "./background-jobs.ts";
 import { openPicoCredentials } from "./credential-policy.ts";
 import { attempt, describeCause, PicoSessionError } from "./errors.ts";
@@ -49,6 +51,11 @@ export interface PicoSessionOptions {
     startOn?: SavedDefault;
     /** Whether a slow plain command moves to the background; Pico's settings decide it, on when unset. */
     autoBackground?: boolean;
+    /**
+     * Where this session's agent finds the user's `intellisense` CLI, resolved per attach;
+     * defaults to the search Pico would run now with nothing saved (pico-bfk.20).
+     */
+    intellisense?: IntellisenseLocation;
     /** Defaults to Pico's registry over the credential store; tests add their own provider to one. */
     modelRegistry?: ModelRegistry;
     /** Engine-owned journal; omit for ephemeral sessions. The engine closes a supplied manager. */
@@ -158,7 +165,9 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             toolNames: [...PICO_BUILTIN_TOOLS, ...mcpToolNames],
             promptTemplates: [],
             preloadedPreparedExtensions: [writes.extension()],
-            appendSystemPrompt: PICO_GUIDANCE,
+            appendSystemPrompt: picoGuidance(
+                options.intellisense ?? resolveIntellisense(null, processEnvironment()),
+            ),
             systemPrompt: withoutSubagentUrl,
         });
         engine = created.session;

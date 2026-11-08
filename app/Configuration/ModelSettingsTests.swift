@@ -52,7 +52,11 @@ struct ModelSettingsTests {
             settingsFile: original.settingsFile,
             after: .init(
                 revision: "saved",
-                item: .init(defaultModel: "provider/second", defaultThinking: "off")
+                item: .init(
+                    defaultModel: "provider/second",
+                    defaultThinking: "off",
+                    intellisensePath: nil
+                )
             )
         )
         let client = ScenarioClient(loads: [original], update: .success(receipt))
@@ -142,7 +146,11 @@ struct ModelSettingsTests {
                 settingsFile: original.settingsFile,
                 after: .init(
                     revision: "saved",
-                    item: .init(defaultModel: "provider/second", defaultThinking: "off")
+                    item: .init(
+                        defaultModel: "provider/second",
+                        defaultThinking: "off",
+                        intellisensePath: nil
+                    )
                 )
             ),
             models: refreshedModels
@@ -158,7 +166,11 @@ struct ModelSettingsTests {
         PicoModelSettings(
             settingsFile: "/tmp/pico-tests/settings.json",
             revision: revision,
-            item: .init(defaultModel: model, defaultThinking: model == nil ? nil : "high"),
+            item: .init(
+                defaultModel: model,
+                defaultThinking: model == nil ? nil : "high",
+                intellisensePath: nil
+            ),
             effective: .init(
                 defaultModel: model ?? "provider/first",
                 defaultThinking: "high",

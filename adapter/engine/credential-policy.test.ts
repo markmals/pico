@@ -68,6 +68,7 @@ function bind(dataDir: string, bindings: Record<string, string>): void {
         defaultModel: item?.defaultModel ?? null,
         defaultThinking: item?.defaultThinking ?? null,
         autoBackground: item?.autoBackground ?? null,
+        intellisensePath: item?.intellisensePath ?? null,
         providerCredentials: bindings,
     });
 }

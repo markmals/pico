@@ -97,6 +97,7 @@ describe("proposal.0007 command line parser", () => {
                 "--default-model",
                 "--default-thinking",
                 "--auto-background",
+                "--intellisense-path",
                 "--if-revision",
                 "--dry-run",
             ],
@@ -134,14 +135,19 @@ describe("proposal.0007 command line parser", () => {
         }
     });
 
-    test("settings update with none of its three settings is refused", () => {
+    test("settings update with none of its four settings is refused", () => {
         const error = failure(["settings", "update"]);
 
         expect(error.code).toBe("INVALID_ARGUMENT");
         expect(error.message).toContain("--default-model");
         expect(error.details).toEqual({
             command: "settings update",
-            accepted: ["--default-model", "--default-thinking", "--auto-background"],
+            accepted: [
+                "--default-model",
+                "--default-thinking",
+                "--auto-background",
+                "--intellisense-path",
+            ],
         });
     });
 

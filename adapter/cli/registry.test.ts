@@ -20,6 +20,7 @@ const DECLARED = [
     "credentials create",
     "credentials delete",
     "auth login",
+    "intellisense check",
 ];
 
 describe("proposal.0007 command registry", () => {
@@ -81,6 +82,7 @@ describe("proposal.0007 command registry", () => {
             "credentials create": "writes",
             "credentials delete": "writes",
             "auth login": "writes",
+            "intellisense check": "reads",
         });
     });
 
@@ -91,6 +93,7 @@ describe("proposal.0007 command registry", () => {
             "--default-model",
             "--default-thinking",
             "--auto-background",
+            "--intellisense-path",
             "--if-revision",
             "--dry-run",
         ]);
@@ -99,9 +102,14 @@ describe("proposal.0007 command registry", () => {
         expect(update?.constraints).toEqual([
             {
                 kind: "at-least-one-of",
-                options: ["--default-model", "--default-thinking", "--auto-background"],
+                options: [
+                    "--default-model",
+                    "--default-thinking",
+                    "--auto-background",
+                    "--intellisense-path",
+                ],
                 description:
-                    "at least one of --default-model, --default-thinking or --auto-background",
+                    "at least one of --default-model, --default-thinking, --auto-background or --intellisense-path",
             },
         ]);
     });
@@ -128,7 +136,8 @@ describe("proposal.0007 command registry", () => {
         );
         expect(usageOf(findCommand(["settings", "update"]) as never)).toBe(
             "pico settings update [--default-model <model>] [--default-thinking <level>]" +
-                " [--auto-background <state>] [--if-revision <revision>] [--dry-run]",
+                " [--auto-background <state>] [--intellisense-path <path>]" +
+                " [--if-revision <revision>] [--dry-run]",
         );
         expect(usageOf(findCommand(["cli", "search"]) as never)).toBe("pico cli search <query…>");
         expect(usageOf(findCommand(["schema"]) as never)).toBe("pico schema [<command…>]");
@@ -266,5 +275,77 @@ describe("proposal.0008 the auto-background option", () => {
         );
 
         expect(invalid?.when).toContain("--auto-background");
+    });
+});
+
+describe("pico-bfk.20 the intellisense location", () => {
+    test("settings update declares the option with the values it accepts", () => {
+        const option = findCommand(["settings", "update"])?.options.find(
+            declared => declared.name === "--intellisense-path",
+        );
+
+        expect(option).toEqual({
+            name: "--intellisense-path",
+            valueName: "path",
+            type: "string",
+            format: "text",
+            required: false,
+            default: undefined,
+            accepted: {
+                kind: "format",
+                format: "an absolute path to the intellisense executable, or auto",
+            },
+            description: expect.any(String) as unknown as string,
+        });
+    });
+
+    test("the INVALID_ARGUMENT description names it among the options one of which is required", () => {
+        const invalid = findCommand(["settings", "update"])?.errors.find(
+            error => error.code === "INVALID_ARGUMENT",
+        );
+
+        expect(invalid?.when).toContain("--intellisense-path");
+    });
+
+    test("settings update has an example that chooses a location", () => {
+        const examples = findCommand(["settings", "update"])?.examples ?? [];
+
+        expect(examples.some(example => example.command.includes("--intellisense-path"))).toBe(
+            true,
+        );
+    });
+
+    test("intellisense check reads, takes nothing, and runs anywhere", () => {
+        const check = findCommand(["intellisense", "check"]);
+
+        expect(check?.effects).toBe("reads");
+        expect(check?.idempotent).toBe(true);
+        expect(check?.dryRun).toBe(false);
+        expect(check?.platform).toBe("any");
+        expect(check?.arguments).toEqual([]);
+        expect(check?.options).toEqual([]);
+        expect(usageOf(check as never)).toBe("pico intellisense check");
+    });
+
+    test("intellisense check declares the failures a caller must handle", () => {
+        const codes = findCommand(["intellisense", "check"])?.errors.map(error => error.code);
+
+        expect(codes?.toSorted()).toEqual(["FAILED_PRECONDITION", "INVALID_ARGUMENT", "IO_ERROR"]);
+    });
+
+    test("its keywords find it from what a caller is looking for", () => {
+        const keywords = findCommand(["intellisense", "check"])?.keywords ?? [];
+
+        expect(
+            [
+                "code intelligence",
+                "executable",
+                "location",
+                "path",
+                "find",
+                "check",
+                "version",
+            ].filter(word => !keywords.includes(word)),
+        ).toEqual([]);
     });
 });

@@ -67,7 +67,7 @@ describe("proposal.0007 command line help", () => {
         expect(help).toContain("--dry-run");
         expect(help).toContain("default: false");
         expect(help).toContain(
-            "at least one of --default-model, --default-thinking or --auto-background",
+            "at least one of --default-model, --default-thinking, --auto-background or --intellisense-path",
         );
     });
 
@@ -103,7 +103,7 @@ describe("proposal.0008 the auto-background option in help", () => {
         expect(help).toContain("--auto-background <state>");
         expect(help).toContain("values: on, off");
         expect(help).toContain(
-            "at least one of --default-model, --default-thinking or --auto-background",
+            "at least one of --default-model, --default-thinking, --auto-background or --intellisense-path",
         );
     });
 });

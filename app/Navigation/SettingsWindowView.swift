@@ -5,6 +5,7 @@ struct SettingsWindowView: View {
 
     @Bindable var navigator: SettingsNavigator
 
+    @Environment(IntellisenseStatus.self) private var intellisense
     @Environment(ModelSettings.self) private var settings
     @Environment(RuntimeReadiness.self) private var runtime
     @State private var headerVisibility = PaneHeaderVisibility()
@@ -23,7 +24,7 @@ struct SettingsWindowView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if navigator.destination != .models {
+                    if ![.models, .tools].contains(navigator.destination) {
                         ScaffoldNotice()
                     }
                 }
@@ -47,14 +48,17 @@ struct SettingsWindowView: View {
         .onAppear {
             settings.reload()
             runtime.check()
+            if navigator.destination == .tools { checkIntellisense() }
         }
         .onDisappear {
             settings.cancel()
             runtime.cancel()
+            intellisense.cancel()
         }
         .onChange(of: navigator.destination) { _, destination in
             if destination == .models { settings.reload() }
             if destination == .general { runtime.check() }
+            if destination == .tools { checkIntellisense() }
         }
         .modifier(ModelSettingsAlert(settings: settings))
         .alert(
@@ -70,5 +74,9 @@ struct SettingsWindowView: View {
 
     private var reveal: SettingsReveal? {
         navigator.revealedItem.map { SettingsReveal(item: $0, openCount: navigator.openCount) }
+    }
+
+    private func checkIntellisense() {
+        intellisense.check(for: settings.snapshot?.item.intellisensePath)
     }
 }

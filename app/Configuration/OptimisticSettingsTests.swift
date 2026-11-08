@@ -98,6 +98,49 @@ struct OptimisticSettingsTests {
         }
     }
 
+    @Test("a chosen intellisense location is shown before the save that confirms it")
+    func chosenIntellisenseLocation() async throws {
+        let client = try ControlledSettingsClient()
+        let settings = ModelSettings(client: client)
+        await settings.reload().value
+        let save = settings.chooseIntellisensePath("/Users/mark/.cargo/bin/intellisense")
+        #expect(
+            settings.displayedDefaults?.intellisensePath
+                == "/Users/mark/.cargo/bin/intellisense"
+        )
+        #expect(settings.snapshot?.item.intellisensePath == nil)
+        try await withCleanup(settings, client, tasks: [save]) {
+            try await client.waitForWrites(1)
+            await client.release()
+            await save?.value
+            #expect(
+                settings.snapshot?.item.intellisensePath
+                    == "/Users/mark/.cargo/bin/intellisense"
+            )
+            #expect(settings.modelSelection == "provider/first")
+            #expect(settings.saveError == nil)
+        }
+    }
+
+    @Test("a refused intellisense location rolls back to the confirmed one with its cause")
+    func refusedIntellisenseLocation() async throws {
+        let client = try ControlledSettingsClient()
+        let settings = ModelSettings(client: client)
+        await settings.reload().value
+        let save = settings.chooseIntellisensePath("/nowhere/intellisense")
+        #expect(settings.displayedDefaults?.intellisensePath == "/nowhere/intellisense")
+        try await withCleanup(settings, client, tasks: [save]) {
+            try await client.waitForWrites(1)
+            await client.release(
+                .init(code: "NOT_FOUND", message: "Nothing exists at /nowhere/intellisense")
+            )
+            await save?.value
+            #expect(settings.displayedDefaults?.intellisensePath == nil)
+            #expect(settings.saveError == "Nothing exists at /nowhere/intellisense")
+            #expect(!settings.isSaving)
+        }
+    }
+
     @Test("an external conflict reloads authoritative settings without replaying queued changes")
     func conflictDiscardsQueue() async throws {
         let client = try ControlledSettingsClient()

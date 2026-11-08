@@ -54,6 +54,7 @@ function bind(dataDir: string, bindings: Record<string, string>) {
         defaultModel: null,
         defaultThinking: null,
         autoBackground: null,
+        intellisensePath: null,
         providerCredentials: bindings,
     });
 }

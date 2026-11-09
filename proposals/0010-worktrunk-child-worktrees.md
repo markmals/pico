@@ -157,7 +157,10 @@ For each child worktree, Pico records with the parent session's private history 
 At the start and at the end of every parent turn, and when the parent session closes, Pico checks each recorded worktree:
 
 1. **Already gone** (for example, removed by `wt merge`): Pico drops the record.
-2. **Child still active:** Pico finds the child in Sesh's session list by working directory equal to the worktree's path. If its state is `working` or `needsInput`, Pico leaves the worktree and keeps the record. A child that is `idle`, `stopped` or `error`, or that is no longer listed, has **finished its turn**.
+2. **Child still active:** Pico looks the child up among the sessions Pico's parent started, using Sesh's session list and matching the working directory to the worktree's path.
+    - If its state is `working` or `needsInput`, Pico leaves the worktree and keeps the record.
+    - If it's `idle` with no reply yet, it hasn't started: Sesh reports a just-launched child as `idle` before its first turn (observed 2026-11-09). Pico leaves it too.
+    - A child that is `idle` with a reply, `stopped` or `error`, or that is no longer listed, has **finished its turn**.
 3. **Finished and unchanged:** "Unchanged" means no staged, unstaged or untracked-but-not-ignored files, and the branch tip still equals the starting commit. Pico removes the worktree and the branch, running in the foreground with deletion forced and hooks approved for the run (the project's `pre-remove` hooks run). Then it drops the record. A follow-up message to that child afterwards fails, because its folder is gone. Further work means a new child.
 4. **Finished with changes:** Pico leaves the worktree and branch for the user to review and integrate, and drops the record. Pico never removes it later.
 

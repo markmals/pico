@@ -44,14 +44,14 @@ Separately, OMP's own worktree handling is still active in Pico's `bash` tool an
 ### Relevant constraints and principles
 
 - **One delegation backend.** Pico delegates only through Sesh child sessions ([VISION.md](../VISION.md)); OMP's native task, agent and workpool delegation stay excluded. This proposal changes where a child's worktree comes from, not what a child is.
-- **Fail closed.** If a worktree can't be created, no child starts. A child never silently runs in an unisolated checkout.
+- **Fail closed.** In a git repository, if a worktree can't be created, no child starts. A child never silently runs in an unisolated checkout.
 - **Explicit integration.** Child changes reach the parent only through a deliberate action ([PROTOTYPE.md](../PROTOTYPE.md#delegation-through-child-sessions)). Pico never merges a child.
 - **Visibility.** Everything Pico does to the user's repository on the agent's behalf shows in the ACP tool stream, with its cause when it fails.
 - **No approvals, no new authority.** Pico never asks the user to approve anything ([proposal 0001](0001-acp-adapter-core.md)). The agent already has unrestricted shell access in the repository it delegates in, so running that repository's own hooks gives it nothing it didn't have.
 
 ### Quality bar
 
-A child launched by Pico starts in a worktree branched from its parent's last commit, with the project's `pre-start` setup finished, or doesn't start at all. Every failure names its cause and leaves no half-made worktree. A worktree is removed only when its child is no longer working and it holds nothing a person could want. Anything with commits or uncommitted files is never removed by Pico.
+A child that Pico launches into a git repository starts in a worktree branched from its parent's last commit, with the project's `pre-start` setup finished, or doesn't start at all. Every failure names its cause and leaves no half-made worktree. A worktree is removed only when its child is no longer working and it holds nothing a person could want. Anything with commits or uncommitted files is never removed by Pico.
 
 ### Remaining uncertainty
 
@@ -97,7 +97,7 @@ The adapted `start_session` keeps proposal 0003's behavior: a launch that suppli
 
 If the folder belongs to the same git repository as the parent's working directory (same git common directory), the target checkout is the **parent's working directory**. That makes "the parent's HEAD" the parent's own branch, not whatever the repository's main checkout has checked out. A folder in another repository is its own target checkout.
 
-[NEEDS CLARIFICATION: when the target folder isn't in a git repository at all, should the launch fail (no worktree is possible), or go to Sesh unchanged, as it does today for non-git projects?]
+**A folder outside any git repository** can't have a worktree. Pico forwards the launch to Sesh unchanged, as Sesh handles non-git projects today: the child runs in that folder. The call's result says the child has no worktree because the folder isn't a git repository. Pico records nothing for it, so cleanup never touches it.
 
 ### Uncommitted changes
 
@@ -179,7 +179,7 @@ The adapted tool's description says the same in one sentence.
 - A launch from a parent with uncommitted changes, without `baseBranch`, now fails instead of starting a child that can't see those changes.
 - A launch in a project whose Worktrunk hooks fail now fails, where Sesh would have started the child anyway.
 - Child worktrees live in `../.worktrees/<repo>.<branch>` beside the main checkout instead of Sesh's worktree folder, and their branches are `pico/…` instead of Sesh's. Sesh still shows the child under its parent, in the right project. A user whose own Worktrunk `worktree-path` differs sees Pico's worktrees marked ⚐ in `wt list`; setting the same template in `~/.config/worktrunk/config.toml` removes the mark.
-- Explicit `inPlace: true` launches, launches with `agent` (still rejected), and every other Sesh operation are unchanged.
+- Explicit `inPlace: true` launches, launches into folders outside any git repository, launches with `agent` (still rejected), and every other Sesh operation are unchanged.
 - `git worktree add` through `bash` runs git directly. In the compiled `pico` it used to fail; in the source launcher it used to go through OMP's clone-first `omp worktree add`.
 - The Homebrew formula's new dependency can't be installed alongside homebrew-core's `wiredtiger`, which also installs `wt`.
 
@@ -248,7 +248,8 @@ The adapted tool's description says the same in one sentence.
 - **Rely on `wt remove`'s own merge check.** It compares with the default branch, so it would keep the branch of every clean child started from a feature branch.
 - **Follow the user's Worktrunk `worktree-path`.** With the default template, every child worktree sits beside the repository in plain view. Mark wants them out of sight in `../.worktrees`. Project config can't set the location, so Pico sets it per run.
 - **Place each worktree with `--path`.** Equivalent location, but the flag is experimental and Pico would have to sanitize branch names itself. `--config-set` keeps Worktrunk's own naming.
+- **Fail launches into folders outside git.** Strictly closed, but it would end delegation in non-git folders, where no worktree is possible and Sesh already runs children in the folder. Mark chose to launch those unchanged and say so in the result.
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: when the target folder isn't in a git repository at all, should the launch fail (no worktree is possible), or go to Sesh unchanged, as it does today for non-git projects?]
+None. Mark settled the open choices on 2026-11-09: hook Sesh's `start_session` rather than OMP subagents; refuse launches from a checkout with uncommitted changes; remove unchanged worktrees when the child's turn ends; make the formula depend on Worktrunk; put child worktrees in `../.worktrees/<repo>.<branch>`; launch non-git children unchanged, without a worktree.

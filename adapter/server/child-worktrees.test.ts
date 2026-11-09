@@ -10,10 +10,11 @@ import {
     readFileSync,
     realpathSync,
     rmSync,
+    symlinkSync,
     writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type { ConnectedClient } from "./agent-harness.ts";
 
@@ -693,5 +694,184 @@ describe("proposal.0010 cleanup when a child's turn ends", () => {
         } finally {
             await shutDown(after);
         }
+    }, 60_000);
+
+    for (const [kind, change] of [
+        [
+            "switched to another branch and committed",
+            (worktree: string) => {
+                git(worktree, "switch", "-q", "-c", "fix");
+                git(worktree, "commit", "-q", "--allow-empty", "-m", "fix");
+            },
+        ],
+        [
+            "committed on a detached HEAD",
+            (worktree: string) => {
+                git(worktree, "switch", "-q", "--detach");
+                git(worktree, "commit", "-q", "--allow-empty", "-m", "detached work");
+            },
+        ],
+    ] as const) {
+        test(`a finished child that ${kind} keeps its worktree`, async () => {
+            const repo = repository();
+            const host = sesh();
+            const { session, worktree } = await launchedChild(repo, host, 2);
+            change(worktree);
+
+            host.children({ state: "idle", lastReply: "Done." });
+            await session.prompt("next turn");
+
+            expect(existsSync(worktree)).toBe(true);
+            expect(removals(session.updates())).toEqual([]);
+        }, 60_000);
+    }
+
+    test("a commit made while removal hooks run keeps the child's branch", async () => {
+        const repo = repository();
+        const host = sesh();
+        const { session } = await launchedChild(repo, host, 2);
+        const [branch] = picoBranches(repo.checkout);
+        const config = join(repo.checkout, ".config", "wt.toml");
+        writeFileSync(
+            config,
+            `${readFileSync(config, "utf8")}\n[[pre-remove]]\nlate = "git -C {{ worktree_path }} -c user.name=Late -c user.email=late@example.com commit -q --allow-empty -m late"\n`,
+        );
+
+        host.children({ state: "idle", lastReply: "Done." });
+        await session.prompt("next turn");
+
+        expect(git(repo.checkout, "log", "-1", "--format=%s", branch!)).toBe("late");
+        const [removal] = removals(session.updates());
+        expect(textOf(removal)).toContain(branch!);
+    }, 60_000);
+
+    test("Sesh naming the child's folder by another path still finds the child", async () => {
+        const repo = repository();
+        const host = sesh();
+        const { session, worktree } = await launchedChild(repo, host, 2);
+        const links = join(repo.root, "links");
+        symlinkSync(join(repo.root, ".worktrees"), links);
+
+        host.children({
+            sessions: [{ id: "child", cwd: join(links, basename(worktree)), state: "working" }],
+        });
+        await session.prompt("next turn");
+
+        expect(existsSync(worktree)).toBe(true);
+        expect(removals(session.updates())).toEqual([]);
+    }, 60_000);
+
+    test("any session still working in the worktree keeps it, whatever another reports", async () => {
+        const repo = repository();
+        const host = sesh();
+        const { session, worktree } = await launchedChild(repo, host, 2);
+
+        host.children({
+            sessions: [
+                { id: "earlier", cwd: worktree, state: "stopped" },
+                { id: "later", cwd: worktree, state: "working" },
+            ],
+        });
+        await session.prompt("next turn");
+
+        expect(existsSync(worktree)).toBe(true);
+    }, 60_000);
+
+    test("a listed session without a folder does not stop the check", async () => {
+        const repo = repository();
+        const host = sesh();
+        const { session, worktree } = await launchedChild(repo, host, 2);
+
+        host.children({
+            sessions: [
+                { id: "elsewhere", state: "working" },
+                { id: "child", cwd: worktree, state: "idle", lastReply: "Done." },
+            ],
+        });
+        await session.prompt("next turn");
+
+        expect(existsSync(worktree)).toBe(false);
+        expect(removals(session.updates()).map(update => update.status)).toEqual(["completed"]);
+    }, 60_000);
+
+    test("a Worktrunk setting that keeps branches does not stop Pico removing its own", async () => {
+        const repo = repository();
+        const host = sesh();
+        const config = join(repo.root, "xdg-config");
+        mkdirSync(join(config, "worktrunk"), { recursive: true });
+        writeFileSync(
+            join(config, "worktrunk", "config.toml"),
+            "[remove]\ndelete-branch = false\n",
+        );
+        const previous = process.env.XDG_CONFIG_HOME;
+        process.env.XDG_CONFIG_HOME = config;
+        try {
+            const { session, worktree } = await launchedChild(repo, host, 2);
+            host.children({ state: "idle", lastReply: "Done." });
+            await session.prompt("next turn");
+
+            expect(existsSync(worktree)).toBe(false);
+            expect(picoBranches(repo.checkout)).toEqual([]);
+        } finally {
+            if (previous === undefined) delete process.env.XDG_CONFIG_HOME;
+            else process.env.XDG_CONFIG_HOME = previous;
+        }
+    }, 60_000);
+});
+
+describe("proposal.0010 launches from unusual checkouts", () => {
+    test("a parent on a detached HEAD launches from that commit", async () => {
+        const repo = repository();
+        git(repo.checkout, "switch", "-q", "--detach");
+        const host = sesh();
+        const session = await startPicoSession(
+            [launch({ project: repo.checkout, prompt: "review" }), { content: ["done"] }],
+            { cwd: repo.checkout, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate");
+
+        expect(endedCall(session.updates(), "launch")?.status).toBe("completed");
+        const [launched] = host.launches();
+        expect(git(launched!.project as string, "rev-parse", "HEAD")).toBe(repo.featureCommit);
+    }, 60_000);
+
+    test("a relative folder is the parent's folder, resolved", async () => {
+        const repo = repository();
+        const host = sesh();
+        const session = await startPicoSession(
+            [launch({ project: ".", prompt: "review" }), { content: ["done"] }],
+            { cwd: repo.checkout, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate");
+
+        expect(endedCall(session.updates(), "launch")?.status).toBe("completed");
+        const [launched] = host.launches();
+        expect(launched?.project).toStartWith(join(repo.root, ".worktrees"));
+    }, 60_000);
+
+    test("a launch that cannot clean up after itself names the worktree and branch it left", async () => {
+        const repo = repository();
+        const config = join(repo.checkout, ".config", "wt.toml");
+        writeFileSync(
+            config,
+            `${readFileSync(config, "utf8")}\n[[pre-remove]]\nblock = "exit 5"\n`,
+        );
+        git(repo.checkout, "commit", "-q", "-am", "block removals");
+        const host = sesh([], { failLaunch: true });
+        const session = await startPicoSession(
+            [launch({ project: repo.checkout, prompt: "review" }), { content: ["done"] }],
+            { cwd: repo.checkout, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate");
+
+        const ended = endedCall(session.updates(), "launch");
+        expect(ended?.status).toBe("failed");
+        const [branch] = picoBranches(repo.checkout);
+        const [refused] = host.launches();
+        expect(textOf(ended)).toContain(branch!);
+        expect(textOf(ended)).toContain(refused!.project as string);
     }, 60_000);
 });

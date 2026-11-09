@@ -18,7 +18,8 @@
  *   --sesh-children <path>   answer `list_sessions` the way Sesh does, with one session per
  *                            `start_session` in the calls file, working in its `project`. The
  *                            JSON in `<path>`, read at call time, holds every child's `state`
- *                            and `lastReply`; `{ "listed": false }` lists none
+ *                            and `lastReply`; `{ "listed": false }` lists none, and
+ *                            `{ "sessions": [...] }` lists exactly those sessions
  */
 
 import { appendFileSync, readFileSync } from "node:fs";
@@ -118,6 +119,7 @@ function callResult(args: string[], request: JsonRpcRequest): Record<string, unk
 
 function seshChildren(callsFile: string | undefined, stateFile: string): unknown[] {
     const status = JSON.parse(readFileSync(stateFile, "utf8")) as Record<string, unknown>;
+    if (Array.isArray(status.sessions)) return status.sessions;
     if (status.listed === false || callsFile === undefined) return [];
     const launches = readFileSync(callsFile, "utf8")
         .split("\n")

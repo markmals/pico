@@ -91,26 +91,28 @@ export async function createWorktree(
 }
 
 /**
- * Removes a branch's worktree and the branch, waiting for the project's `pre-remove` hooks.
- * `force` also discards uncommitted files, for a worktree nothing has worked in yet.
+ * Removes a worktree, waiting for the project's `pre-remove` hooks, and keeps its branch:
+ * whatever the user's own Worktrunk settings say, Pico deletes branches itself, and only when
+ * nothing has moved them. `force` also discards uncommitted files, for a worktree nothing has
+ * worked in yet.
  */
 export async function removeWorktree(
     wt: string,
-    request: { checkout: string; branch: string; force: boolean },
+    request: { checkout: string; worktree: string; force: boolean },
 ): Promise<void> {
     const run = await runWorktrunk(wt, [
         "-C",
         request.checkout,
         "remove",
-        request.branch,
+        request.worktree,
         "--foreground",
-        "--force-delete",
+        "--no-delete-branch",
         "--yes",
         ...(request.force ? ["--force"] : []),
     ]);
     if (run.exitCode !== 0) {
         throw new WorktrunkError(
-            `Worktrunk couldn't remove branch ${request.branch} and its worktree (exit ${run.exitCode}):\n${run.output}`,
+            `Worktrunk couldn't remove the worktree ${request.worktree} (exit ${run.exitCode}):\n${run.output}`,
         );
     }
 }

@@ -58,3 +58,42 @@ export async function branchTip(checkout: string, branch: string): Promise<strin
     const run = await git(checkout, ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]);
     return run.exitCode === 0 ? run.stdout : undefined;
 }
+
+/** The commit a revision names, or undefined when it names none. */
+export async function commitOf(checkout: string, revision: string): Promise<string | undefined> {
+    const run = await git(checkout, ["rev-parse", "--verify", "--quiet", `${revision}^{commit}`]);
+    return run.exitCode === 0 ? run.stdout : undefined;
+}
+
+/** The branch a worktree has checked out, or undefined on a detached HEAD. */
+export async function checkedOutBranch(worktree: string): Promise<string | undefined> {
+    const run = await git(worktree, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    return run.exitCode === 0 ? run.stdout : undefined;
+}
+
+/** Where the repository has a branch checked out, or undefined when no worktree has it. */
+export async function worktreeWithBranch(
+    checkout: string,
+    branch: string,
+): Promise<string | undefined> {
+    const run = await git(checkout, ["worktree", "list", "--porcelain"]);
+    if (run.exitCode !== 0) return undefined;
+    const entry = run.stdout
+        .split("\n\n")
+        .map(block => block.split("\n"))
+        .find(lines => lines.includes(`branch refs/heads/${branch}`));
+    return entry?.find(line => line.startsWith("worktree "))?.slice("worktree ".length);
+}
+
+/**
+ * Deletes a branch only while it still points at `expectedTip`, so a commit made meanwhile is
+ * never lost; false when the branch has moved.
+ */
+export async function deleteBranchAt(
+    checkout: string,
+    branch: string,
+    expectedTip: string,
+): Promise<boolean> {
+    const run = await git(checkout, ["update-ref", "-d", `refs/heads/${branch}`, expectedTip]);
+    return run.exitCode === 0;
+}

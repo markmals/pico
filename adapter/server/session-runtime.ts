@@ -71,6 +71,8 @@ export class SessionRuntime {
     readonly #stopWatchingModel: () => void;
     /** The plan this attachment's client last received. */
     readonly #plan = new PlanReporter();
+    /** The child worktree check running now, which a close arriving meanwhile joins (proposal.0010). */
+    #childWorktreeCheck: Promise<void> | undefined;
 
     constructor(
         sessionId: string,
@@ -335,12 +337,20 @@ export class SessionRuntime {
     }
 
     /** Removes finished children's unchanged worktrees, each removal shown as a tool call (proposal.0010). */
-    async #cleanUpChildWorktrees(): Promise<void> {
-        const cleanup = await this.#session.cleanUpChildWorktrees().catch((error: unknown) => ({
-            removals: [],
-            failure: `Pico couldn't check its children's worktrees: ${describe(error)}`,
-        }));
-        for (const update of childWorktreeUpdates(cleanup)) this.#queue.push(update);
+    #cleanUpChildWorktrees(): Promise<void> {
+        this.#childWorktreeCheck ??= this.#session
+            .cleanUpChildWorktrees()
+            .catch((error: unknown) => ({
+                removals: [],
+                failure: `Pico couldn't check its children's worktrees: ${describe(error)}`,
+            }))
+            .then(cleanup => {
+                for (const update of childWorktreeUpdates(cleanup)) this.#queue.push(update);
+            })
+            .finally(() => {
+                this.#childWorktreeCheck = undefined;
+            });
+        return this.#childWorktreeCheck;
     }
 
     /**

@@ -12,13 +12,15 @@ const CLEANUP_TOOL = "pico_child_worktree_cleanup";
  * its outcome (proposal.0010).
  */
 export function childWorktreeUpdates(cleanup: ChildWorktreeCleanup): SessionUpdate[] {
-    const updates = cleanup.removals.flatMap(({ worktree, error }) =>
+    const updates = cleanup.removals.flatMap(({ worktree, error, keptBranch }) =>
         toolCall(
             `Remove unchanged worktree ${worktree.branch}`,
             "delete",
             { path: worktree.path, branch: worktree.branch },
             error ??
-                `Removed ${worktree.path} and branch ${worktree.branch}: the child's turn had ended and it changed nothing.`,
+                (keptBranch
+                    ? `Removed ${worktree.path}, but kept branch ${worktree.branch}: it gained a commit while the worktree was being removed.`
+                    : `Removed ${worktree.path} and branch ${worktree.branch}: the child's turn had ended and it changed nothing.`),
             error === undefined,
             [{ path: worktree.path }],
         ),

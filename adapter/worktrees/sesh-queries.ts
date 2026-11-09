@@ -10,7 +10,7 @@ const projectList = z.object({
 const childList = z.object({
     sessions: z.array(
         z.object({
-            cwd: z.string(),
+            cwd: z.string().optional(),
             state: z.string(),
             lastReply: z.string().nullable().optional(),
         }),

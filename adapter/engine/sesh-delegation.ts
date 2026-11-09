@@ -86,7 +86,7 @@ export function constrainSeshDelegation(
     const parameters = launchParameters(schema);
     const description =
         `${tool.description}\nChildren inherit this session's registered Pico agent. Do not supply an agent field; selecting another harness is unsupported.` +
-        "\nEach child starts in a new worktree on a new branch from this session's last commit, so commit first: a launch from a checkout with uncommitted changes fails.";
+        "\nEach child starts in a new worktree on a new branch from this session's last commit, so commit first (a launch from a checkout with uncommitted changes fails); its commits stay on that branch for deliberate integration, and once its turn ends without changes Pico removes the worktree.";
     const execute: CustomTool["execute"] = (id, args, onUpdate, context, signal) => {
         if (typeof args === "object" && args !== null && Object.hasOwn(args, "agent")) {
             throw new Error(

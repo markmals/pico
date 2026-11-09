@@ -12,7 +12,7 @@ supersedes: []
 
 ## Summary
 
-Before a Pico child session starts, Pico creates its worktree with Worktrunk: a new branch from the parent's last commit, set up by the project's blocking `pre-start` hooks. A failed creation fails the launch. Unchanged worktrees are removed when the child's turn ends. OMP's own worktree handling is turned off.
+Before a Pico child starts, Pico creates its worktree with Worktrunk: a new branch from the parent's last commit, set up by blocking `pre-start` hooks. Failed creation fails the launch; unchanged worktrees are removed after the child's turn. OMP's worktree handling, which breaks `git worktree add` in `pico`, is removed.
 
 ## Motivation
 
@@ -24,7 +24,7 @@ Mark delegates implementation work from a Pico parent to Sesh child sessions. To
 
 Mark already uses [Worktrunk](https://worktrunk.dev) (`wt`) for worktrees, and this repository already configures Worktrunk hooks in `.config/wt.toml`. Worktrunk can branch from the current HEAD (`--base=@`), runs the project's blocking `pre-start` hooks before it returns, and gives agents a structured result to read. Worktrunk's [agent integration page](https://worktrunk.dev/claude-code/) says harnesses without worktree-lifecycle hooks, oh-my-pi among them, call `wt switch --create` and `wt remove` directly. Pico is one of those harnesses.
 
-Separately, OMP's own worktree handling is still active in Pico's `bash` tool and is broken in the shipped executable (see [Existing baseline](#existing-baseline)).
+Separately, OMP's own worktree handling breaks `git worktree add` in Pico's `bash` tool. OMP rewrites the command to `<executable> worktree add …`. In the shipped `pico` that fails with `pico has no command "worktree"`. From the source launcher, it runs stock OMP's CLI, which reads the user's own OMP settings that Pico sessions must never read ([proposal 0007](0007-pico-owned-configuration.md)). Details are in [Existing baseline](#existing-baseline).
 
 ## Domain grounding
 
@@ -61,7 +61,10 @@ A child that Pico launches into a git repository starts in a worktree branched f
 ## Existing baseline
 
 - **Delegation.** [Proposal 0003](0003-pico-only-child-sessions.md) adapts Sesh's `start_session` into the tool Pico admits (`constrainSeshDelegation`, `adapter/engine/sesh-delegation.ts`). The adapted tool hides the `agent` field, rejects any launch that supplies one, and otherwise forwards the launch unchanged. Sesh creates the worktree. That adapter is the one place a child launch passes through, so it's where worktree creation belongs. Keep its agent rejection, its schema checks and its receiver-preserving proxy.
-- **OMP worktree handling in Pico.** The only OMP worktree feature live in a Pico session is `worktree.clone`. Under `picoSettings()` it resolves to `true`, so OMP's `bash` tool rewrites a `git worktree add …` command into `<executable> worktree add …`. In the compiled `pico`, that executable is `pico` itself, and `pico worktree add` fails with `INVALID_ARGUMENT: pico has no command "worktree"` (both halves observed on 2026-11-09). Task isolation (`task.isolation.enabled`, off) and session worktrees (`worktree.onStart`, interactive only) never run in Pico.
+- **OMP worktree handling in Pico.** The only OMP worktree feature live in a Pico session is `worktree.clone`. Under `picoSettings()` it resolves to `true`, so OMP's `bash` tool rewrites a `git worktree add …` command into OMP's own entry point followed by `worktree add …` (`rewriteGitWorktreeAdd` with `resolveCliEntryCmd()`).
+    - **Compiled `pico`:** the entry point is the executable itself, and `pico worktree add` exits 2 with `INVALID_ARGUMENT: pico has no command "worktree"`. The setting's value and that rejection were observed on 2026-11-09.
+    - **Source launcher:** Pico declares no OMP worker-host entry, so the entry point falls back to `bun …/@oh-my-pi/pi-coding-agent/src/cli.ts`. That's stock OMP's CLI, which loads the user's OMP settings (for example `worktree.base` and `isolation.backend`). This comes from reading the 18.14.0 source.
+    - Task isolation (`task.isolation.enabled`, off) and session worktrees (`worktree.onStart`, interactive only) never run in Pico.
 - **This repository's Worktrunk config.** `.config/wt.toml` runs `mise trust` and `mise install` as blocking `pre-start` hooks. `wt step copy-ignored` (which copies `node_modules`) and `mise run setup` (which installs dependencies) run as background `post-start` hooks, so a new worktree isn't ready when `wt switch` returns.
 - **Distribution.** `Formula/pico.rb` in `markmals/homebrew-tap` declares `depends_on "bun" => :build`, `arch: :arm64` and `macos: :sonoma`, and no runtime dependencies ([proposal 0002](0002-pico-homebrew-distribution.md)).
 
@@ -81,7 +84,13 @@ child's turn ends with commits → worktree and branch stay
 
 ### OMP's worktree handling is off
 
-Pico's isolated settings set `worktree.clone` to `false`. A `git worktree add` command in `bash` runs git unchanged, in the source launcher and in the compiled executable. No other OMP worktree setting changes.
+Pico's isolated settings set `worktree.clone` to `false`, so OMP never rewrites a `bash` command into an `<executable> worktree add …` call.
+
+- A `git worktree add …` run through `bash` runs as written, in the compiled `pico` and in the source launcher. Git creates the worktree, and the call reports git's own output and exit status.
+- A command that git rejects, such as one naming a path that already exists, fails with git's error.
+- Neither the Pico executable nor OMP's CLI is started on the command's behalf, and the user's OMP settings are never read.
+
+No other OMP worktree setting changes. The compiled `pico` is checked offline: `mise run pico:verify` gains a step where the scripted model runs `git worktree add` through `bash` in a scratch repository, and the step checks that git created the worktree and that the call succeeded.
 
 ### Which launches get a worktree
 
@@ -180,7 +189,7 @@ The adapted tool's description says the same in one sentence.
 - A launch in a project whose Worktrunk hooks fail now fails, where Sesh would have started the child anyway.
 - Child worktrees live in `../.worktrees/<repo>.<branch>` beside the main checkout instead of Sesh's worktree folder, and their branches are `pico/…` instead of Sesh's. Sesh still shows the child under its parent, in the right project. A user whose own Worktrunk `worktree-path` differs sees Pico's worktrees marked ⚐ in `wt list`; setting the same template in `~/.config/worktrunk/config.toml` removes the mark.
 - Explicit `inPlace: true` launches, launches into folders outside any git repository, launches with `agent` (still rejected), and every other Sesh operation are unchanged.
-- `git worktree add` through `bash` runs git directly. In the compiled `pico` it used to fail; in the source launcher it used to go through OMP's clone-first `omp worktree add`.
+- `git worktree add` through `bash` works in the compiled `pico`, where it used to fail with `pico has no command "worktree"`. From the source launcher it runs plain git, where it used to run stock OMP's CLI with the user's OMP settings. Its worktrees are now plain git checkouts, without OMP's copy-on-write clone of ignored files.
 - The Homebrew formula's new dependency can't be installed alongside homebrew-core's `wiredtiger`, which also installs `wt`.
 
 ## Implications on adoption
@@ -192,7 +201,7 @@ The adapted tool's description says the same in one sentence.
 
 ## Scope
 
-- Turn off `worktree.clone` in Pico's isolated settings.
+- Turn off `worktree.clone` in Pico's isolated settings, with a session-level regression test for `git worktree add` through `bash` and the matching `pico:verify` step for the compiled executable.
 - Create worktrees with Worktrunk in the adapted `start_session`: target resolution, the uncommitted-changes refusal, branch naming, streamed progress, every failure path and its cleanup.
 - Record child worktrees with the parent's history, and the turn-boundary cleanup with its ACP reporting.
 - Update Pico's guidance and the adapted tool's description.
@@ -219,7 +228,8 @@ The adapted tool's description says the same in one sentence.
     - launch from a dirty parent, and see the refusal and no child;
     - make the hook fail, and see the failed launch with no leftover worktree or branch;
     - let an idle child that changed nothing get cleaned up at the next parent turn;
-    - let a child commit something, and check its worktree and branch stay.
+    - let a child commit something, and check its worktree and branch stay;
+    - in the parent, ask the agent to run `git worktree add ../scratch` through `bash`, and check git creates it with no `pico`/OMP `worktree` error.
 - Completion cleanup: remove the disposable repository and any worktrees and branches left in it. Disposable Sesh sessions are archived by Mark.
 
 ## Policies and decisions checked
@@ -232,6 +242,7 @@ The adapted tool's description says the same in one sentence.
 - [Proposal 0001](0001-acp-adapter-core.md): no approval requests, visible tool calls, truthful failures. Kept. `--yes` stands in for an approval no one could give, and cleanup is shown as tool calls.
 - [Proposal 0002](0002-pico-homebrew-distribution.md) defines the formula. This proposal adds one runtime dependency to it.
 - [Proposal 0004](0004-session-restoration.md): worktree records live in the parent's private history and follow its restoration.
+- [Proposal 0007](0007-pico-owned-configuration.md): Pico sessions read no OMP settings file. Turning off `worktree.clone` closes the source launcher's route into stock OMP's CLI, which read them.
 
 ## Future directions
 

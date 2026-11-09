@@ -1,4 +1,16 @@
+import { stripGitRepoLocationEnv } from "@oh-my-pi/pi-utils/env";
 import path from "node:path";
+
+/**
+ * Pico's environment as it is now, for git and Worktrunk, without the repository location a git
+ * hook exports (`GIT_DIR`, `GIT_WORK_TREE`, …): inherited, it would point them at that hook's
+ * repository instead of the folder Pico names. Bun otherwise passes the environment it started with.
+ */
+export function folderGitEnv(): Record<string, string> {
+    const env = { ...process.env } as Record<string, string>;
+    stripGitRepoLocationEnv(env);
+    return env;
+}
 
 interface GitRun {
     exitCode: number;
@@ -8,7 +20,12 @@ interface GitRun {
 
 async function git(cwd: string, args: readonly string[]): Promise<GitRun> {
     try {
-        const run = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+        const run = Bun.spawn(["git", ...args], {
+            cwd,
+            env: folderGitEnv(),
+            stdout: "pipe",
+            stderr: "pipe",
+        });
         const [stdout, stderr, exitCode] = await Promise.all([
             new Response(run.stdout).text(),
             new Response(run.stderr).text(),

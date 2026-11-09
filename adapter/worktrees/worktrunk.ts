@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 
+import { folderGitEnv } from "./git.ts";
+
 /** Where Homebrew links `wt` on Apple silicon, for a `pico` launched without it on its PATH. */
 const HOMEBREW_WORKTRUNK = "/opt/homebrew/bin/wt";
 
@@ -129,6 +131,7 @@ async function runWorktrunk(
     signal?.throwIfAborted();
     // Its own process group, so stopping it also stops the hooks it is running.
     const run = Bun.spawn([wt, ...args], {
+        env: folderGitEnv(),
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",

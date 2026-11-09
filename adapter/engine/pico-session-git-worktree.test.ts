@@ -13,10 +13,17 @@ import {
     toolCall,
 } from "./testing/session-fixture.ts";
 
+// hk runs this suite from `pre-push`, and git exports GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE
+// to its hooks; git inheriting them would act on the outer repository. The fixture's git gets
+// an environment without them, and the agent's command unsets them before its own git runs.
+const fixtureEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+);
+
 function git(cwd: string, ...args: string[]): void {
     const result = Bun.spawnSync(
         ["git", "-c", "user.name=Pico Test", "-c", "user.email=pico@example.com", ...args],
-        { cwd, stdout: "pipe", stderr: "pipe" },
+        { cwd, env: fixtureEnv, stdout: "pipe", stderr: "pipe" },
     );
     if (result.exitCode !== 0)
         throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
@@ -40,7 +47,13 @@ describe("proposal.0010 OMP's worktree handling is off", () => {
             authStorage: await mockAuthStorage(dataDir),
             model: createMockModel({
                 responses: [
-                    { content: [toolCall("bash", { command: `git worktree add ${worktree}` })] },
+                    {
+                        content: [
+                            toolCall("bash", {
+                                command: `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git worktree add ${worktree}`,
+                            }),
+                        ],
+                    },
                     { content: ["done"] },
                 ],
             }),

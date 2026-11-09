@@ -45,6 +45,13 @@ const LAUNCH_SCHEMA = {
 
 const roots: string[] = [];
 
+// hk runs this suite from `pre-push`, and git exports GIT_DIR, GIT_INDEX_FILE and GIT_WORK_TREE
+// to its hooks. A fixture's git inheriting them would act on the outer repository, and Bun's
+// default for a child is the environment the test process started with, so it gets this one.
+const fixtureEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+);
+
 afterEach(closeOpenConnections);
 afterAll(() => {
     removeTemporaryDirectories();
@@ -54,7 +61,7 @@ afterAll(() => {
 function git(cwd: string, ...args: string[]): string {
     const run = Bun.spawnSync(
         ["git", "-c", "user.name=Pico Test", "-c", "user.email=pico@example.com", ...args],
-        { cwd, stdout: "pipe", stderr: "pipe" },
+        { cwd, env: fixtureEnv, stdout: "pipe", stderr: "pipe" },
     );
     if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr.toString()}`);
     return run.stdout.toString().trim();
@@ -385,6 +392,31 @@ describe("proposal.0010 launching a child in a new worktree", () => {
         const launched = host.launches();
         expect(launched).toHaveLength(1);
         expect(git(launched[0]!.project as string, "rev-parse", "HEAD")).toBe(repo.featureCommit);
+    }, 60_000);
+});
+
+describe("proposal.0010 a launch acts on the repository it names", () => {
+    test("a git location inherited from a git hook does not redirect the launch", async () => {
+        const repo = repository();
+        const decoy = repository();
+        const host = sesh();
+        const session = await startPicoSession(
+            [launch({ project: repo.checkout, prompt: "review" }), { content: ["done"] }],
+            { cwd: repo.checkout, mcpServers: [host.server] },
+        );
+        process.env.GIT_DIR = join(decoy.checkout, ".git");
+        process.env.GIT_WORK_TREE = decoy.checkout;
+        try {
+            await session.prompt("delegate");
+        } finally {
+            delete process.env.GIT_DIR;
+            delete process.env.GIT_WORK_TREE;
+        }
+
+        expect(endedCall(session.updates(), "launch")?.status).toBe("completed");
+        expect(picoBranches(repo.checkout)).toHaveLength(1);
+        expect(picoBranches(decoy.checkout)).toEqual([]);
+        expect(childWorktrees(repo.root)).toHaveLength(1);
     }, 60_000);
 });
 

@@ -14,6 +14,12 @@ export interface FakeLmStudioOptions {
 /** A prompt that makes the model start a background job ignoring SIGTERM (proposal.0008). */
 export const BACKGROUND_JOB_PROMPT = "Start the background job.";
 
+/**
+ * The start of a prompt that makes the model run `git worktree add` through `bash` for the path
+ * that follows it (proposal.0010).
+ */
+export const GIT_WORKTREE_PROMPT = "Add a git worktree at ";
+
 export interface FakeLmStudio {
     /** The value for `LM_STUDIO_BASE_URL`; OMP appends `/models` and `/chat/completions` to it. */
     baseUrl: string;
@@ -69,7 +75,8 @@ async function serve(request: Request, options: FakeLmStudioOptions): Promise<Re
 
 /**
  * The scripted model: write the token and open a todo for it, then answer, then remember. A
- * conversation opened with {@link BACKGROUND_JOB_PROMPT} starts a background job instead.
+ * conversation opened with {@link BACKGROUND_JOB_PROMPT} starts a background job instead, and
+ * one opened with {@link GIT_WORKTREE_PROMPT} adds that git worktree.
  */
 function script(messages: ChatMessage[], options: FakeLmStudioOptions): ScriptedTurn {
     const { memoryToken, reply, jobPidFile } = options;
@@ -79,6 +86,19 @@ function script(messages: ChatMessage[], options: FakeLmStudioOptions): Scripted
         const command = `/bin/sh -c 'trap "" TERM; echo $$ > ${jobPidFile}; exec /bin/sleep 300'`;
         return {
             toolCalls: [{ id: "verify-job", name: "bash", arguments: { command, async: true } }],
+        };
+    }
+    const worktree = requestedWorktree(users[0]?.content);
+    if (worktree !== undefined) {
+        if (messages.at(-1)?.role !== "user") return { text: reply };
+        return {
+            toolCalls: [
+                {
+                    id: "verify-worktree",
+                    name: "bash",
+                    arguments: { command: `git worktree add ${worktree}` },
+                },
+            ],
         };
     }
     if (users.length > 1) {
@@ -104,6 +124,15 @@ function script(messages: ChatMessage[], options: FakeLmStudioOptions): Scripted
         };
     }
     return { text: reply };
+}
+
+/** The path a {@link GIT_WORKTREE_PROMPT} names, read up to the end of its text. */
+function requestedWorktree(content: unknown): string | undefined {
+    const text = JSON.stringify(content) ?? "";
+    const start = text.indexOf(GIT_WORKTREE_PROMPT);
+    if (start === -1) return undefined;
+    const rest = text.slice(start + GIT_WORKTREE_PROMPT.length);
+    return rest.slice(0, rest.indexOf('"'));
 }
 
 function completionChunks(turn: ScriptedTurn): unknown[] {

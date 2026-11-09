@@ -8,12 +8,19 @@ import type { MCPServerConfig } from "@oh-my-pi/pi-coding-agent/mcp/types";
 import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp";
 import { createMCPToolName } from "@oh-my-pi/pi-coding-agent/mcp/tool-bridge";
 
+import type { ChildWorktreeRecords } from "../worktrees/child-worktree-records.ts";
+import type { SeshQueries } from "../worktrees/sesh-queries.ts";
+
+import { launchChild } from "../worktrees/child-launch.ts";
+import { seshQueries } from "../worktrees/sesh-queries.ts";
 import { PicoSessionError } from "./errors.ts";
 import { constrainSeshDelegation } from "./sesh-delegation.ts";
 
 export interface HostMcpServers {
     manager: MCPManager;
     tools: CustomTool[];
+    /** What Pico reads from Sesh for itself; its calls fail when Sesh is not connected. */
+    sesh: SeshQueries;
 }
 
 function toConfig(server: McpServerStdio, cwd: string): MCPServerConfig {
@@ -48,9 +55,11 @@ export async function connectHostMcpServers(
     cwd: string,
     servers: readonly McpServerStdio[],
     authStorage: AuthStorage,
+    childWorktrees: ChildWorktreeRecords,
 ): Promise<HostMcpServers> {
     const manager = new MCPManager(cwd);
-    if (servers.length === 0) return { manager, tools: [] };
+    const sesh = seshQueries(manager);
+    if (servers.length === 0) return { manager, tools: [], sesh };
 
     manager.setAuthStorage(authStorage);
     // Null prototype again: `__proto__` is a legal, if hostile, server name.
@@ -106,14 +115,20 @@ export async function connectHostMcpServers(
         const definition = manager
             .getConnection("sesh")
             ?.tools?.find(tool => tool.name === "start_session");
+        const context = { cwd, sesh, records: childWorktrees };
         const tools = manager
             .getTools()
             .map(tool =>
                 tool.mcpServerName === "sesh" && tool.mcpToolName === "start_session"
-                    ? constrainSeshDelegation(tool, definition?.inputSchema)
+                    ? constrainSeshDelegation(
+                          tool,
+                          definition?.inputSchema,
+                          (args, forward, onUpdate, signal) =>
+                              launchChild(args, forward, context, onUpdate, signal),
+                      )
                     : tool,
             );
-        return { manager, tools };
+        return { manager, tools, sesh };
     } catch (error) {
         await manager.disconnectAll();
         throw error;

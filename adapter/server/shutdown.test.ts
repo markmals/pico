@@ -46,6 +46,7 @@ describe("proposal.0001 shutdown", () => {
                     stopBackgroundJobs: () => session.stopBackgroundJobs(),
                     selectModel: model => session.selectModel(model),
                     selectThinkingLevel: level => session.selectThinkingLevel(level),
+                    cleanUpChildWorktrees: () => session.cleanUpChildWorktrees(),
                     dispose: async () => {
                         disposed.push(session.cwd);
                         await session.dispose();

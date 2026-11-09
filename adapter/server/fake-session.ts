@@ -88,6 +88,7 @@ export function fakeSession(cwd: string, behaviour: FakeEngine = {}): FakeSessio
             selectThinkingLevel: () => {
                 throw new Error("the fake session cannot set a thinking level");
             },
+            cleanUpChildWorktrees: () => Promise.resolve({ removals: [] }),
             dispose: async () => {
                 calls.push("dispose");
                 counters.disposals++;

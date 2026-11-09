@@ -12,9 +12,17 @@
  *   --tool <name>            advertise `<name>` instead of the default tools (repeatable)
  *   --input-schema <json>    schema for tools selected with `--tool`
  *   --calls-file <path>      append each received tool call as JSONL
+ *   --answer <tool>=<path>   answer `<tool>` with the JSON in `<path>`, read at call time, as
+ *                            structured content and its text
+ *   --fail-tool <tool>       answer `<tool>` with an error result
+ *   --sesh-children <path>   answer `list_sessions` the way Sesh does, with one session per
+ *                            `start_session` in the calls file, working in its `project`. The
+ *                            JSON in `<path>`, read at call time, holds every child's `state`
+ *                            and `lastReply`; `{ "listed": false }` lists none, and
+ *                            `{ "sessions": [...] }` lists exactly those sessions
  */
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 interface JsonRpcRequest {
     jsonrpc: "2.0";
@@ -82,6 +90,22 @@ function send(message: Record<string, unknown>): void {
 
 function callResult(args: string[], request: JsonRpcRequest): Record<string, unknown> {
     const name = request.params?.name;
+    if (valuesOf(args, "--fail-tool").includes(String(name))) {
+        return { content: [{ type: "text", text: `fake ${String(name)} failed` }], isError: true };
+    }
+    const answer = valuesOf(args, "--answer").find(entry => entry.startsWith(`${String(name)}=`));
+    if (answer !== undefined) {
+        const text = readFileSync(answer.slice(answer.indexOf("=") + 1), "utf8");
+        return { content: [{ type: "text", text }], structuredContent: JSON.parse(text) };
+    }
+    const children = valuesOf(args, "--sesh-children")[0];
+    if (name === "list_sessions" && children !== undefined) {
+        const sessions = seshChildren(valuesOf(args, "--calls-file")[0], children);
+        return {
+            content: [{ type: "text", text: JSON.stringify({ sessions }) }],
+            structuredContent: { sessions },
+        };
+    }
     if (name === "launch_report") {
         const report: LaunchReport = { args, env: reportedEnv(), cwd: process.cwd() };
         return { content: [{ type: "text", text: JSON.stringify(report) }] };
@@ -91,6 +115,23 @@ function callResult(args: string[], request: JsonRpcRequest): Record<string, unk
         return { content: [{ type: "text", text: typeof text === "string" ? text : "" }] };
     }
     return { content: [{ type: "text", text: `called ${String(name)}` }] };
+}
+
+function seshChildren(callsFile: string | undefined, stateFile: string): unknown[] {
+    const status = JSON.parse(readFileSync(stateFile, "utf8")) as Record<string, unknown>;
+    if (Array.isArray(status.sessions)) return status.sessions;
+    if (status.listed === false || callsFile === undefined) return [];
+    const launches = readFileSync(callsFile, "utf8")
+        .split("\n")
+        .filter(line => line.trim().length > 0)
+        .map(line => JSON.parse(line) as { name?: string; arguments?: { project?: string } })
+        .filter(call => call.name === "start_session");
+    return launches.map((launch, index) => ({
+        id: `child-${index}`,
+        cwd: launch.arguments?.project,
+        parentSessionId: "parent",
+        ...status,
+    }));
 }
 
 async function handle(

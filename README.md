@@ -90,7 +90,7 @@ Beads (`bd`) is the work tracker, the ready-work queue, and durable agent memory
 In the repository today:
 
 - `mise.toml`, the only task graph. Every routine command is a mise task.
-- `adapter/`, the ACP adapter with its curated turn path, Pico-only child launches, private session persistence, background jobs, Pico-owned settings and Keychain credentials with agent-first commands ([proposals 0001–0004 and 0006–0009](proposals/)), with tests beside the code; `native/keychain/`, the synchronous credential-storage bridge; `tools/write-launcher.ts`, which writes `.build/pico-acp`; and `tools/build-pico.ts`, which compiles the executable and generates its third-party notices.
+- `adapter/`, the ACP adapter with its curated turn path, Pico-only child launches in Worktrunk worktrees, private session persistence, background jobs, Pico-owned settings and Keychain credentials with agent-first commands ([proposals 0001–0004 and 0006–0010](proposals/)), with tests beside the code; `native/keychain/`, the synchronous credential-storage bridge; `tools/write-launcher.ts`, which writes `.build/pico-acp`; and `tools/build-pico.ts`, which compiles the executable and generates its third-party notices.
 - `LICENSE` (MIT).
 - `tools/check-scoped-commit.ts` with its tests, enforcing commit subjects from `commit-msg`, and `tools/check-pr-commits.ts`, which applies the same rule to a pull request. They are the live example of the TypeScript and test conventions here.
 - the Workbench workflow scripts `tools/status.ts`, `tools/validate.ts` and `tools/require-changeset.ts`, with their tests.

@@ -2,7 +2,7 @@
 id: proposal.0010
 title: Worktrunk Worktrees for Child Sessions
 authors: [Mark Malstrom]
-status: awaiting-implementation
+status: active-review
 pull-request: https://github.com/markmals/pico/pull/55
 issues: []
 supersedes: []

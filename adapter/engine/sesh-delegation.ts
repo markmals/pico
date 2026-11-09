@@ -1,7 +1,17 @@
-import type { AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { CustomTool } from "@oh-my-pi/pi-coding-agent/extensibility/custom-tools";
 
+import type { ForwardLaunch, LaunchArguments } from "../worktrees/child-launch.ts";
+
 import { PicoSessionError } from "./errors.ts";
+
+/** Decides where an accepted launch's child works, then forwards the launch to Sesh. */
+export type ChildLauncher = (
+    args: LaunchArguments,
+    forward: ForwardLaunch,
+    onUpdate: AgentToolUpdateCallback | undefined,
+    signal: AbortSignal | undefined,
+) => Promise<AgentToolResult>;
 
 const ROOT_CONSTRAINTS = [
     "$ref",
@@ -68,16 +78,27 @@ function launchParameters(schema: unknown): Record<string, unknown> {
     };
 }
 
-export function constrainSeshDelegation(tool: CustomTool, schema: unknown): CustomTool {
+export function constrainSeshDelegation(
+    tool: CustomTool,
+    schema: unknown,
+    launch: ChildLauncher,
+): CustomTool {
     const parameters = launchParameters(schema);
-    const description = `${tool.description}\nChildren inherit this session's registered Pico agent. Do not supply an agent field; selecting another harness is unsupported.`;
+    const description =
+        `${tool.description}\nChildren inherit this session's registered Pico agent. Do not supply an agent field; selecting another harness is unsupported.` +
+        "\nEach child starts in a new worktree on a new branch from this session's last commit, so commit first: a launch from a checkout with uncommitted changes fails.";
     const execute: CustomTool["execute"] = (id, args, onUpdate, context, signal) => {
         if (typeof args === "object" && args !== null && Object.hasOwn(args, "agent")) {
             throw new Error(
                 "Pico child sessions inherit this session's agent; an agent override is not supported. Omit the agent field.",
             );
         }
-        return tool.execute(id, args, onUpdate, context, signal);
+        return launch(
+            args as LaunchArguments,
+            next => tool.execute(id, next, onUpdate, context, signal),
+            onUpdate,
+            signal,
+        );
     };
     // Keep forbidden fields visible through OMP's schema-healing pass.
     const adapted: CustomTool & Pick<AgentTool, "lenientArgValidation"> = Object.create(tool, {

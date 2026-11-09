@@ -8,11 +8,14 @@ import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 import { parseConfiguredThinkingLevel } from "@oh-my-pi/pi-tui/thinking";
 
 import type { SecretStore } from "../credentials/keychain.ts";
+import type { ChildWorktreeCleanup } from "../worktrees/child-worktree-cleanup.ts";
 import type { PicoCredentials } from "./credential-policy.ts";
 import type { HostMcpServers } from "./host-mcp-servers.ts";
 import type { RecordedChange } from "./write-bridge.ts";
 
 import { DEFAULT_AUTO_BACKGROUND } from "../settings/settings-document.ts";
+import { cleanUpChildWorktrees } from "../worktrees/child-worktree-cleanup.ts";
+import { ChildWorktreeRecords } from "../worktrees/child-worktree-records.ts";
 import { PICO_GUIDANCE, withoutSubagentUrl } from "./agent-guidance.ts";
 import { BackgroundJobs, STOP_GRACE_MS } from "./background-jobs.ts";
 import { openPicoCredentials } from "./credential-policy.ts";
@@ -104,6 +107,11 @@ export interface PicoSession {
     selectModel(model: Model<Api>): Promise<void>;
     /** Selects and journals this session's thinking level without changing OMP defaults. */
     selectThinkingLevel(level: ConfiguredThinkingLevel): void;
+    /**
+     * Removes the worktrees of this session's children whose turn has ended and that changed
+     * nothing, and reports each removal it attempted (proposal.0010).
+     */
+    cleanUpChildWorktrees(): Promise<ChildWorktreeCleanup>;
     /** Stops background jobs, disconnects MCP servers, terminating the processes they spawned, and disposes the engine. Idempotent. */
     dispose(): Promise<void>;
 }
@@ -126,10 +134,13 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     let mcp: HostMcpServers | undefined;
     let engine: AgentSession | undefined;
+    let childWorktrees: ChildWorktreeRecords | undefined;
     const writes = new WriteBridge();
     try {
         const settings = picoSettings(options.autoBackground ?? DEFAULT_AUTO_BACKGROUND);
-        mcp = await connectHostMcpServers(cwd, mcpServers, authStorage);
+        const sessionManager = options.sessionManager ?? SessionManager.inMemory(cwd);
+        childWorktrees = new ChildWorktreeRecords(sessionManager);
+        mcp = await connectHostMcpServers(cwd, mcpServers, authStorage, childWorktrees);
         const mcpToolNames = mcp.tools.map(tool => tool.name);
         const modelRegistry =
             options.modelRegistry ??
@@ -149,7 +160,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             modelRegistry,
             model: options.model ?? start?.model,
             thinkingLevel: start?.thinkingLevel,
-            sessionManager: options.sessionManager ?? SessionManager.inMemory(cwd),
+            sessionManager,
             enableMCP: false,
             enableLsp: false,
             hasUI: false,
@@ -219,6 +230,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
 
     const liveEngine = engine;
     const liveMcp = mcp;
+    const liveChildWorktrees = childWorktrees;
     const identities = mcpToolIdentities(mcp.tools);
     const jobs = new BackgroundJobs(liveEngine);
     let disposed = false;
@@ -239,6 +251,7 @@ export async function createPicoSession(options: PicoSessionOptions): Promise<Pi
             await liveEngine.setModelTemporary(model);
         },
         selectThinkingLevel: level => liveEngine.setThinkingLevel(level, false),
+        cleanUpChildWorktrees: () => cleanUpChildWorktrees(liveChildWorktrees, liveMcp.sesh),
         dispose: async () => {
             if (disposed) return;
             disposed = true;

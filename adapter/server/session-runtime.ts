@@ -16,6 +16,7 @@ import type { ToolPresentation } from "../events/tool-presentation.ts";
 import type { StoredSession } from "../history/session-store.ts";
 
 import { attempt } from "../engine/errors.ts";
+import { childWorktreeUpdates } from "../events/child-worktree-updates.ts";
 import { replayHistory } from "../events/history-replay.ts";
 import { SessionEventMapper } from "../events/session-event-mapper.ts";
 import { PlanReporter } from "../events/todo-plan.ts";
@@ -237,6 +238,8 @@ export class SessionRuntime {
             await this.flushPersistence();
             if (turn.cancellation) return "cancelled";
             this.#requireOpen();
+            await this.#cleanUpChildWorktrees();
+            if (turn.cancellation) return "cancelled";
             turn.enginePrompt = this.#runEngine(turn, text).then(
                 () => undefined,
                 (error: unknown) => {
@@ -269,6 +272,7 @@ export class SessionRuntime {
             for (const update of mapper.closeOpenToolCalls()) this.#publish(update);
             // A cancellation can close a todo call whose change the engine still kept.
             this.#reportPlanChanges();
+            if (!this.#closedReason) await this.#cleanUpChildWorktrees();
             // A cancel can still arrive while the last update is in flight, so the
             // turn is only free once nothing is draining and none is pending.
             let joined: Promise<void> | undefined;
@@ -330,6 +334,15 @@ export class SessionRuntime {
         });
     }
 
+    /** Removes finished children's unchanged worktrees, each removal shown as a tool call (proposal.0010). */
+    async #cleanUpChildWorktrees(): Promise<void> {
+        const cleanup = await this.#session.cleanUpChildWorktrees().catch((error: unknown) => ({
+            removals: [],
+            failure: `Pico couldn't check its children's worktrees: ${describe(error)}`,
+        }));
+        for (const update of childWorktreeUpdates(cleanup)) this.#queue.push(update);
+    }
+
     /**
      * Stops a running turn before the engine session and its MCP servers go away.
      *
@@ -343,6 +356,7 @@ export class SessionRuntime {
             await this.#turn.aborted;
         }
         this.#step = "disposing";
+        if (!this.#closedReason && !this.#disposal) await this.#cleanUpChildWorktrees();
         try {
             await this.#dispose();
         } finally {

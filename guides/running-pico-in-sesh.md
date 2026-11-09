@@ -11,6 +11,7 @@ describes:
         proposal.0007,
         proposal.0008,
         proposal.0009,
+        proposal.0010,
     ]
 ---
 
@@ -256,9 +257,33 @@ The child-session tool has no agent selector. Supplying an `agent` field anyway 
 
 This rule selects the harness, not the provider or model. A Codex model available inside Pico is still usable; a Codex harness is not an alternative child-session backend. Child model and thinking settings follow the options Pico and Sesh actually offer; this rule does not copy the parent’s model selection to its children.
 
-Sesh still owns worktrees, launch limits, reporting, and stopping children. A failed launch remains a failed tool call with its cause. If Sesh does not provide child-session tools, Pico can continue its other work but cannot delegate. If Sesh provides an incompatible child-launch definition, Pico refuses to start the session and names `sesh/start_session` in the error rather than exposing an unprotected launch operation. A host definition that requires an explicit agent cannot support inherited-agent launches and is rejected at startup.
+Sesh still owns launch limits, reporting, and stopping children. A failed launch remains a failed tool call with its cause. If Sesh does not provide child-session tools, Pico can continue its other work but cannot delegate. If Sesh provides an incompatible child-launch definition, Pico refuses to start the session and names `sesh/start_session` in the error rather than exposing an unprotected launch operation. A host definition that requires an explicit agent cannot support inherited-agent launches and is rejected at startup.
 
 Pico’s instructions prohibit native workers and shell-launched harnesses as delegation fallbacks. Normal shell access remains available: this tool-level restriction is not an operating-system sandbox against arbitrary commands or scripts. Sessions running stock OMP or another registered agent do not acquire Pico’s policy; select Pico when starting the parent.
+
+### Where a child works
+
+Pico creates each child's worktree itself, with [Worktrunk](https://worktrunk.dev) (`wt`), before Sesh starts the child. The child gets a new branch named `pico/<name>-<six hex digits>`, made from the parent session's last commit, so it sees everything the parent has committed. Its worktree goes in a hidden `.worktrees` folder beside your main checkout, named `<repo>.<branch>`. For example, a child named "Review auth" of a session in `~/Developer/pico` works in `~/Developer/.worktrees/pico.pico-review-auth-1a2b3c`. Sesh still shows the child under its parent, in the same project.
+
+Homebrew installs Worktrunk with Pico. When `pico` can't find `wt`, on its `PATH` or at `/opt/homebrew/bin/wt`, a launch fails and says to run `brew install worktrunk`.
+
+- **Commit first.** A new worktree starts from the last commit, so uncommitted work can't reach the child. When the parent's checkout has staged or unstaged changes, or untracked files that aren't ignored, the launch fails before anything is created. The error names the checkout and says to commit or discard the changes, then launch again. Pico never commits, stashes or discards anything itself. A launch that names a `baseBranch` starts from that branch instead, and isn't checked.
+- **Setup runs before the child starts.** Worktrunk runs your project's `pre-start` hooks from `.config/wt.toml` in the new worktree and waits for them, so put toolchain and dependency installs there (`mise install`, `pnpm install`, `bun install` and so on). Pico approves the project's hook commands for that one run only and saves nothing in your Worktrunk approvals. `post-start` hooks run in the background and may still be running when the child starts. Their output appears in the launch's tool call.
+- **Failures start nothing.** If a hook fails, `wt` fails, Sesh refuses the launch, or you stop the turn while setup runs, the launch fails with the cause and no child starts. Pico removes the worktree and branch it had begun; if that removal fails as well, the error names what was left behind.
+- **Projects:** a launch names a project's folder or its Sesh project name. A folder in the parent's own repository branches from the parent session's checkout, not from whatever your main checkout has out. A name Sesh doesn't know fails the launch.
+- **No worktree:** a launch that asks to work in place (`inPlace`) runs in the project's own checkout, as you asked. A folder that isn't in a git repository can't have a worktree, so the child runs in that folder and the launch's result says it has no worktree.
+
+The child's own `git worktree add` commands, and the parent's, run as plain git.
+
+### When a child is done
+
+At the start and end of each parent turn, and when the parent session closes, Pico checks the worktrees it made for that parent's children. A child has finished its turn once Sesh shows it idle after replying, stopped, failed, or archived. A child that is working, waiting for you, or that Sesh has started but that hasn't replied yet keeps its worktree.
+
+- **Nothing changed:** when a finished child left no uncommitted or untracked files (ignored files don't count) and made no commits, Pico removes its worktree and branch. The removal appears in the conversation as its own tool call. A follow-up message to that child then fails because its folder is gone: give each child a complete task, and start a new child for more work.
+- **Something changed:** the worktree and branch stay, and Pico never removes them. Review the branch and bring it into your work deliberately, for example with `wt merge <parent branch>` from the child's worktree, or with git. Nothing is merged for you.
+- **A failed removal** shows as a failed tool call with its cause, such as a failing `pre-remove` hook, and Pico tries again at the next turn.
+
+These checks continue after Pico restarts, when Sesh reopens the parent session. Worktrees Sesh created for children before this version are untouched.
 
 ## What the agent can't do
 

@@ -817,6 +817,30 @@ describe("proposal.0010 cleanup when a child's turn ends", () => {
             else process.env.XDG_CONFIG_HOME = previous;
         }
     }, 60_000);
+
+    test("a branch Pico couldn't delete is reported as a failure and deleted at the next turn", async () => {
+        const repo = repository();
+        const host = sesh();
+        const { session, worktree } = await launchedChild(repo, host, 3);
+        const [branch] = picoBranches(repo.checkout);
+        const lock = join(repo.checkout, ".git", "refs", "heads", `${branch!}.lock`);
+        writeFileSync(lock, "");
+
+        host.children({ state: "idle", lastReply: "Done." });
+        await session.prompt("next turn");
+
+        expect(existsSync(worktree)).toBe(false);
+        expect(picoBranches(repo.checkout)).toEqual([branch!]);
+        const [failed] = removals(session.updates());
+        expect(failed?.status).toBe("failed");
+        expect(textOf(failed)).toContain(branch!);
+
+        rmSync(lock);
+        await session.prompt("and another");
+
+        expect(picoBranches(repo.checkout)).toEqual([]);
+        expect(removals(session.updates()).at(-1)?.status).toBe("completed");
+    }, 60_000);
 });
 
 describe("proposal.0010 launches from unusual checkouts", () => {
@@ -873,5 +897,57 @@ describe("proposal.0010 launches from unusual checkouts", () => {
         const [refused] = host.launches();
         expect(textOf(ended)).toContain(branch!);
         expect(textOf(ended)).toContain(refused!.project as string);
+    }, 60_000);
+
+    test("the project's hooks see the parent's branch and checkout as Worktrunk's base", async () => {
+        const repo = repository("echo {{ base }} {{ base_worktree_path }} > .prepared");
+        const host = sesh();
+        const session = await startPicoSession(
+            [launch({ project: repo.checkout, prompt: "review" }), { content: ["done"] }],
+            { cwd: repo.checkout, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate");
+
+        expect(endedCall(session.updates(), "launch")?.status).toBe("completed");
+        const [launched] = host.launches();
+        expect(readFileSync(join(launched!.project as string, ".prepared"), "utf8").trim()).toBe(
+            `feature ${repo.checkout}`,
+        );
+    }, 60_000);
+
+    test("a baseBranch that exists only on the remote starts the child from it", async () => {
+        const origin = repository();
+        git(origin.checkout, "switch", "-q", "main");
+        const clone = join(origin.root, "clone");
+        git(origin.root, "clone", "-q", origin.checkout, clone);
+        const host = sesh();
+        const session = await startPicoSession(
+            [
+                launch({ project: clone, prompt: "fix", baseBranch: "feature" }),
+                { content: ["done"] },
+            ],
+            { cwd: clone, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate from the remote branch");
+
+        expect(endedCall(session.updates(), "launch")?.status).toBe("completed");
+        const [launched] = host.launches();
+        expect(git(launched!.project as string, "rev-parse", "HEAD")).toBe(origin.featureCommit);
+    }, 60_000);
+
+    test("a relative folder outside git reaches Sesh resolved against the parent's folder", async () => {
+        const parent = temporaryProject();
+        mkdirSync(join(parent, "notes"));
+        const host = sesh();
+        const session = await startPicoSession(
+            [launch({ project: "./notes", prompt: "tidy" }), { content: ["done"] }],
+            { cwd: parent, mcpServers: [host.server] },
+        );
+
+        await session.prompt("delegate");
+
+        expect(host.launches()).toEqual([{ project: join(parent, "notes"), prompt: "tidy" }]);
     }, 60_000);
 });

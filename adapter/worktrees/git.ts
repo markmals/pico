@@ -87,13 +87,13 @@ export async function worktreeWithBranch(
 
 /**
  * Deletes a branch only while it still points at `expectedTip`, so a commit made meanwhile is
- * never lost; false when the branch has moved.
+ * never lost. Throws git's error when it refuses, whether the branch moved or is locked.
  */
 export async function deleteBranchAt(
     checkout: string,
     branch: string,
     expectedTip: string,
-): Promise<boolean> {
+): Promise<void> {
     const run = await git(checkout, ["update-ref", "-d", `refs/heads/${branch}`, expectedTip]);
-    return run.exitCode === 0;
+    if (run.exitCode !== 0) throw new Error(run.stderr || `git couldn't delete branch ${branch}.`);
 }

@@ -45,7 +45,8 @@ export async function cleanUpChildWorktrees(
     const removals: ChildWorktreeRemoval[] = [];
     for (const worktree of open) {
         if (!existsSync(worktree.path)) {
-            records.drop(worktree);
+            const removal = await deleteBranch(records, worktree, false);
+            if (removal !== undefined) removals.push(removal);
             continue;
         }
         const folder = canonical(worktree.path);
@@ -74,16 +75,37 @@ async function removeIfUnchanged(
             worktree: worktree.path,
             force: false,
         });
-        records.drop(worktree);
-        // A commit made while the hooks ran moved the branch; it keeps that work.
-        const deleted = await deleteBranchAt(
-            worktree.repository,
-            worktree.branch,
-            worktree.startingCommit,
-        );
-        return { worktree, keptBranch: !deleted };
     } catch (error) {
         return { worktree, error: describe(error) };
+    }
+    return deleteBranch(records, worktree, true);
+}
+
+/**
+ * Deletes the branch of a worktree that is gone while it still points at its starting commit.
+ * A branch that has moved, or is already gone, keeps whatever it holds. A deletion git refuses
+ * for another reason, such as a lock, is a failure, and the next check tries again.
+ */
+async function deleteBranch(
+    records: ChildWorktreeRecords,
+    worktree: ChildWorktree,
+    removedNow: boolean,
+): Promise<ChildWorktreeRemoval | undefined> {
+    try {
+        await deleteBranchAt(worktree.repository, worktree.branch, worktree.startingCommit);
+        records.drop(worktree);
+        return { worktree };
+    } catch (error) {
+        const tip = await branchTip(worktree.repository, worktree.branch);
+        if (tip === worktree.startingCommit) {
+            return {
+                worktree,
+                error: `The worktree ${worktree.path} is gone, but Pico couldn't delete branch ${worktree.branch}: ${describe(error)}`,
+            };
+        }
+        records.drop(worktree);
+        // A commit made while the removal hooks ran moved the branch; it keeps that work.
+        return removedNow && tip !== undefined ? { worktree, keptBranch: true } : undefined;
     }
 }
 

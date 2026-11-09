@@ -18,7 +18,10 @@ const AUTO_BACKGROUND_THRESHOLD_MS = 60_000;
  * UI to ask with, and `todo` is always on without the reminders that would continue a turn the
  * model ended or the hidden title requests a new list would start (proposal.0006). Background
  * jobs and `wait` are on and service mode is off, with every value they depend on Pico's own;
- * `autoBackground` is the session's setting from Pico's settings file (proposal.0008).
+ * `autoBackground` is the session's setting from Pico's settings file (proposal.0008). OMP's
+ * worktree cloning is off: it rewrites `git worktree add` in `bash` into a call to its own
+ * executable, which is `pico` in the compiled build and stock OMP's CLI from source
+ * (proposal.0010).
  */
 export function picoSettings(autoBackground: boolean): Settings {
     return Settings.isolated({
@@ -36,6 +39,7 @@ export function picoSettings(autoBackground: boolean): Settings {
         "launch.enabled": false,
         "bash.autoBackground.enabled": autoBackground,
         "bash.autoBackground.thresholdMs": AUTO_BACKGROUND_THRESHOLD_MS,
+        "worktree.clone": false,
         disabledProviders: OMP_CONFIGURATION_PROVIDERS,
     });
 }

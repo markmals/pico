@@ -29,6 +29,7 @@ import { verifyBackgroundJobs } from "./background-jobs.ts";
 import { Checklist } from "./checklist.ts";
 import { checkCommands, VERIFY_MODEL } from "./commands.ts";
 import { startFakeLmStudio } from "./fake-lm-studio.ts";
+import { verifyGitWorktreeAdd } from "./git-worktree.ts";
 import { subprocessInput } from "./processes.ts";
 import { verifyRestoration } from "./restoration.ts";
 import { acpMessageProblem, inspectLines } from "./wire.ts";
@@ -260,6 +261,7 @@ async function main(): Promise<void> {
         const sessionId = await checkTurn(executable, scratchDirs, checklist);
         if (sessionId) await verifyRestoration(executable, scratchDirs, sessionId, checklist);
         await verifyBackgroundJobs(executable, scratchDirs, checklist);
+        await verifyGitWorktreeAdd(executable, scratchDirs, checklist);
         checkDataDir(scratchDirs, checklist);
         process.stdout.write(`${checklist.report()}\n`);
         process.stdout.write(
